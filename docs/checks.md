@@ -1,99 +1,33 @@
-# depguard — Checks and Codes
+# Checks catalog
 
-This document is the source of truth for check IDs, codes, and remediation guidance.
+Depguard checks are identified by a stable `check_id` and a stable `code`.
 
-## General conventions
+Naming convention:
+- `check_id` is a dotted namespace (e.g. `deps.no_wildcards`)
+- `code` is a short snake_case discriminator (e.g. `wildcard_version`)
 
-- `check_id` identifies the producer check (stable)
-- `code` classifies the specific condition (stable)
-- Codes must never be renamed; deprecate via aliases only
-- Each emitted code must have an explain entry
+The code registry lives in `crates/depguard-types/src/ids.rs`.
 
-Severity defaults are profile-driven (oss|team|strict) and may be overridden by config.
+## Implemented in this scaffold
 
----
+These are implemented as stubs with basic structure:
 
-## deps.no_wildcards
+- `deps.no_wildcards`
+  - `wildcard_version` — dependency version is `*` or contains wildcard segments
 
-Flags dependency versions containing `*` (e.g., `"*"`, `"1.*"`).
+- `deps.path_requires_version`
+  - `path_without_version` — `path = ...` without an explicit `version = ...` where required
 
-**Codes**
-- `wildcard_version`
+- `deps.path_safety`
+  - `absolute_path` — `path = "/abs/..."` (or Windows drive roots)
+  - `parent_escape` — `path` includes `..` segments escaping the repo root
 
-**Default severity**
-- oss: warn
-- team: error
-- strict: error
+- `deps.workspace_inheritance`
+  - `missing_workspace_true` — member depends on a `[workspace.dependencies]` entry but doesn't opt in
 
-**Remediation**
-- Pin a semver requirement (e.g., `"1"`, `"^1.2"`, `"~1.2.3"`).
-- Prefer centralizing in `[workspace.dependencies]` and inheriting with `{ workspace = true }`.
+## Adding a new check
 
----
-
-## deps.path_requires_version
-
-Flags `{ path = "..." }` dependencies missing `version`.
-
-**Codes**
-- `missing_version`
-
-**Default severity**
-- oss: warn (often), configurable
-- team: error
-- strict: error
-
-**Notes**
-- Config may ignore this when the *owning crate* has `package.publish = false`.
-
-**Remediation**
-- Add `version = "x.y.z"` matching the target crate.
-- Or centralize in `[workspace.dependencies]` and inherit with `{ workspace = true }`.
-
----
-
-## deps.path_safety
-
-Flags path dependencies that are absolute or escape the repo root lexically.
-
-**Codes**
-- `absolute_path`
-- `escapes_root`
-
-**Default severity**
-- oss: warn
-- team: error
-- strict: error
-
-**Remediation**
-- Use repo-relative paths that do not escape the workspace root.
-- Avoid `..` segments that move outside the workspace boundary.
-- Consider moving the dependency into the workspace if it’s truly internal.
-
----
-
-## deps.workspace_inheritance
-
-If the workspace root defines `[workspace.dependencies] <dep> = ...`, member crates should use `<dep> = { workspace = true }`.
-
-**Codes**
-- `not_inherited`
-
-**Default severity**
-- oss: skip (off by default)
-- team: warn (often)
-- strict: error (often)
-
-**Remediation**
-- Replace member entry with `{ workspace = true }`.
-- Preserve member flags (`features`, `optional`, `default-features`, etc.).
-
----
-
-## Shared / standardized codes
-
-These should be standardized ecosystem-wide:
-
-- `tool.runtime_error`
-  - Tool-level failure (I/O, parse crash prevented, internal errors)
-  - Emitted with `verdict.status="fail"` and `verdict.reasons=["tool_error"]`
+1. Add a `check_id` and any `code` constants to `depguard-types::ids`.
+2. Implement the check in `depguard-domain::checks`.
+3. Add unit tests in the same module.
+4. Add an entry to the explain registry (optional, but recommended).

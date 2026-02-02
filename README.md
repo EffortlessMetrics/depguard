@@ -1,25 +1,50 @@
-# depguard — Architecture + Plan Package
+# depguard (workspace scaffold)
 
-This folder is a **copy-ready doc set** for **depguard**, written to match the ecosystem shape:
+Depguard is a Rust dependency policy linter designed for **CI** and **monorepos**:
+it inspects `Cargo.toml` manifests (workspaces and single crates), evaluates them against
+an explicit policy, and emits a versioned receipt-style report suitable for:
+- GitHub Actions annotations
+- PR comments (Markdown)
+- artifact storage for audit / trend analysis
 
-- receipts-first (`artifacts/<sensor>/report.json`)
-- strict, versioned schemas
-- deterministic outputs
-- hexagonal / clean architecture
-- microcrate workspace layout
-- test-heavy: BDD + fixtures + proptest + fuzz + mutation testing
+This repository is structured as a **microcrate workspace**: each crate owns a small, stable surface area.
+The intent is simple: keep the policy engine testable, keep IO replaceable, and keep the CLI thin.
 
-## Contents
+## Workspace layout
 
-- `docs/` — requirements, design, architecture, implementation plan, config, checks, testing
-- `schemas/` — `receipt.envelope.v1.json` and `depguard.report.v1.json`
-- `examples/` — example `depguard.toml`, example `cockpit.toml`, and a GitHub Actions snippet
-- `tests/` — starter BDD feature file and fixture skeleton (structure + a tiny sample)
+```text
+crates/
+  depguard-types     Stable DTOs + receipt envelope + finding codes
+  depguard-settings  Config model + profile/preset resolution
+  depguard-domain    Pure policy evaluation (checks) + deterministic finding ordering
+  depguard-repo      Workspace discovery + Cargo.toml parsing + diff scoping adapters
+  depguard-render    Markdown / GitHub annotations renderers
+  depguard-cli       CLI binary (the only crate that talks to the outside world)
+xtask/               Dev tooling: schema generation, fixture updates, release packaging
+schemas/             Versioned JSON Schemas for emitted artifacts
+docs/                Design + operating notes
+```
 
-## Notes
+## Design rules (the important ones)
 
-- This package is intentionally **schema-first**: the envelope is treated as a stable ABI.
-- Tool-specific payload is confined to `data` (report-level) and `finding.data` (finding-level).
-- Codes and check IDs are treated as API: never rename; only deprecate with aliases.
+- **Domain has no IO**: `depguard-domain` takes an in-memory model and returns findings.
+- **Adapters are swappable**: filesystem/git live in `depguard-repo`.
+- **DTOs are stable**: receipt/envelope types live in `depguard-types`, with versioned schema IDs.
+- **Deterministic output**: sorting and capping rules are explicit so CI diffs are stable.
 
-Generated: 2026-02-02
+## Quick start (when implemented)
+
+```bash
+cargo run -p depguard-cli -- check --scope=repo
+cargo run -p depguard-cli -- check --scope=diff --base origin/main --head HEAD
+```
+
+## Documentation
+
+- `docs/architecture.md` — overall flow and boundaries
+- `docs/microcrates.md` — crate-by-crate contracts
+- `docs/testing.md` — BDD + fuzzing + mutation + property tests
+- `docs/checks.md` — check catalog and code registry
+
+---
+**Note:** This is a scaffold with compile-friendly stubs. It is intended as a starting point for implementation.

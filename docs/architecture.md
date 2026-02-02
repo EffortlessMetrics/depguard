@@ -1,169 +1,101 @@
-# depguard — Architecture (Hexagonal / Clean)
+# Architecture
 
-This document describes *how the codebase is structured* to preserve boundaries, determinism, and testability.
-
-## Architectural stance
-
-depguard is a **repo-truth sensor** that must stay:
-
-- deterministic (same inputs → same outputs)
-- cheap (fast lane viable)
-- offline (no network)
-- decoupled from orchestration (cockpit director composes; depguard just senses)
-
-To preserve those properties, depguard uses a **hexagonal / clean architecture** split:
-
-- **Domain**: pure rules and policy evaluation
-- **Application**: use cases orchestration
-- **Adapters**: filesystem, git, rendering, CLI wiring
+Depguard is split into a **pure evaluation core** and a set of **adapters** that translate real repositories into
+an in-memory model. Think “load-bearing wall” vs “drywall”: the domain crate is the wall; everything else can move.
 
 ## Data flow
 
+```text
+repo on disk / git
+     |
+     v
+depguard-repo  (discover + read + parse Cargo.toml)
+     |
+     v
+depguard-domain (evaluate policy checks -> findings)
+     |
+     v
+depguard-types  (receipt/envelope DTOs)
+     |
+     v
+depguard-render (markdown / annotations / sarif)
+     |
+     v
+depguard-cli    (writes artifacts, exit codes, stdout)
 ```
-CLI -> App(use case) -> Repo discovery -> Manifest parsing -> Dependency walk
-    -> Domain checks -> Findings + Verdict -> Receipt writer
-    -> Optional renderers: Markdown / Annotations
+
+The key is the seam between `depguard-repo` and `depguard-domain`: once the input model is built, evaluation
+is deterministic and testable without touching the filesystem.
+
+## Crate dependency graph
+
+```text
+depguard-cli
+  |-- depguard-render -----> depguard-types
+  |-- depguard-repo -------> depguard-domain -----> depguard-types
+  |-- depguard-settings ---> depguard-domain -----> depguard-types
+  `-- depguard-types
+
+xtask (dev tooling) -> depguard-types (schemas) and reads /schemas
 ```
 
-## Ports (interfaces)
+Rules:
+- `depguard-domain` depends on **only** `depguard-types` (plus minimal error types).
+- `depguard-repo` may depend on `depguard-domain` to construct the domain model.
+- `depguard-cli` is the only place allowed to:
+  - call `std::process::Command`
+  - write files to disk
+  - decide exit codes
 
-These should live in application layer or a dedicated `*-ports` module:
+## Core abstractions
 
-- `RepoReader`
-  - read bytes/text for a repo-relative path
-- `WorkspaceDiscoverer`
-  - enumerate manifest paths (root + members)
-- `DiffProvider`
-  - list changed files between base/head (diff-scope selection)
-- `Clock`
-  - provide timestamps
-- `Writer`
-  - write artifacts (report.json, comment.md)
-- `Logger` (optional)
-  - capture structured log lines to raw.log if enabled
+Depguard is opinionated about what “policy enforcement” means:
 
-## Adapters
+- **Input is manifests, not cargo metadata** (no build graph evaluation).
+- **Policy is explicit and versioned** (config + profile).
+- **Output is a receipt** (envelope + findings + data summary).
+- **CI ergonomics are first-class** (Markdown + annotations + stable ordering).
 
-- `fs_repo`
-  - implements `RepoReader` and `Writer`
-- `git_diff`
-  - implements `DiffProvider` (start with shell-out `git diff --name-only`; make it injectable)
-- `workspace_globs`
-  - implements `WorkspaceDiscoverer`
-- `render_md`
-  - markdown rendering from report DTO
-- `render_gh_annotations`
-  - GitHub workflow command render from report DTO
+The core model (owned by `depguard-domain`) is intentionally small:
 
-## Domain layer: rules and invariants
+- `WorkspaceModel` — repo root + workspace dependencies + manifests
+- `ManifestModel` — path + package metadata + dependency declarations
+- `DependencyDecl` — kind + name + spec (version/path/workspace) + location
 
-Domain code must not:
-- touch filesystem
-- shell out
-- depend on clap
-- log to stdout
+## Scopes
 
-It receives:
-- parsed/normalized manifests and dependency entries
-- effective config (profile + overrides)
+Depguard supports two scopes (selected by CLI/config):
 
-It returns:
-- findings (with stable ordering)
-- verdict computation (status + counts + reasons)
+- `repo` — scan all manifests reachable from the workspace root
+- `diff` — scan only manifests affected by a git diff (`--base` / `--head`), plus the root manifest if needed
 
-### Deterministic ordering utility
+Scope selection is an **adapter concern** (repo/git). The domain only sees the final manifest set.
 
-Centralize ordering in one function to avoid drift:
+## Findings model
 
-- severity desc (error > warn > info)
-- manifest path lexical
-- line asc (missing last)
-- check_id lexical
-- code lexical
-- message lexical
+A finding is a structured event:
 
-All renderers must reuse the same ordering.
+- `check_id` — stable identifier for the check (`deps.no_wildcards`, etc.)
+- `code` — stable sub-code for the specific condition (`wildcard_version`, etc.)
+- `severity` — `info` / `warning` / `error`
+- `location` — best-effort file + line/col
+- `message` — human summary
+- `help` / `url` — remediation guidance
+- `fingerprint` — stable hash for dedup/trending
 
-## Microcrate workspace layout
+The emitted report is deterministic:
+- canonical path normalization (`RepoPath`)
+- stable ordering (path -> check_id -> code -> message)
+- optional caps (max findings) with explicit truncation reason
 
-This structure keeps compile times sane and boundaries clear:
+## Where “hexagonal” shows up
 
-- `depguard-types`
-  - DTOs: config, report, findings
-  - schema ids/constants
-  - stable codes/check IDs and explain metadata types
+The “ports” are deliberately simple: rather than define dozens of traits, the domain expects an in-memory model.
+The “adapters” are:
+- filesystem + glob expansion + TOML parsing
+- git diff scoping (optional)
 
-- `depguard-domain`
-  - rule implementations
-  - policy evaluation and verdict computation
-  - ordering and normalization utilities
+This is the same hexagonal idea, but with fewer moving parts: a **single port** (“provide a workspace model”) and
+multiple adapters that can produce it (real FS, in-memory fixtures, synthetic fuzz inputs).
 
-- `depguard-repo`
-  - workspace discovery + manifest loading
-  - TOML parsing and extraction into normalized structures
-  - diff-scope selection helper
-
-- `depguard-render`
-  - Markdown renderer
-  - GitHub annotations renderer
-
-- `depguard-app`
-  - use cases:
-    - `check`
-    - `md`
-    - `annotations`
-    - `explain`
-  - converts inputs -> domain -> outputs
-  - owns “what happens on error” classification (tool error vs skip/warn)
-
-- `depguard-cli`
-  - clap wiring
-  - filesystem paths and defaults
-  - exit code mapping
-
-- `xtask`
-  - schema emission/validation tasks
-  - fixture generation helpers
-  - release helper tasks
-
-## Receipt contract
-
-depguard emits `depguard.report.v1` (envelope-compliant). Canonical output path:
-
-- `artifacts/depguard/report.json`
-
-Tool-specific fields must remain under `data` only.
-
-### Finding identity
-
-- `check_id`: stable producer identity
-- `code`: stable classification string
-
-This allows:
-- explain lookup
-- dedupe in cockpit director
-- future actuator mapping without coupling to depguard internals
-
-## Conformance and drift prevention
-
-depguard CI must enforce:
-
-1. schema validation for emitted receipts (`schemas/depguard.report.v1.json` + envelope)
-2. golden tests for deterministic outputs
-3. explain coverage for every emitted (check_id, code)
-4. fuzz targets do not panic
-5. mutation testing for domain logic
-
-## Observability (optional)
-
-depguard is a gatekeeper; logs must be minimal and useful:
-
-- structured logs can be written to `artifacts/depguard/raw.log` if enabled
-- receipt is the source of truth; logs are debugging aids only
-
-## Security posture
-
-- no network access
-- no execution of arbitrary repo code
-- if shelling out to git: use fixed args and avoid shell parsing
-- handle malicious TOML content robustly (fuzzing)
+For details, see `docs/microcrates.md`.

@@ -1,0 +1,28 @@
+[package]
+name = "depguard-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "depguard"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+time.workspace = true
+
+depguard-types = { path = "../depguard-types" }
+depguard-settings = { path = "../depguard-settings" }
+depguard-domain = { path = "../depguard-domain" }
+depguard-repo = { path = "../depguard-repo" }
+depguard-render = { path = "../depguard-render" }
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true

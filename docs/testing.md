@@ -1,83 +1,41 @@
-# depguard — Testing Strategy
+# Testing
 
-depguard is a gatekeeper. Trust is the product, and trust comes from:
-- determinism
-- resilience to weird TOML
-- clear failure classification
-- stable outputs over time
+The intent is layered tests with different “optics”:
 
-This doc describes the test stack and what each layer is protecting.
+## Unit tests (fast)
 
-## 1) Golden fixtures (contract tests)
+Live next to code:
+- check behavior under small, explicit inputs
+- config merge precedence
+- renderer formatting
 
-Every check should have fixtures that produce:
+## Property tests (broad)
 
-- exact `report.json` (byte-stable)
-- exact `comment.md` (byte-stable, capped)
+Use `proptest` for invariants:
+- domain evaluation is deterministic
+- no panics on arbitrary manifests
+- ordering is stable
 
-Fixtures should cover:
-- workspace discovery edge cases (members/exclude globs, ordering, duplicates)
-- dependency table shapes (string vs inline table vs workspace = true)
-- target-specific dependency tables
-- formatting oddities (comments, weird whitespace, ordering)
-- Windows path separators and CRLF
+## BDD (integration semantics)
 
-Golden tests should run on all platforms, or at minimum validate normalization yields identical canonical paths.
+Keep scenarios readable:
+- “given a workspace with …”
+- “when depguard runs …”
+- “then report contains …”
 
-## 2) BDD (behavior-as-spec)
+The scaffold includes a `tests/bdd/` folder for `.feature` files. Wiring to a runner is left to implementation
+choice (either `cucumber` crate, or explicit table-driven scenario tests).
 
-Use a small set of `.feature` files describing expected behavior in human language.
+## Fuzzing (parser hardening)
 
-The BDD harness should:
-- set up a fixture repo directory
-- run depguard with known flags
-- compare output artifacts to expected snapshots
+TOML parsing is the highest risk surface.
+The scaffold includes a `fuzz/` directory placeholder for `cargo-fuzz` harnesses:
+- fuzz manifest parsing
+- fuzz workspace discovery member expansion
 
-BDD is valuable here because you will add checks over time and you want a stable story:
-- “what happens when I do X” remains readable and enforceable.
+## Mutation testing (test quality)
 
-## 3) Property tests (proptest)
-
-Use proptest for:
-- generating randomized dependency spec shapes (string/table/workspace flags)
-- ensuring normalization doesn’t crash and yields stable internal representation
-- ordering invariants (randomly permuted input order → same output ordering)
-
-## 4) Fuzzing (cargo-fuzz)
-
-Fuzz targets should include:
-- TOML parser inputs (arbitrary bytes) → must not panic
-- workspace member glob expansion inputs → must not panic
-- (optional) any diff-related parsing helpers if introduced
-
-The key assertion: malformed input is classified as a tool/runtime error, not a crash.
-
-## 5) Mutation testing (cargo-mutants)
-
-Run mutation testing on:
-- `depguard-domain` crate
-- critical check logic and policy mapping
-- ordering comparator and “ignore_publish_false” logic
-
-Mutation testing is ideal here because the logic is small but critical; it catches “tests that don’t actually assert the rule.”
-
-Recommended posture:
-- run in scheduled CI initially (nightly)
-- move to required CI if runtime is acceptable
-
-## 6) Schema validation
-
-In CI:
-- validate sample receipts against:
-  - `schemas/receipt.envelope.v1.json`
-  - `schemas/depguard.report.v1.json`
-
-If you generate receipts in tests, validate those artifacts too.
-
-## 7) Explain coverage tests
-
-Depguard must not emit undocumented codes.
-
-Enforce in CI:
-- every `(check_id, code)` in fixtures exists in explain registry
-- every explain entry has a remediation sentence and (optional) a docs link
+Use `cargo-mutants` (or similar) to ensure tests fail when behavior changes.
+The discipline:
+- run mutants on `depguard-domain` first
+- exclude renderers if they produce noisy diffs until stabilized
