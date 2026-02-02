@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:effortless:depguard.config.v1",
+  "title": "depguard.config.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "enum": [
+        "oss",
+        "team",
+        "strict"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "repo",
+        "diff"
+      ]
+    },
+    "fail_on": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warn",
+        "never"
+      ]
+    },
+    "max_findings": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_comment_findings": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_annotations": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-check configuration; keys are check IDs."
+    }
+  }
+}

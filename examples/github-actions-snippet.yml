@@ -1,0 +1,22 @@
+# GitHub Actions snippet (example)
+# Assumes depguard is installed (prefer pinned release binary).
+# Run depguard as a repo-truth fast lane sensor.
+
+- name: depguard
+  continue-on-error: true
+  run: |
+    depguard check \
+      --root . \
+      --config depguard.toml \
+      --profile team \
+      --scope diff \
+      --base "${{ github.event.pull_request.base.sha }}" \
+      --head "${{ github.sha }}" \
+      --out artifacts/depguard/report.json \
+      --md artifacts/depguard/comment.md
+
+- name: Upload artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: cockpit-artifacts
+    path: artifacts/

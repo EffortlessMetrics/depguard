@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:effortless:depguard.report.v1",
+  "title": "depguard.report.v1",
+  "allOf": [
+    {
+      "$ref": "./receipt.envelope.v1.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "depguard.report.v1"
+        },
+        "tool": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "const": "depguard"
+            }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "enum": [
+                "oss",
+                "team",
+                "strict"
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "repo",
+                "diff"
+              ]
+            },
+            "manifests_scanned": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dependency_entries_scanned": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "workspace_dependencies_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "truncated_reason": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

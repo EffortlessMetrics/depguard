@@ -1,0 +1,6 @@
+# cockpit.toml — excerpt for depguard
+[sensors.depguard]
+blocking = true
+missing = "warn"
+highlights = 5
+annotations = 10

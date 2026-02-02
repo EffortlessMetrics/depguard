@@ -1,0 +1,30 @@
+# depguard.toml — example
+profile = "team"          # oss|team|strict
+scope = "diff"            # repo|diff
+fail_on = "error"         # error|warn|never
+
+max_findings = 200
+max_comment_findings = 10
+max_annotations = 25
+
+[paths]
+exclude = ["vendor/**", "third_party/**", "target/**"]
+
+[checks.deps.no_wildcards]
+enabled = true
+severity = "error"
+
+[checks.deps.path_requires_version]
+enabled = true
+severity = "error"
+ignore_publish_false = true
+
+[checks.deps.path_safety]
+enabled = true
+severity = "error"
+allow_paths = ["crates/**"]
+
+[checks.deps.workspace_inheritance]
+enabled = true
+severity = "warn"
+allow_deps = ["tracing"]
