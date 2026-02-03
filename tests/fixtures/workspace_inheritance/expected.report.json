@@ -1,0 +1,11 @@
+{
+  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json.",
+  "__expected_findings__": [
+    {
+      "check_id": "deps.workspace_inheritance",
+      "code": "missing_workspace_true",
+      "dependency": "serde",
+      "manifest": "member-crate/Cargo.toml"
+    }
+  ]
+}

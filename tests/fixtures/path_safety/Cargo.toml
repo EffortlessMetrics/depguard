@@ -1,0 +1,16 @@
+[package]
+name = "path-safety"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Absolute path dependency - triggers deps.path_safety/absolute_path
+# Using Unix-style absolute path
+abs-unix = { path = "/opt/libs/abs-unix", version = "0.1.0" }
+
+# Windows-style absolute path (drive letter)
+abs-windows = { path = "C:\\libs\\abs-windows", version = "0.1.0" }
+
+# Relative path that escapes repo root with excessive parent traversal
+# triggers deps.path_safety/parent_escape
+escaping = { path = "../../../../../../../../outside-repo", version = "0.1.0" }

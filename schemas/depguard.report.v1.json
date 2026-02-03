@@ -1,65 +1,204 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:depguard.report.v1",
-  "title": "depguard.report.v1",
-  "allOf": [
-    {
-      "$ref": "./receipt.envelope.v1.json"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReportEnvelope_for_DepguardData",
+  "description": "A generic receipt/envelope.\n\nKeeping this generic allows Depguard to embed tool-specific data while still enforcing a stable outer shape.",
+  "type": "object",
+  "required": [
+    "data",
+    "findings",
+    "finished_at",
+    "schema",
+    "started_at",
+    "tool",
+    "verdict"
+  ],
+  "properties": {
+    "data": {
+      "$ref": "#/definitions/DepguardData"
     },
-    {
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Finding"
+      }
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "schema": {
+      "description": "Versioned schema identifier for the envelope shape.",
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "tool": {
+      "$ref": "#/definitions/ToolMeta"
+    },
+    "verdict": {
+      "$ref": "#/definitions/Verdict"
+    }
+  },
+  "definitions": {
+    "DepguardData": {
+      "description": "Depguard-specific summary payload for the report.",
       "type": "object",
+      "required": [
+        "dependencies_scanned",
+        "findings_emitted",
+        "findings_total",
+        "manifests_scanned",
+        "profile",
+        "scope"
+      ],
       "properties": {
-        "schema": {
-          "const": "depguard.report.v1"
+        "dependencies_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
         },
-        "tool": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "const": "depguard"
-            }
-          }
+        "findings_emitted": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
         },
-        "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "profile": {
-              "type": "string",
-              "enum": [
-                "oss",
-                "team",
-                "strict"
-              ]
-            },
-            "scope": {
-              "type": "string",
-              "enum": [
-                "repo",
-                "diff"
-              ]
-            },
-            "manifests_scanned": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "dependency_entries_scanned": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "workspace_dependencies_count": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "truncated": {
-              "type": "boolean"
-            },
-            "truncated_reason": {
-              "type": "string"
-            }
-          }
+        "findings_total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "manifests_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "profile": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "truncated_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
+    },
+    "Finding": {
+      "type": "object",
+      "required": [
+        "check_id",
+        "code",
+        "message",
+        "severity"
+      ],
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "data": {
+          "description": "Check-specific structured payload (kept open-ended for forward compatibility)."
+        },
+        "fingerprint": {
+          "description": "Stable identifier intended for dedup and trending. Typically a hash of: `check_id + code + canonical_path + (line?) + salient fields`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/definitions/Severity"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Location": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "col": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "Severity": {
+      "description": "Severity is intentionally small: it maps cleanly to CI signals.",
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "ToolMeta": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "Verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
     }
-  ]
+  }
 }

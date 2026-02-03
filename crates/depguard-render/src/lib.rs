@@ -2,8 +2,8 @@
 
 #![forbid(unsafe_code)]
 
-mod markdown;
 mod gha;
+mod markdown;
 
 pub use gha::render_github_annotations;
 pub use markdown::render_markdown;

@@ -1,0 +1,56 @@
+{
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": "2024-01-15T10:30:00Z",
+  "finished_at": "2024-01-15T10:30:01Z",
+  "verdict": "Fail",
+  "findings": [
+    {
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "severity": "Error",
+      "message": "Dependency 'serde' uses wildcard version '*'",
+      "location": {
+        "path": "crates/example/Cargo.toml",
+        "line": 15,
+        "col": null
+      },
+      "help": "Specify an explicit version like '1.0'",
+      "url": null
+    },
+    {
+      "check_id": "deps.path_requires_version",
+      "code": "path_missing_version",
+      "severity": "Warning",
+      "message": "Path dependency 'my-crate' has no version field",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 22,
+        "col": null
+      },
+      "help": "Add a version field for publishing: version = \"0.1.0\"",
+      "url": null
+    },
+    {
+      "check_id": "deps.path_safety",
+      "code": "path_escape",
+      "severity": "Error",
+      "message": "Path '../../../external' escapes workspace",
+      "location": {
+        "path": "crates/foo/Cargo.toml",
+        "line": 10,
+        "col": null
+      },
+      "help": "Use workspace dependencies or a relative path within the workspace",
+      "url": null
+    }
+  ],
+  "data": {
+    "findings_total": 3,
+    "findings_emitted": 3,
+    "truncated_reason": null
+  }
+}

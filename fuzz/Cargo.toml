@@ -1,0 +1,34 @@
+[package]
+name = "depguard-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.depguard-repo]
+path = "../crates/depguard-repo"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_toml_parser"
+path = "fuzz_targets/fuzz_toml_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_glob_expansion"
+path = "fuzz_targets/fuzz_glob_expansion.rs"
+test = false
+doc = false
+bench = false

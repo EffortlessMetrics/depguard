@@ -13,7 +13,9 @@ use walkdir::WalkDir;
 pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>> {
     let root = repo_root.join("Cargo.toml");
     let text = std::fs::read_to_string(&root).with_context(|| format!("read {}", root))?;
-    let doc = text.parse::<DocumentMut>().context("parse root Cargo.toml")?;
+    let doc = text
+        .parse::<DocumentMut>()
+        .context("parse root Cargo.toml")?;
 
     let workspace = doc.get("workspace");
     if workspace.is_none() {
@@ -60,7 +62,11 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
             Ok(p) => p,
             Err(_) => continue,
         };
-        let rel = abs.strip_prefix(repo_root).unwrap_or(&abs).as_str().replace('\\', "/");
+        let rel = abs
+            .strip_prefix(repo_root)
+            .unwrap_or(&abs)
+            .as_str()
+            .replace('\\', "/");
         if rel == "Cargo.toml" {
             continue;
         }
@@ -71,7 +77,8 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
             .map(|p| p.as_str())
             .unwrap_or("");
 
-        let is_member = members.is_empty() || member_set.is_match(&rel) || member_set.is_match(dir_rel);
+        let is_member =
+            members.is_empty() || member_set.is_match(&rel) || member_set.is_match(dir_rel);
         let is_excluded = exclude_set.is_match(&rel) || exclude_set.is_match(dir_rel);
 
         if is_member && !is_excluded {

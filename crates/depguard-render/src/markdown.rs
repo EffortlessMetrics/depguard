@@ -58,7 +58,7 @@ pub fn render_markdown(report: &DepguardReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use depguard_types::{DepguardData, Finding, ReportEnvelope, Severity, ToolMeta, Verdict};
+    use depguard_types::{DepguardData, ReportEnvelope, ToolMeta, Verdict};
     use time::macros::datetime;
 
     #[test]

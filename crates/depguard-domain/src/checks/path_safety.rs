@@ -12,7 +12,9 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
         let manifest_depth = manifest_dir_depth(manifest.path.as_str());
 
         for dep in &manifest.dependencies {
-            let Some(path) = dep.spec.path.as_deref() else { continue };
+            let Some(path) = dep.spec.path.as_deref() else {
+                continue;
+            };
 
             if is_absolute_path(path) {
                 out.push(Finding {
@@ -79,7 +81,10 @@ fn manifest_dir_depth(manifest_path: &str) -> i32 {
     if parts.len() > 1 {
         parts.pop(); // drop filename
     }
-    parts.into_iter().filter(|s| !s.is_empty() && *s != ".").count() as i32
+    parts
+        .into_iter()
+        .filter(|s| !s.is_empty() && *s != ".")
+        .count() as i32
 }
 
 fn escapes_repo_root(start_depth: i32, rel_path: &str) -> bool {

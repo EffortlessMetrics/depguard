@@ -10,7 +10,7 @@ pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
     checks::run_all(model, cfg, &mut findings);
 
     // Deterministic ordering before truncation.
-    findings.sort_by(|a, b| compare_findings(a, b));
+    findings.sort_by(compare_findings);
 
     let total = findings.len() as u32;
 
@@ -90,11 +90,12 @@ fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
         .then(a.message.cmp(&b.message))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceModel};
+    use crate::model::{
+        DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceModel,
+    };
     use crate::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
     use depguard_types::{Location, RepoPath, Severity};
     use std::collections::BTreeMap;

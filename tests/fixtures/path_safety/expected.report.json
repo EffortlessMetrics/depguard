@@ -1,0 +1,20 @@
+{
+  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json.",
+  "__expected_findings__": [
+    {
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "dependency": "abs-unix"
+    },
+    {
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "dependency": "abs-windows"
+    },
+    {
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "dependency": "escaping"
+    }
+  ]
+}

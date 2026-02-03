@@ -1,4 +1,4 @@
-use depguard_domain::{CheckPolicy, EffectiveConfig, FailOn, Scope};
+use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
 use std::collections::BTreeMap;
 

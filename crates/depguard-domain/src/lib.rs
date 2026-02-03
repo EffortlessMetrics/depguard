@@ -9,7 +9,11 @@ pub mod model;
 pub mod policy;
 pub mod report;
 
-mod engine;
 pub mod checks;
+mod engine;
+
+#[cfg(test)]
+mod proptest;
 
 pub use engine::evaluate;
+pub use policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};

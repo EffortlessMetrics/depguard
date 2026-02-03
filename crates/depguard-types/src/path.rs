@@ -8,9 +8,17 @@ use serde::{Deserialize, Serialize};
 /// - always forward slashes (`/`)
 /// - no leading `./`
 /// - never absolute (best-effort: absolute inputs are preserved but flagged by checks)
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(transparent)]
 pub struct RepoPath(String);
+
+impl Default for RepoPath {
+    fn default() -> Self {
+        RepoPath::new(".")
+    }
+}
 
 impl RepoPath {
     pub fn new<S: AsRef<str>>(s: S) -> Self {

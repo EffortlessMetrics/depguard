@@ -1,0 +1,10 @@
+{
+  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json.",
+  "__expected_findings__": [
+    {
+      "check_id": "deps.path_requires_version",
+      "code": "path_without_version",
+      "dependency": "my-local"
+    }
+  ]
+}

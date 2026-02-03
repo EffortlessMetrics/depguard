@@ -1,62 +1,73 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:depguard.config.v1",
-  "title": "depguard.config.v1",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DepguardConfigV1",
+  "description": "`depguard.toml` schema v1.\n\nThis is a *user-facing* config model: it is intentionally permissive so forward-compat is easy.",
   "type": "object",
-  "additionalProperties": false,
   "properties": {
+    "checks": {
+      "description": "Map of check_id -> config.",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/CheckConfig"
+      }
+    },
+    "max_findings": {
+      "description": "How many findings to emit before truncating the list.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0.0
+    },
     "profile": {
-      "type": "string",
-      "enum": [
-        "oss",
-        "team",
-        "strict"
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema": {
+      "description": "Optional schema string for tooling (`depguard.config.v1`).",
+      "type": [
+        "string",
+        "null"
       ]
     },
     "scope": {
-      "type": "string",
-      "enum": [
-        "repo",
-        "diff"
+      "type": [
+        "string",
+        "null"
       ]
-    },
-    "fail_on": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "never"
-      ]
-    },
-    "max_findings": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "max_comment_findings": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "max_annotations": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "paths": {
+    }
+  },
+  "definitions": {
+    "CheckConfig": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "exclude": {
+        "allow": {
+          "description": "Generic allowlist patterns (semantics are check-specific).",
+          "default": [],
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "default": []
+          }
+        },
+        "enabled": {
+          "description": "Override preset enable/disable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "severity": {
+          "description": "Override preset severity: `info`, `warning`, `error`.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
-    },
-    "checks": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Per-check configuration; keys are check IDs."
     }
   }
 }

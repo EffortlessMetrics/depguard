@@ -1,0 +1,12 @@
+[package]
+name = "member-crate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# This uses serde without workspace = true, even though serde is defined
+# in [workspace.dependencies]. Triggers deps.workspace_inheritance/missing_workspace_true
+serde = "1.0"
+
+# This correctly uses workspace inheritance - should NOT trigger a finding
+tokio = { workspace = true }

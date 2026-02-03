@@ -1,6 +1,6 @@
 use crate::{model::DepguardConfigV1, presets};
 use anyhow::Context;
-use depguard_domain::{CheckPolicy, EffectiveConfig, FailOn, Scope};
+use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
 
 #[derive(Clone, Debug, Default)]
@@ -15,7 +15,10 @@ pub struct ResolvedConfig {
     pub effective: EffectiveConfig,
 }
 
-pub fn resolve_config(cfg: DepguardConfigV1, overrides: Overrides) -> anyhow::Result<ResolvedConfig> {
+pub fn resolve_config(
+    cfg: DepguardConfigV1,
+    overrides: Overrides,
+) -> anyhow::Result<ResolvedConfig> {
     let profile = overrides
         .profile
         .clone()
@@ -39,14 +42,14 @@ pub fn resolve_config(cfg: DepguardConfigV1, overrides: Overrides) -> anyhow::Re
         let entry = effective
             .checks
             .entry(check_id.clone())
-            .or_insert_with(|| CheckPolicy::disabled());
+            .or_insert_with(CheckPolicy::disabled);
 
         if let Some(enabled) = cc.enabled {
             entry.enabled = enabled;
         }
         if let Some(sev) = cc.severity.as_deref() {
-            entry.severity = parse_severity(sev)
-                .with_context(|| format!("invalid severity for {check_id}"))?;
+            entry.severity =
+                parse_severity(sev).with_context(|| format!("invalid severity for {check_id}"))?;
         }
         if !cc.allow.is_empty() {
             entry.allow = cc.allow.clone();

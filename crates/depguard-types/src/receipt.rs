@@ -85,7 +85,9 @@ pub struct ReportEnvelope<TData = DepguardData> {
     /// Versioned schema identifier for the envelope shape.
     pub schema: String,
     pub tool: ToolMeta,
+    #[schemars(with = "String")]
     pub started_at: OffsetDateTime,
+    #[schemars(with = "String")]
     pub finished_at: OffsetDateTime,
     pub verdict: Verdict,
     pub findings: Vec<Finding>,
