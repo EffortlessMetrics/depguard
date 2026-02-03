@@ -1,5 +1,19 @@
 {
-  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json.",
-  "__expected_findings__": [],
-  "__expected_verdict__": "pass"
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": "__TIMESTAMP__",
+  "finished_at": "__TIMESTAMP__",
+  "verdict": "pass",
+  "findings": [],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 5,
+    "findings_total": 0,
+    "findings_emitted": 0
+  }
 }

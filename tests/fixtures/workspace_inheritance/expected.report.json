@@ -1,11 +1,35 @@
 {
-  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json.",
-  "__expected_findings__": [
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": "__TIMESTAMP__",
+  "finished_at": "__TIMESTAMP__",
+  "verdict": "fail",
+  "findings": [
     {
+      "severity": "error",
       "check_id": "deps.workspace_inheritance",
       "code": "missing_workspace_true",
-      "dependency": "serde",
-      "manifest": "member-crate/Cargo.toml"
+      "message": "dependency 'serde' exists in [workspace.dependencies] but is not declared with `workspace = true`",
+      "location": {
+        "path": "member-crate/Cargo.toml",
+        "line": 9
+      },
+      "help": "Prefer `workspace = true` to inherit the workspace dependency version and features.",
+      "data": {
+        "dependency": "serde",
+        "manifest": "member-crate/Cargo.toml"
+      }
     }
-  ]
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 2,
+    "dependencies_scanned": 2,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
 }
