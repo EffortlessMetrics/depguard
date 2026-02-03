@@ -1,0 +1,22 @@
+# Test fixture: Multiple violations for determinism testing
+# This fixture triggers multiple checks to verify findings are deterministically ordered.
+
+[package]
+name = "multi-violation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# deps.no_wildcards/wildcard_version - multiple wildcards
+alpha-wildcard = "*"
+zeta-wildcard = "*"
+
+# deps.path_requires_version/path_without_version
+path-no-version = { path = "../sibling" }
+
+# deps.path_safety/absolute_path
+absolute-dep = { path = "/absolute/path", version = "0.1.0" }
+
+[dev-dependencies]
+# More wildcards in dev-dependencies
+dev-wildcard = "*"

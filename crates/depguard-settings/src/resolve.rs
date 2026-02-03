@@ -56,7 +56,10 @@ pub fn resolve_config(
         }
     }
 
-    // fail_on may be profile-driven for now; keep override space for v2 config.
+    // fail_on override from config
+    if let Some(fail_on_s) = cfg.fail_on.as_deref() {
+        effective.fail_on = parse_fail_on(fail_on_s)?;
+    }
 
     Ok(ResolvedConfig { effective })
 }
@@ -78,7 +81,6 @@ fn parse_severity(v: &str) -> anyhow::Result<Severity> {
     }
 }
 
-#[allow(dead_code)]
 fn parse_fail_on(v: &str) -> anyhow::Result<FailOn> {
     match v {
         "error" => Ok(FailOn::Error),

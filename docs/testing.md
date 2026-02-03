@@ -1,41 +1,140 @@
 # Testing
 
-The intent is layered tests with different “optics”:
+The testing strategy is layered with different "optics" for different concerns.
+
+## Test commands
+
+```bash
+# All tests
+cargo test
+
+# By scope
+cargo test --lib                    # Unit tests only
+cargo test --test '*'               # Integration tests only
+cargo test -p depguard-domain       # Single crate
+
+# Linting
+cargo fmt --check
+cargo clippy --all-targets --all-features
+
+# Mutation testing (domain crate)
+cargo mutants --package depguard-domain
+
+# Fuzzing (requires nightly)
+cargo +nightly fuzz run fuzz_toml_parser
+```
 
 ## Unit tests (fast)
 
-Live next to code:
-- check behavior under small, explicit inputs
-- config merge precedence
-- renderer formatting
+Live next to code in each crate:
+
+| Crate | Focus |
+|-------|-------|
+| `depguard-types` | Serde roundtrip, explanation coverage |
+| `depguard-domain` | Check behavior under small, explicit inputs |
+| `depguard-settings` | Config parse, merge precedence, validation |
+| `depguard-repo` | Manifest parsing, workspace discovery |
+| `depguard-render` | Renderer formatting |
+
+Example locations:
+- `crates/depguard-domain/src/checks/no_wildcards.rs` → `#[cfg(test)] mod tests`
+- `crates/depguard-settings/src/resolve.rs` → `#[cfg(test)] mod tests`
 
 ## Property tests (broad)
 
-Use `proptest` for invariants:
-- domain evaluation is deterministic
-- no panics on arbitrary manifests
-- ordering is stable
+Use `proptest` for invariants in `depguard-domain`:
 
-## BDD (integration semantics)
+- Domain evaluation is deterministic (same input → same output)
+- No panics on arbitrary manifest structures
+- Findings ordering is stable under re-evaluation
+- Truncation preserves ordering invariants
 
-Keep scenarios readable:
-- “given a workspace with …”
-- “when depguard runs …”
-- “then report contains …”
+Location: `crates/depguard-domain/src/engine.rs` tests module
 
-The scaffold includes a `tests/bdd/` folder for `.feature` files. Wiring to a runner is left to implementation
-choice (either `cucumber` crate, or explicit table-driven scenario tests).
+## Golden fixtures (byte-stable)
+
+Canonical fixtures live in `tests/fixtures/`:
+
+| File | Purpose |
+|------|---------|
+| `report.json` | Expected JSON report output |
+| `comment.md` | Expected Markdown comment |
+
+Regenerate with: `cargo xtask fixtures`
+
+These tests catch unintentional output drift.
+
+## BDD scenarios (integration)
+
+Feature files in `tests/features/`:
+
+```gherkin
+Feature: Wildcard detection
+  Scenario: Detects * in version
+    Given a workspace with a dependency version "*"
+    When depguard runs
+    Then the report contains a finding with code "wildcard_version"
+```
+
+Wiring: Either `cucumber` crate or explicit table-driven scenario tests in `tests/`.
+
+Location: `tests/features/depguard.feature`
+
+## Integration tests
+
+End-to-end tests using real CLI invocations:
+
+Location: `crates/depguard-cli/tests/`
+
+These tests:
+- Run the actual binary
+- Use fixture workspaces
+- Verify exit codes, JSON output, Markdown output
 
 ## Fuzzing (parser hardening)
 
-TOML parsing is the highest risk surface.
-The scaffold includes a `fuzz/` directory placeholder for `cargo-fuzz` harnesses:
-- fuzz manifest parsing
-- fuzz workspace discovery member expansion
+TOML parsing is the highest risk surface. Fuzz targets ensure no panics.
+
+Location: `fuzz/` directory (when present)
+
+Targets:
+- `fuzz_toml_parser` — arbitrary TOML input to manifest parser
+- `fuzz_glob_expansion` — arbitrary glob patterns
+
+The `depguard-repo` crate exposes `fuzz` module APIs that return `Option` instead of `Result` and are guaranteed not to panic.
 
 ## Mutation testing (test quality)
 
-Use `cargo-mutants` (or similar) to ensure tests fail when behavior changes.
-The discipline:
-- run mutants on `depguard-domain` first
-- exclude renderers if they produce noisy diffs until stabilized
+Use `cargo-mutants` to ensure tests fail when behavior changes.
+
+```bash
+cargo mutants --package depguard-domain
+```
+
+Discipline:
+- Run mutants on `depguard-domain` first (core logic)
+- Exclude renderers if they produce noisy diffs until stabilized
+- Target: <5% surviving mutants in domain crate
+
+## Schema validation
+
+CI validates that emitted reports conform to JSON schemas:
+
+```bash
+# Using xtask or standalone validator
+cargo xtask validate-schema tests/fixtures/report.json
+```
+
+Also validates:
+- Every emitted `(check_id, code)` pair has an explain entry
+- Report envelope matches `schemas/receipt.envelope.v1.json`
+- Report body matches `schemas/depguard.report.v1.json`
+
+## Test data locations
+
+| Path | Contents |
+|------|----------|
+| `tests/fixtures/` | Golden output files |
+| `tests/features/` | BDD feature files |
+| `crates/*/tests/` | Per-crate integration tests |
+| `examples/` | Example config files |

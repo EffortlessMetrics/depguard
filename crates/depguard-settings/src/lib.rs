@@ -173,4 +173,27 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("invalid severity"));
     }
+
+    #[test]
+    fn fail_on_config_overrides_profile() {
+        let cfg = DepguardConfigV1 {
+            profile: Some("strict".to_string()),
+            fail_on: Some("warn".to_string()),
+            ..Default::default()
+        };
+        let resolved = resolve_config(cfg, Overrides::default()).unwrap();
+        // strict profile defaults to FailOn::Error, but config overrides to Warning
+        assert_eq!(resolved.effective.fail_on, FailOn::Warning);
+    }
+
+    #[test]
+    fn invalid_fail_on_returns_error() {
+        let cfg = DepguardConfigV1 {
+            fail_on: Some("never".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown fail_on"));
+    }
 }

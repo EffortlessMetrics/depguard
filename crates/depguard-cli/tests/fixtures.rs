@@ -18,16 +18,16 @@ use tempfile::TempDir;
 /// Wraps the deprecated cargo_bin to centralize the deprecation warning.
 #[allow(deprecated)]
 fn depguard_cmd() -> Command {
-    Command::cargo_bin("depguard").unwrap()
+    Command::cargo_bin("depguard").expect("depguard binary not found - run `cargo build` first")
 }
 
 /// Get the path to the test fixtures directory
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .unwrap()
+        .expect("depguard-cli crate should have a parent directory")
         .parent()
-        .unwrap()
+        .expect("crates directory should have a parent (repo root)")
         .join("tests")
         .join("fixtures")
 }
@@ -164,6 +164,30 @@ fn fixture_workspace_inheritance_fails() {
     assert_reports_match(report, expected, "workspace_inheritance");
 }
 
+#[test]
+fn fixture_multi_violation_fails() {
+    let (exit_code, report) = run_check_on_fixture("multi_violation");
+    let expected = load_expected_report("multi_violation");
+
+    assert_eq!(
+        exit_code, 2,
+        "multi_violation fixture should exit with 2 (fail)"
+    );
+
+    // Verify deterministic ordering: findings should be sorted by line number
+    // (all have same severity and path, so line is the tiebreaker)
+    let findings = report["findings"].as_array().expect("findings should be array");
+    let lines: Vec<i64> = findings
+        .iter()
+        .map(|f| f["location"]["line"].as_i64().unwrap())
+        .collect();
+    let mut sorted_lines = lines.clone();
+    sorted_lines.sort();
+    assert_eq!(lines, sorted_lines, "findings should be sorted by line number");
+
+    assert_reports_match(report, expected, "multi_violation");
+}
+
 // ============================================================================
 // CLI behavior tests
 // ============================================================================
@@ -208,7 +232,8 @@ fn check_with_markdown_output() {
     assert!(report_path.exists(), "JSON report should be created");
     assert!(md_path.exists(), "Markdown report should be created");
 
-    let md_content = std::fs::read_to_string(&md_path).unwrap();
+    let md_content =
+        std::fs::read_to_string(&md_path).expect("failed to read generated markdown file");
     assert!(
         md_content.to_lowercase().contains("fail"),
         "Markdown should contain verdict"

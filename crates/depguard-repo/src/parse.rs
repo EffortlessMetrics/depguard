@@ -270,7 +270,8 @@ cc = "1.0"
 "#;
 
         let manifest_path = RepoPath::new("crates/test-pkg/Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).unwrap();
+        let model = parse_member_manifest(&manifest_path, manifest)
+            .expect("target-specific manifest should parse successfully");
 
         // Check that we have all expected dependencies
         let dep_names: Vec<_> = model.dependencies.iter().map(|d| d.name.as_str()).collect();
@@ -300,7 +301,13 @@ cc = "1.0"
         );
 
         // Verify DepKind is correct
-        let find_dep = |name: &str| model.dependencies.iter().find(|d| d.name == name).unwrap();
+        let find_dep = |name: &str| {
+            model
+                .dependencies
+                .iter()
+                .find(|d| d.name == name)
+                .unwrap_or_else(|| panic!("dependency '{}' should exist", name))
+        };
 
         assert_eq!(find_dep("serde").kind, DepKind::Normal);
         assert_eq!(find_dep("nix").kind, DepKind::Normal);
@@ -322,7 +329,8 @@ serde = "1.0"
 "#;
 
         let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).unwrap();
+        let model = parse_member_manifest(&manifest_path, manifest)
+            .expect("simple manifest should parse successfully");
 
         assert_eq!(model.dependencies.len(), 1);
         assert_eq!(model.dependencies[0].name, "serde");
@@ -370,21 +378,40 @@ serde = "1.0"
             insta = \"1.0\"\n";
 
         let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).unwrap();
+        let model = parse_member_manifest(&manifest_path, manifest)
+            .expect("manifest with line numbers should parse successfully");
 
         // Find each dependency and check its line number
-        let find_dep = |name: &str| model.dependencies.iter().find(|d| d.name == name).unwrap();
+        let find_dep = |name: &str| {
+            model
+                .dependencies
+                .iter()
+                .find(|d| d.name == name)
+                .unwrap_or_else(|| panic!("dependency '{}' should exist", name))
+        };
 
         let serde_dep = find_dep("serde");
-        let serde_line = serde_dep.location.as_ref().unwrap().line;
+        let serde_line = serde_dep
+            .location
+            .as_ref()
+            .expect("serde should have a location")
+            .line;
         assert_eq!(serde_line, Some(6), "serde should be on line 6");
 
         let tokio_dep = find_dep("tokio");
-        let tokio_line = tokio_dep.location.as_ref().unwrap().line;
+        let tokio_line = tokio_dep
+            .location
+            .as_ref()
+            .expect("tokio should have a location")
+            .line;
         assert_eq!(tokio_line, Some(7), "tokio should be on line 7");
 
         let insta_dep = find_dep("insta");
-        let insta_line = insta_dep.location.as_ref().unwrap().line;
+        let insta_line = insta_dep
+            .location
+            .as_ref()
+            .expect("insta should have a location")
+            .line;
         assert_eq!(insta_line, Some(10), "insta should be on line 10");
     }
 
@@ -413,16 +440,31 @@ serde = "1.0"
             features = [\"full\"]\n";
 
         let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).unwrap();
+        let model = parse_member_manifest(&manifest_path, manifest)
+            .expect("manifest with table-style dep should parse successfully");
 
-        let find_dep = |name: &str| model.dependencies.iter().find(|d| d.name == name).unwrap();
+        let find_dep = |name: &str| {
+            model
+                .dependencies
+                .iter()
+                .find(|d| d.name == name)
+                .unwrap_or_else(|| panic!("dependency '{}' should exist", name))
+        };
 
         let serde_dep = find_dep("serde");
-        let serde_line = serde_dep.location.as_ref().unwrap().line;
+        let serde_line = serde_dep
+            .location
+            .as_ref()
+            .expect("serde should have a location")
+            .line;
         assert_eq!(serde_line, Some(6), "serde should be on line 6");
 
         let tokio_dep = find_dep("tokio");
-        let tokio_line = tokio_dep.location.as_ref().unwrap().line;
+        let tokio_line = tokio_dep
+            .location
+            .as_ref()
+            .expect("tokio should have a location")
+            .line;
         // For table-style deps, the span points to the table section
         assert!(tokio_line.is_some(), "tokio should have a line number");
     }
