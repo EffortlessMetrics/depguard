@@ -1,5 +1,7 @@
 # Microcrates
 
+> **Navigation**: [Architecture](architecture.md) | [Design](design.md) | Microcrates | [Testing](testing.md) | [Contributing](../CONTRIBUTING.md)
+
 This document is the **contract map**: what each crate owns, what it is allowed to depend on, and what its public API looks like.
 
 The goal is not microcrates for their own sake; the goal is to keep:
@@ -254,3 +256,10 @@ cargo xtask schemas    # Generate JSON schemas
 cargo xtask fixtures   # Regenerate test fixtures
 cargo xtask release    # Prepare release artifacts
 ```
+
+## See also
+
+- [Architecture](architecture.md) — Data flow and crate relationships
+- [Design Notes](design.md) — Why microcrates, domain purity
+- [Testing](testing.md) — Per-crate test strategies
+- [Contributing](../CONTRIBUTING.md) — How to add new crates or checks

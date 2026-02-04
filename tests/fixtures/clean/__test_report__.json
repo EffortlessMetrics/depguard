@@ -8,9 +8,9 @@
     2026,
     34,
     20,
-    42,
-    50,
-    180696400,
+    43,
+    54,
+    229717600,
     0,
     0,
     0
@@ -19,9 +19,9 @@
     2026,
     34,
     20,
-    42,
-    50,
-    182038600,
+    43,
+    54,
+    230798100,
     0,
     0,
     0
@@ -32,7 +32,7 @@
     "scope": "repo",
     "profile": "strict",
     "manifests_scanned": 1,
-    "dependencies_scanned": 1,
+    "dependencies_scanned": 5,
     "findings_total": 0,
     "findings_emitted": 0
   }

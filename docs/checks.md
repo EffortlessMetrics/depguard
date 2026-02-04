@@ -1,4 +1,6 @@
-# Checks catalog
+# Checks Catalog
+
+> **Navigation**: [Quick Start](quickstart.md) | [Configuration](config.md) | Checks | [CI Integration](ci-integration.md) | [Architecture](architecture.md) | [Troubleshooting](troubleshooting.md)
 
 Depguard checks are identified by a stable `check_id` and a stable `code`.
 
@@ -198,3 +200,10 @@ Configure per-check severity in `depguard.toml`:
 [checks."deps.no_wildcards"]
 severity = "warning"  # Downgrade from default "error"
 ```
+
+## See also
+
+- [Configuration](config.md) — Full config reference with profiles
+- [Quick Start](quickstart.md) — Getting started guide
+- [Troubleshooting](troubleshooting.md) — False positives and allowlists
+- [Design Notes](design.md) — Check architecture details

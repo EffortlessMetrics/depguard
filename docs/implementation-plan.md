@@ -1,4 +1,6 @@
-# depguard — Implementation Plan
+# Implementation Plan
+
+> **Navigation**: [Architecture](architecture.md) | [Design](design.md) | [Microcrates](microcrates.md) | Implementation Plan | [Testing](testing.md)
 
 This plan is sequenced to ship value early while freezing the protocol and preventing drift.
 
@@ -154,3 +156,10 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [ ] Golden snapshot tests pass
 - [ ] Fuzz targets exist and run in scheduled CI
 - [ ] Mutation testing runs on domain crate
+
+## See also
+
+- [Architecture](architecture.md) — System design
+- [Testing](testing.md) — Test strategy details
+- [Microcrates](microcrates.md) — Crate boundaries
+- [Design Notes](design.md) — Key decisions

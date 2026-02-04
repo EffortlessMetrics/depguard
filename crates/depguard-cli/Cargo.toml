@@ -26,3 +26,10 @@ assert_cmd.workspace = true
 predicates.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
+cucumber.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+[[test]]
+name = "bdd"
+harness = false

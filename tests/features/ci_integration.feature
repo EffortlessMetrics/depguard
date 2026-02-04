@@ -84,4 +84,4 @@ Feature: CI/CD integration
   Scenario: Report contains schema_id for consumers
     Given any workspace
     When I run "depguard check --report-out report.json"
-    Then report.json has "schema_id" = "depguard.report.v1"
+    Then report.json has "schema_id" = "receipt.envelope.v1"

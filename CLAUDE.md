@@ -93,9 +93,19 @@ depguard explain <check_id|code>         # Show remediation guidance
 
 ## Documentation
 
+**User-facing:**
+- `docs/quickstart.md` — Getting started guide
+- `docs/config.md` — Configuration file format
+- `docs/checks.md` — Check IDs, codes, remediation guidance
+- `docs/ci-integration.md` — CI/CD pipeline setup
+- `docs/troubleshooting.md` — FAQ and common issues
+
+**Architecture:**
 - `docs/architecture.md` — Hexagonal architecture design
 - `docs/design.md` — Data flow, parsing, rule evaluation
+- `docs/microcrates.md` — Crate contracts and APIs
 - `docs/implementation-plan.md` — 5-phase development roadmap
 - `docs/testing.md` — Test strategy details
-- `docs/checks.md` — Check IDs, codes, remediation guidance
-- `docs/config.md` — Configuration file format
+
+**Contributing:**
+- `CONTRIBUTING.md` — How to contribute

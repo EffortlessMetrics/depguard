@@ -1,4 +1,6 @@
-# Design notes
+# Design Notes
+
+> **Navigation**: [Architecture](architecture.md) | Design | [Microcrates](microcrates.md) | [Implementation Plan](implementation-plan.md) | [Testing](testing.md)
 
 ## Why microcrates?
 
@@ -115,3 +117,10 @@ Report schema versioning is explicit:
 - Add v2 schemas as new files; don't mutate v1
 - Envelope schema is vendored (external contract)
 - Use `schema` field in output to indicate version
+
+## See also
+
+- [Architecture](architecture.md) — System overview and data flow
+- [Microcrates](microcrates.md) — Crate contracts and APIs
+- [Checks Catalog](checks.md) — Available checks
+- [Testing](testing.md) — Test strategy

@@ -1,5 +1,7 @@
 # Architecture
 
+> **Navigation**: [Quick Start](quickstart.md) | [Configuration](config.md) | [Checks](checks.md) | [CI Integration](ci-integration.md) | Architecture | [Design](design.md) | [Testing](testing.md)
+
 Depguard uses **hexagonal (ports & adapters)** architecture with a **pure evaluation core** and a set of **adapters** that translate real repositories into an in-memory model. Think "load-bearing wall" vs "drywall": the domain crate is the wall; everything else can move.
 
 ## Crate overview
@@ -135,4 +137,11 @@ The "ports" are deliberately simple: rather than define dozens of traits, the do
 
 This is the same hexagonal idea, but with fewer moving parts: a **single port** ("provide a workspace model and config") and multiple adapters that can produce it (real FS, in-memory fixtures, synthetic fuzz inputs).
 
-For crate-level contracts, see `docs/microcrates.md`.
+For crate-level contracts, see [microcrates.md](microcrates.md).
+
+## See also
+
+- [Design Notes](design.md) — Design decisions and rationale
+- [Microcrates](microcrates.md) — Crate-by-crate contracts
+- [Testing](testing.md) — Test strategy and organization
+- [Implementation Plan](implementation-plan.md) — Development roadmap

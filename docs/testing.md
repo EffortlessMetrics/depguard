@@ -1,5 +1,7 @@
 # Testing
 
+> **Navigation**: [Architecture](architecture.md) | [Design](design.md) | [Microcrates](microcrates.md) | Testing | [Contributing](../CONTRIBUTING.md)
+
 The testing strategy is layered with different "optics" for different concerns.
 
 ## Test commands
@@ -138,3 +140,10 @@ Also validates:
 | `tests/features/` | BDD feature files |
 | `crates/*/tests/` | Per-crate integration tests |
 | `examples/` | Example config files |
+
+## See also
+
+- [Contributing](../CONTRIBUTING.md) — How to contribute and run tests
+- [Design Notes](design.md) — Pure domain and determinism
+- [Architecture](architecture.md) — Crate responsibilities
+- [Implementation Plan](implementation-plan.md) — Test requirements by phase

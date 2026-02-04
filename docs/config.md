@@ -1,5 +1,7 @@
 # Configuration (`depguard.toml`)
 
+> **Navigation**: [Quick Start](quickstart.md) | Configuration | [Checks](checks.md) | [CI Integration](ci-integration.md) | [Architecture](architecture.md) | [Troubleshooting](troubleshooting.md)
+
 The config file is optional. If it doesn't exist, Depguard runs with the default profile (`strict`).
 
 ## Full example
@@ -173,3 +175,10 @@ schema = "depguard.config.v1"
 ```
 
 JSON schema available at: `schemas/depguard.config.v1.json`
+
+## See also
+
+- [Quick Start](quickstart.md) — Get started with depguard
+- [Checks Catalog](checks.md) — All checks and their options
+- [CI Integration](ci-integration.md) — CI pipeline setup
+- [Troubleshooting](troubleshooting.md) — Common issues and solutions

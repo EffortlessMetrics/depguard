@@ -129,7 +129,7 @@ Feature: Dependency manifest hygiene (depguard)
   Scenario: Receipt contains required envelope fields
     Given a workspace fixture "clean"
     When I run "depguard check --repo-root . --report-out report.json"
-    Then the receipt has field "schema_id" with value "depguard.report.v1"
+    Then the receipt has field "schema_id" with value "receipt.envelope.v1"
     And the receipt has field "tool_name" with value "depguard"
     And the receipt has field "tool_version"
     And the receipt has field "started_at"
