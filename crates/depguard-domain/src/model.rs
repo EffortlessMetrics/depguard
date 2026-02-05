@@ -25,6 +25,8 @@ pub struct ManifestModel {
     pub path: RepoPath,
     pub package: Option<PackageMeta>,
     pub dependencies: Vec<DependencyDecl>,
+    /// Features defined in [features] table, mapped to their dependencies.
+    pub features: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +55,18 @@ pub struct DepSpec {
     pub version: Option<String>,
     pub path: Option<String>,
     pub workspace: bool,
+    /// Git repository URL (e.g., "https://github.com/...")
+    pub git: Option<String>,
+    /// Git branch reference
+    pub branch: Option<String>,
+    /// Git tag reference
+    pub tag: Option<String>,
+    /// Git commit revision
+    pub rev: Option<String>,
+    /// Whether default-features is explicitly set (None = not specified)
+    pub default_features: Option<bool>,
+    /// Whether this dependency is marked as optional
+    pub optional: bool,
 }
 
 impl ManifestModel {

@@ -128,39 +128,34 @@ fn arb_dep_spec() -> impl Strategy<Value = DepSpec> {
         // String version: `"1.0"` -> version only
         arb_version().prop_map(|v| DepSpec {
             version: Some(v),
-            path: None,
-            workspace: false,
+            ..DepSpec::default()
         }),
         // Inline table with version: `{ version = "1.0" }`
         arb_version().prop_map(|v| DepSpec {
             version: Some(v),
-            path: None,
-            workspace: false,
+            ..DepSpec::default()
         }),
         // Inline table with path and version: `{ path = "../foo", version = "1.0" }`
         (arb_safe_relative_path(), arb_version()).prop_map(|(p, v)| DepSpec {
             version: Some(v),
             path: Some(p),
-            workspace: false,
+            ..DepSpec::default()
         }),
         // Inline table with path only: `{ path = "../foo" }`
         arb_safe_relative_path().prop_map(|p| DepSpec {
-            version: None,
             path: Some(p),
-            workspace: false,
+            ..DepSpec::default()
         }),
         // Workspace reference: `{ workspace = true }`
         Just(DepSpec {
-            version: None,
-            path: None,
             workspace: true,
+            ..DepSpec::default()
         }),
         // Workspace reference with features: `{ workspace = true, features = [...] }`
         // (features not tracked in DepSpec, but workspace = true is the key)
         Just(DepSpec {
-            version: None,
-            path: None,
             workspace: true,
+            ..DepSpec::default()
         }),
     ]
 }
@@ -666,6 +661,7 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![
                     // Wildcard violation
                     DependencyDecl {
@@ -673,8 +669,7 @@ proptest! {
                         name: format!("{}-wildcard", dep_name),
                         spec: DepSpec {
                             version: Some(wildcard_version),
-                            path: None,
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -689,7 +684,7 @@ proptest! {
                         spec: DepSpec {
                             version: None,
                             path: Some(escaping_path),
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -703,8 +698,7 @@ proptest! {
                         name: dep_name.clone(),
                         spec: DepSpec {
                             version: Some("2.0.0".to_string()),
-                            path: None,
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -750,13 +744,13 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![DependencyDecl {
                     kind: DepKind::Normal,
                     name: dep_name,
                     spec: DepSpec {
-                        version: None,
-                        path: None,
                         workspace: true,
+                        ..DepSpec::default()
                     },
                     location: Some(Location {
                         path: RepoPath::new("Cargo.toml"),
@@ -799,13 +793,13 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![DependencyDecl {
                     kind: DepKind::Normal,
                     name: dep_name.clone(),
                     spec: DepSpec {
                         version: Some(wildcard.clone()),
-                        path: None,
-                        workspace: false,
+                        ..DepSpec::default()
                     },
                     location: Some(Location {
                         path: RepoPath::new("Cargo.toml"),
@@ -848,13 +842,13 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![DependencyDecl {
                     kind: DepKind::Normal,
                     name: dep_name.clone(),
                     spec: DepSpec {
-                        version: None,
                         path: Some(abs_path.clone()),
-                        workspace: false,
+                        ..DepSpec::default()
                     },
                     location: Some(Location {
                         path: RepoPath::new("Cargo.toml"),
@@ -897,13 +891,13 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: false, // Not publishable
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![DependencyDecl {
                     kind: DepKind::Normal,
                     name: dep_name,
                     spec: DepSpec {
-                        version: None,
                         path: Some(path),
-                        workspace: false,
+                        ..DepSpec::default()
                     },
                     location: Some(Location {
                         path: RepoPath::new("Cargo.toml"),
@@ -949,8 +943,7 @@ proptest! {
                 name: format!("dep{}", i),
                 spec: DepSpec {
                     version: Some("*".to_string()),
-                    path: None,
-                    workspace: false,
+                    ..DepSpec::default()
                 },
                 location: Some(Location {
                     path: RepoPath::new("Cargo.toml"),
@@ -969,6 +962,7 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: deps,
             }],
         };
@@ -1007,8 +1001,7 @@ proptest! {
                 name: format!("dep{}", num_deps - i), // Reverse order names
                 spec: DepSpec {
                     version: Some("*".to_string()),
-                    path: None,
-                    workspace: false,
+                    ..DepSpec::default()
                 },
                 location: Some(Location {
                     path: RepoPath::new(if i % 2 == 0 {
@@ -1031,6 +1024,7 @@ proptest! {
                     name: "test-pkg".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: deps,
             }],
         };
@@ -1084,8 +1078,7 @@ mod unit_tests {
         // String version: `"1.0"` -> DepSpec with version only
         let spec = DepSpec {
             version: Some("1.0.0".to_string()),
-            path: None,
-            workspace: false,
+            ..DepSpec::default()
         };
         assert!(spec.version.is_some());
         assert!(spec.path.is_none());
@@ -1097,8 +1090,7 @@ mod unit_tests {
         // Inline table: `{ version = "1.0" }`
         let spec = DepSpec {
             version: Some("1.0.0".to_string()),
-            path: None,
-            workspace: false,
+            ..DepSpec::default()
         };
         assert!(spec.version.is_some());
         assert!(spec.path.is_none());
@@ -1111,7 +1103,7 @@ mod unit_tests {
         let spec = DepSpec {
             version: Some("1.0.0".to_string()),
             path: Some("../foo".to_string()),
-            workspace: false,
+            ..DepSpec::default()
         };
         assert!(spec.version.is_some());
         assert!(spec.path.is_some());
@@ -1122,9 +1114,8 @@ mod unit_tests {
     fn test_dep_spec_workspace_ref_shape() {
         // Workspace reference: `{ workspace = true }`
         let spec = DepSpec {
-            version: None,
-            path: None,
             workspace: true,
+            ..DepSpec::default()
         };
         assert!(spec.version.is_none());
         assert!(spec.path.is_none());

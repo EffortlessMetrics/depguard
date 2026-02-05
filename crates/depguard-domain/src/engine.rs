@@ -685,6 +685,7 @@ mod tests {
                     name: "root".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![
                     // Create multiple violations in non-sorted order
                     DependencyDecl {
@@ -692,8 +693,7 @@ mod tests {
                         name: "dep_z".to_string(),
                         spec: DepSpec {
                             version: Some("*".to_string()),
-                            path: None,
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -706,8 +706,7 @@ mod tests {
                         name: "dep_a".to_string(),
                         spec: DepSpec {
                             version: Some("*".to_string()),
-                            path: None,
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -720,8 +719,7 @@ mod tests {
                         name: "dep_m".to_string(),
                         spec: DepSpec {
                             version: Some("*".to_string()),
-                            path: None,
-                            workspace: false,
+                            ..DepSpec::default()
                         },
                         location: Some(Location {
                             path: RepoPath::new("Cargo.toml"),
@@ -778,13 +776,13 @@ mod tests {
                     name: "root".to_string(),
                     publish: true,
                 }),
+                features: BTreeMap::new(),
                 dependencies: vec![DependencyDecl {
                     kind: DepKind::Normal,
                     name: "serde".to_string(),
                     spec: DepSpec {
                         version: Some("*".to_string()),
-                        path: None,
-                        workspace: false,
+                        ..DepSpec::default()
                     },
                     location: Some(Location {
                         path: RepoPath::new("Cargo.toml"),

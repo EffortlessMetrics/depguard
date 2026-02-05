@@ -164,6 +164,230 @@ allow = ["special-*"]  # Glob patterns allowed to override
 
 ---
 
+## `deps.git_requires_version`
+
+Detects git dependencies without an explicit version, which can cause issues when publishing.
+
+By default, this check is skipped for crates with `publish = false`. Set `ignore_publish_false = true` to enforce regardless of publishability.
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `git_without_version` | Dependency has `git = "..."` but no `version = "..."` |
+
+### Examples
+
+```toml
+# Bad
+my-crate = { git = "https://github.com/org/my-crate" }
+
+# Good
+my-crate = { git = "https://github.com/org/my-crate", version = "0.1" }
+```
+
+### Remediation
+
+Add a `version` field alongside `git`. This ensures the crate can be published to crates.io and consumers get the right version from the registry.
+
+### Configuration
+
+```toml
+[checks."deps.git_requires_version"]
+enabled = true
+severity = "error"
+allow = ["internal-*"]  # Glob patterns (case-sensitive)
+ignore_publish_false = true  # Enforce even when publish = false
+```
+
+---
+
+## `deps.dev_only_in_normal`
+
+Detects crates that are typically dev-only appearing in `[dependencies]`.
+
+This check flags common test/mock/benchmark crates that should typically be in `[dev-dependencies]`:
+- Test frameworks: proptest, quickcheck, rstest, test-case
+- Mocking: mockall, mockito, wiremock
+- Benchmarking: criterion, divan
+- Test utilities: tempfile, assert_cmd, insta
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `dev_dep_in_normal` | Dev-only crate found in `[dependencies]` instead of `[dev-dependencies]` |
+
+### Examples
+
+```toml
+# Bad - test framework in normal deps
+[dependencies]
+mockall = "0.11"
+proptest = "1.0"
+
+# Good - in dev-dependencies
+[dev-dependencies]
+mockall = "0.11"
+proptest = "1.0"
+```
+
+### Remediation
+
+Move the dependency to `[dev-dependencies]` unless it's genuinely needed in production code. If intentional, add to the allowlist.
+
+### Configuration
+
+```toml
+[checks."deps.dev_only_in_normal"]
+enabled = true
+severity = "warning"
+allow = ["tempfile"]  # Allow specific crates in normal deps
+```
+
+---
+
+## `deps.default_features_explicit`
+
+Detects dependencies with inline options that don't explicitly set `default-features`.
+
+When a dependency has inline options (features, optional, path, git) but doesn't explicitly declare `default-features = true/false`, it can lead to unclear intent.
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `default_features_implicit` | Dependency has inline options but no explicit `default-features` declaration |
+
+### Examples
+
+```toml
+# Bad - unclear if default features are wanted
+serde = { version = "1.0", features = ["derive"] }
+
+# Good - explicit about default features
+serde = { version = "1.0", features = ["derive"], default-features = true }
+tokio = { version = "1.0", features = ["rt"], default-features = false }
+```
+
+### Remediation
+
+Add an explicit `default-features = true` or `default-features = false` to make the intent clear.
+
+### Configuration
+
+```toml
+[checks."deps.default_features_explicit"]
+enabled = true
+severity = "info"
+allow = []
+```
+
+---
+
+## `deps.no_multiple_versions`
+
+Detects the same crate with different versions across workspace members.
+
+Having multiple versions of the same dependency in a workspace increases binary size and can cause subtle compatibility issues.
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `duplicate_different_versions` | Same crate appears with different versions in multiple manifests |
+
+### Examples
+
+```toml
+# Bad - crates/a/Cargo.toml
+[dependencies]
+serde = "1.0.195"
+
+# Bad - crates/b/Cargo.toml
+[dependencies]
+serde = "1.0.200"
+
+# Good - use workspace inheritance
+# Cargo.toml (root)
+[workspace.dependencies]
+serde = "1.0.200"
+
+# crates/a/Cargo.toml and crates/b/Cargo.toml
+[dependencies]
+serde.workspace = true
+```
+
+### Remediation
+
+Define the dependency in `[workspace.dependencies]` and use workspace inheritance in all members.
+
+### Configuration
+
+```toml
+[checks."deps.no_multiple_versions"]
+enabled = true
+severity = "warning"
+allow = ["proc-macro2"]  # Allow specific crates to have multiple versions
+```
+
+---
+
+## `deps.optional_unused`
+
+Detects optional dependencies that aren't referenced in any feature.
+
+When a dependency is marked `optional = true`, it should be activated by at least one feature. An optional dependency not referenced in any feature cannot be enabled by users.
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `optional_not_in_features` | Optional dependency not referenced in any feature |
+
+### Examples
+
+```toml
+# Bad - optional but no feature uses it
+[dependencies]
+serde = { version = "1.0", optional = true }
+
+[features]
+# No feature references serde
+
+# Good - optional and referenced in feature
+[dependencies]
+serde = { version = "1.0", optional = true }
+
+[features]
+serialization = ["dep:serde"]
+```
+
+### Remediation
+
+Either reference the optional dependency in a feature, or remove `optional = true` if it should always be included.
+
+### Configuration
+
+```toml
+[checks."deps.optional_unused"]
+enabled = true
+severity = "warning"
+allow = []
+```
+
+---
+
 ## Adding a new check
 
 1. **Add IDs** — Add `check_id` and `code` constants to `crates/depguard-types/src/ids.rs`:

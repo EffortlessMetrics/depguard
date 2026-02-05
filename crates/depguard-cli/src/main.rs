@@ -25,6 +25,17 @@ enum RunMode {
     Cockpit,
 }
 
+/// Options for the check command (reduces function argument count).
+struct CheckOpts {
+    base: Option<String>,
+    head: Option<String>,
+    report_out: Utf8PathBuf,
+    report_version: String,
+    write_markdown: bool,
+    markdown_out: Utf8PathBuf,
+    mode: RunMode,
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "depguard",
@@ -131,13 +142,15 @@ fn main() -> anyhow::Result<()> {
             mode,
         } => cmd_check(
             &cli,
-            base.clone(),
-            head.clone(),
-            report_out.clone(),
-            report_version.clone(),
-            write_markdown,
-            markdown_out.clone(),
-            mode,
+            CheckOpts {
+                base: base.clone(),
+                head: head.clone(),
+                report_out: report_out.clone(),
+                report_version: report_version.clone(),
+                write_markdown,
+                markdown_out: markdown_out.clone(),
+                mode,
+            },
         ),
         Commands::Md { report, output } => cmd_md(report, output),
         Commands::Annotations { report, max } => cmd_annotations(report, max),
@@ -145,22 +158,13 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn cmd_check(
-    cli: &Cli,
-    base: Option<String>,
-    head: Option<String>,
-    report_out: Utf8PathBuf,
-    report_version: String,
-    write_markdown: bool,
-    markdown_out: Utf8PathBuf,
-    mode: RunMode,
-) -> anyhow::Result<()> {
+fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
     let repo_root = cli
         .repo_root
         .canonicalize_utf8()
         .unwrap_or_else(|_| cli.repo_root.clone());
 
-    let report_version = parse_report_version(&report_version)?;
+    let report_version = parse_report_version(&opts.report_version)?;
 
     let result = (|| -> anyhow::Result<i32> {
         if !repo_root.exists() {
@@ -191,11 +195,11 @@ fn cmd_check(
                 depguard_domain::policy::Scope::Diff => "diff",
             };
             let report = empty_report(report_version, scope, &resolved.effective.profile);
-            write_report_file(&report_out, &report).context("write report json")?;
-            if write_markdown {
+            write_report_file(&opts.report_out, &report).context("write report json")?;
+            if opts.write_markdown {
                 let renderable = to_renderable(&report);
                 let md = render_markdown(&renderable);
-                write_text_file(&markdown_out, &md).context("write markdown")?;
+                write_text_file(&opts.markdown_out, &md).context("write markdown")?;
             }
             eprintln!(
                 "depguard: no Cargo.toml found at {}; emitting empty report",
@@ -208,10 +212,10 @@ fn cmd_check(
         let changed_files = if cli.scope.as_deref() == Some("diff")
             || (cli.scope.is_none() && scope_from_config(&cfg_text) == Some("diff"))
         {
-            let base = base.context("diff scope requires --base")?;
-            let head = head.context("diff scope requires --head")?;
+            let base = opts.base.as_ref().context("diff scope requires --base")?;
+            let head = opts.head.as_ref().context("diff scope requires --head")?;
             Some(
-                git_changed_files(&repo_root, &base, &head)
+                git_changed_files(&repo_root, base, head)
                     .context("git diff --name-only failed")?,
             )
         } else {
@@ -228,12 +232,12 @@ fn cmd_check(
 
         let output = run_check(input)?;
 
-        write_report_file(&report_out, &output.report).context("write report json")?;
+        write_report_file(&opts.report_out, &output.report).context("write report json")?;
 
-        if write_markdown {
+        if opts.write_markdown {
             let renderable = to_renderable(&output.report);
             let md = render_markdown(&renderable);
-            write_text_file(&markdown_out, &md).context("write markdown")?;
+            write_text_file(&opts.markdown_out, &md).context("write markdown")?;
         }
 
         Ok(report_exit_code(&output.report))
@@ -242,7 +246,7 @@ fn cmd_check(
     match result {
         Ok(code) => {
             // In cockpit mode, always exit 0 if receipt was written successfully.
-            let final_code = match mode {
+            let final_code = match opts.mode {
                 RunMode::Cockpit => 0,
                 RunMode::Standard => code,
             };
@@ -253,11 +257,11 @@ fn cmd_check(
         }
         Err(err) => {
             let report = runtime_error_report(report_version, &format!("{err:#}"));
-            let receipt_written = write_report_file(&report_out, &report).is_ok();
+            let receipt_written = write_report_file(&opts.report_out, &report).is_ok();
             eprintln!("depguard error: {err:#}");
 
             // In cockpit mode, exit 0 if we successfully wrote an error receipt.
-            match (mode, receipt_written) {
+            match (opts.mode, receipt_written) {
                 (RunMode::Cockpit, true) => Ok(()),
                 _ => std::process::exit(1),
             }

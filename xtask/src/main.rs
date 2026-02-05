@@ -164,6 +164,7 @@ fn print_help() {
     eprintln!("  validate-schemas  Check if schemas/ matches generated output (for CI)");
     eprintln!("  print-schema-ids  Print known schema IDs");
     eprintln!("  conform           Validate sensor.report.v1 conformance");
+    eprintln!("  explain-coverage  Validate all check IDs and codes have explanations");
 }
 
 /// Validate sensor.report.v1 conformance.
@@ -242,6 +243,66 @@ fn conform() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Validate that all check IDs and codes have explanations.
+fn explain_coverage() -> anyhow::Result<()> {
+    let check_ids = depguard_types::explain::all_check_ids();
+    let codes = depguard_types::explain::all_codes();
+
+    let mut errors = Vec::new();
+
+    // Validate check IDs
+    for check_id in check_ids {
+        match depguard_types::explain::lookup_explanation(check_id) {
+            Some(exp) => {
+                if exp.title.is_empty() {
+                    errors.push(format!("Check ID '{}' has empty title", check_id));
+                }
+                if exp.description.is_empty() {
+                    errors.push(format!("Check ID '{}' has empty description", check_id));
+                }
+                if exp.remediation.is_empty() {
+                    errors.push(format!("Check ID '{}' has empty remediation", check_id));
+                }
+            }
+            None => {
+                errors.push(format!("Check ID '{}' has no explanation", check_id));
+            }
+        }
+    }
+
+    // Validate codes
+    for code in codes {
+        match depguard_types::explain::lookup_explanation(code) {
+            Some(exp) => {
+                if exp.title.is_empty() {
+                    errors.push(format!("Code '{}' has empty title", code));
+                }
+                if exp.description.is_empty() {
+                    errors.push(format!("Code '{}' has empty description", code));
+                }
+                if exp.remediation.is_empty() {
+                    errors.push(format!("Code '{}' has empty remediation", code));
+                }
+            }
+            None => {
+                errors.push(format!("Code '{}' has no explanation", code));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        println!("✓ {} check IDs have explanations", check_ids.len());
+        println!("✓ {} codes have explanations", codes.len());
+        println!("\n✓ All explain coverage checks passed!");
+        Ok(())
+    } else {
+        for error in &errors {
+            eprintln!("  - {}", error);
+        }
+        bail!("Explain coverage validation failed with {} errors", errors.len())
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
@@ -254,6 +315,7 @@ fn main() -> anyhow::Result<()> {
         "emit-schemas" => emit_schemas(),
         "validate-schemas" => validate_schemas(),
         "conform" => conform(),
+        "explain-coverage" => explain_coverage(),
         "print-schema-ids" => {
             // List all schema IDs for reference
             println!("receipt.envelope.v1 (vendored, not generated)");

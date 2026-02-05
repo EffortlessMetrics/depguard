@@ -2369,6 +2369,61 @@ enabled = true
     });
 }
 
+#[given(expr = "the deps.git_requires_version check is enabled by default")]
+fn given_git_requires_version_enabled(world: &mut DepguardWorld) {
+    let config = r#"[checks."deps.git_requires_version"]
+enabled = true
+"#;
+    world.config_content = Some(match &world.config_content {
+        Some(existing) => format!("{existing}\n{config}"),
+        None => config.to_string(),
+    });
+}
+
+#[given(expr = "the deps.dev_only_in_normal check is enabled by default")]
+fn given_dev_only_in_normal_enabled(world: &mut DepguardWorld) {
+    let config = r#"[checks."deps.dev_only_in_normal"]
+enabled = true
+"#;
+    world.config_content = Some(match &world.config_content {
+        Some(existing) => format!("{existing}\n{config}"),
+        None => config.to_string(),
+    });
+}
+
+#[given(expr = "the deps.default_features_explicit check is enabled by default")]
+fn given_default_features_explicit_enabled(world: &mut DepguardWorld) {
+    let config = r#"[checks."deps.default_features_explicit"]
+enabled = true
+"#;
+    world.config_content = Some(match &world.config_content {
+        Some(existing) => format!("{existing}\n{config}"),
+        None => config.to_string(),
+    });
+}
+
+#[given(expr = "the deps.no_multiple_versions check is enabled by default")]
+fn given_no_multiple_versions_enabled(world: &mut DepguardWorld) {
+    let config = r#"[checks."deps.no_multiple_versions"]
+enabled = true
+"#;
+    world.config_content = Some(match &world.config_content {
+        Some(existing) => format!("{existing}\n{config}"),
+        None => config.to_string(),
+    });
+}
+
+#[given(expr = "the deps.optional_unused check is enabled by default")]
+fn given_optional_unused_enabled(world: &mut DepguardWorld) {
+    let config = r#"[checks."deps.optional_unused"]
+enabled = true
+"#;
+    world.config_content = Some(match &world.config_content {
+        Some(existing) => format!("{existing}\n{config}"),
+        None => config.to_string(),
+    });
+}
+
 // Step for asserting finding message content
 #[then("the finding message mentions the dependency name")]
 fn then_finding_mentions_dep_name(world: &mut DepguardWorld) {

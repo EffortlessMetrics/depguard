@@ -37,6 +37,11 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CHECK_DEPS_PATH_REQUIRES_VERSION => Some(explain_path_requires_version()),
         ids::CHECK_DEPS_PATH_SAFETY => Some(explain_path_safety()),
         ids::CHECK_DEPS_WORKSPACE_INHERITANCE => Some(explain_workspace_inheritance()),
+        ids::CHECK_DEPS_GIT_REQUIRES_VERSION => Some(explain_git_requires_version()),
+        ids::CHECK_DEPS_DEV_ONLY_IN_NORMAL => Some(explain_dev_only_in_normal()),
+        ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT => Some(explain_default_features_explicit()),
+        ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS => Some(explain_no_multiple_versions()),
+        ids::CHECK_DEPS_OPTIONAL_UNUSED => Some(explain_optional_unused()),
         ids::CHECK_TOOL_RUNTIME => Some(explain_tool_runtime()),
 
         // Codes
@@ -45,6 +50,11 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CODE_ABSOLUTE_PATH => Some(explain_absolute_path()),
         ids::CODE_PARENT_ESCAPE => Some(explain_parent_escape()),
         ids::CODE_MISSING_WORKSPACE_TRUE => Some(explain_missing_workspace_true()),
+        ids::CODE_GIT_WITHOUT_VERSION => Some(explain_git_without_version()),
+        ids::CODE_DEV_DEP_IN_NORMAL => Some(explain_dev_dep_in_normal()),
+        ids::CODE_DEFAULT_FEATURES_IMPLICIT => Some(explain_default_features_implicit()),
+        ids::CODE_DUPLICATE_DIFFERENT_VERSIONS => Some(explain_duplicate_different_versions()),
+        ids::CODE_OPTIONAL_NOT_IN_FEATURES => Some(explain_optional_not_in_features()),
         ids::CODE_RUNTIME_ERROR => Some(explain_runtime_error()),
 
         _ => None,
@@ -58,6 +68,11 @@ pub fn all_check_ids() -> &'static [&'static str] {
         ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
         ids::CHECK_DEPS_PATH_SAFETY,
         ids::CHECK_DEPS_WORKSPACE_INHERITANCE,
+        ids::CHECK_DEPS_GIT_REQUIRES_VERSION,
+        ids::CHECK_DEPS_DEV_ONLY_IN_NORMAL,
+        ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT,
+        ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS,
+        ids::CHECK_DEPS_OPTIONAL_UNUSED,
         ids::CHECK_TOOL_RUNTIME,
     ]
 }
@@ -70,6 +85,11 @@ pub fn all_codes() -> &'static [&'static str] {
         ids::CODE_ABSOLUTE_PATH,
         ids::CODE_PARENT_ESCAPE,
         ids::CODE_MISSING_WORKSPACE_TRUE,
+        ids::CODE_GIT_WITHOUT_VERSION,
+        ids::CODE_DEV_DEP_IN_NORMAL,
+        ids::CODE_DEFAULT_FEATURES_IMPLICIT,
+        ids::CODE_DUPLICATE_DIFFERENT_VERSIONS,
+        ids::CODE_OPTIONAL_NOT_IN_FEATURES,
         ids::CODE_RUNTIME_ERROR,
     ]
 }
@@ -352,6 +372,228 @@ fn explain_missing_workspace_true() -> Explanation {
 fn explain_runtime_error() -> Explanation {
     let mut exp = explain_tool_runtime();
     exp.title = "Runtime Error";
+    exp
+}
+
+// --- New check explanations ---
+
+fn explain_git_requires_version() -> Explanation {
+    Explanation {
+        title: "Git Dependencies Require Version",
+        description: "\
+Detects git dependencies in publishable crates that lack an explicit version.
+
+When publishing a crate to crates.io, Cargo ignores the `git` key and uses only
+the version from the registry. If no version is specified:
+- The crate cannot be published (cargo publish will fail)
+- Users who depend on your crate won't be able to build it
+
+This check only applies to crates that can be published (publish != false).",
+        remediation: "\
+Add an explicit version alongside the git URL:
+
+    my-crate = { git = \"https://github.com/org/repo\", version = \"0.1.0\" }
+
+Alternatively, use workspace inheritance:
+
+    my-crate.workspace = true
+
+Or mark the crate as unpublishable in its Cargo.toml:
+
+    [package]
+    publish = false",
+        examples: ExamplePair {
+            before: r#"[dependencies]
+my-lib = { git = "https://github.com/org/my-lib" }"#,
+            after: r#"[dependencies]
+my-lib = { git = "https://github.com/org/my-lib", version = "0.1.0" }
+
+# Or use workspace inheritance:
+my-lib.workspace = true"#,
+        },
+    }
+}
+
+fn explain_git_without_version() -> Explanation {
+    let mut exp = explain_git_requires_version();
+    exp.title = "Git Without Version";
+    exp
+}
+
+fn explain_dev_only_in_normal() -> Explanation {
+    Explanation {
+        title: "Dev-Only Crate in Normal Dependencies",
+        description: "\
+Detects crates that are typically dev-only appearing in [dependencies].
+
+Some crates are designed exclusively for testing and development:
+- Test frameworks: proptest, quickcheck, rstest, test-case
+- Mocking: mockall, mockito, wiremock
+- Benchmarking: criterion, divan
+- Test utilities: tempfile, assert_cmd, insta
+
+Including these in [dependencies] instead of [dev-dependencies]:
+- Increases binary size for consumers
+- May add unnecessary compile time
+- Suggests a potential configuration error",
+        remediation: "\
+Move the dependency to [dev-dependencies]:
+
+    [dev-dependencies]
+    mockall = \"0.11\"
+    proptest = \"1.0\"
+
+If you genuinely need it in [dependencies] for production code,
+add it to the check's allow list in depguard.toml.",
+        examples: ExamplePair {
+            before: r#"[dependencies]
+mockall = "0.11"
+proptest = "1.0""#,
+            after: r#"[dependencies]
+# Production dependencies only
+
+[dev-dependencies]
+mockall = "0.11"
+proptest = "1.0""#,
+        },
+    }
+}
+
+fn explain_dev_dep_in_normal() -> Explanation {
+    let mut exp = explain_dev_only_in_normal();
+    exp.title = "Dev Dependency in Normal";
+    exp
+}
+
+fn explain_default_features_explicit() -> Explanation {
+    Explanation {
+        title: "Explicit default-features",
+        description: "\
+Detects dependencies with inline options that don't explicitly set default-features.
+
+When a dependency has inline options (features, optional, path, git) but doesn't
+explicitly declare `default-features = true/false`, it can lead to:
+- Unclear intent about whether default features are wanted
+- Accidental inclusion of unwanted features
+- Inconsistent behavior when features change upstream",
+        remediation: "\
+Add an explicit `default-features` declaration:
+
+    # If you want default features:
+    serde = { version = \"1.0\", features = [\"derive\"], default-features = true }
+
+    # If you don't want default features:
+    tokio = { version = \"1.0\", features = [\"rt\"], default-features = false }
+
+For simple version-only dependencies, this check doesn't apply.",
+        examples: ExamplePair {
+            before: r#"[dependencies]
+serde = { version = "1.0", features = ["derive"] }"#,
+            after: r#"[dependencies]
+serde = { version = "1.0", features = ["derive"], default-features = true }"#,
+        },
+    }
+}
+
+fn explain_default_features_implicit() -> Explanation {
+    let mut exp = explain_default_features_explicit();
+    exp.title = "Default Features Implicit";
+    exp
+}
+
+fn explain_no_multiple_versions() -> Explanation {
+    Explanation {
+        title: "No Multiple Versions",
+        description: "\
+Detects the same crate with different versions across workspace members.
+
+Having multiple versions of the same dependency in a workspace:
+- Increases binary size (both versions are compiled)
+- Can cause subtle compatibility issues
+- Makes dependency updates more complex
+- May indicate accidental version drift",
+        remediation: "\
+Align all workspace members to use the same version:
+
+1. Define the dependency in [workspace.dependencies]:
+   [workspace.dependencies]
+   serde = \"1.0.200\"
+
+2. Use workspace inheritance in all members:
+   [dependencies]
+   serde.workspace = true
+
+If intentional version differences are required, add the crate
+to the check's allow list.",
+        examples: ExamplePair {
+            before: r#"# crates/a/Cargo.toml
+[dependencies]
+serde = "1.0.195"
+
+# crates/b/Cargo.toml
+[dependencies]
+serde = "1.0.200""#,
+            after: r#"# Cargo.toml (workspace root)
+[workspace.dependencies]
+serde = "1.0.200"
+
+# crates/a/Cargo.toml
+[dependencies]
+serde.workspace = true
+
+# crates/b/Cargo.toml
+[dependencies]
+serde.workspace = true"#,
+        },
+    }
+}
+
+fn explain_duplicate_different_versions() -> Explanation {
+    let mut exp = explain_no_multiple_versions();
+    exp.title = "Duplicate Different Versions";
+    exp
+}
+
+fn explain_optional_unused() -> Explanation {
+    Explanation {
+        title: "Unused Optional Dependency",
+        description: "\
+Detects optional dependencies that aren't referenced in any feature.
+
+When a dependency is marked `optional = true`, it should be activated by
+at least one feature in the [features] table. An optional dependency that
+isn't referenced in any feature:
+- Cannot be enabled by users
+- Suggests incomplete feature configuration
+- May indicate dead code or misconfiguration",
+        remediation: "\
+Either reference the optional dependency in a feature:
+
+    [features]
+    my-feature = [\"dep:optional-crate\"]
+
+Or remove the `optional = true` if it should always be included:
+
+    [dependencies]
+    my-crate = \"1.0\"  # Remove optional = true",
+        examples: ExamplePair {
+            before: r#"[dependencies]
+serde = { version = "1.0", optional = true }
+
+[features]
+# No feature uses serde"#,
+            after: r#"[dependencies]
+serde = { version = "1.0", optional = true }
+
+[features]
+serialization = ["dep:serde"]"#,
+        },
+    }
+}
+
+fn explain_optional_not_in_features() -> Explanation {
+    let mut exp = explain_optional_unused();
+    exp.title = "Optional Not in Features";
     exp
 }
 

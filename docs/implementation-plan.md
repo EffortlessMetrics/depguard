@@ -158,6 +158,164 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [x] Fuzz targets exist and run in scheduled CI
 - [ ] Mutation testing runs on domain crate
 
+---
+
+## Phase 6 — CI/CD & Release Automation 🆕
+
+### 6.1 Continuous Integration Workflow
+- [ ] `.github/workflows/ci.yml`:
+  - [ ] Unit tests: `cargo test --lib`
+  - [ ] Integration tests: `cargo test --test '*'`
+  - [ ] Format check: `cargo fmt --check`
+  - [ ] Clippy: `cargo clippy --all-targets --all-features`
+  - [ ] Schema validation: `cargo xtask validate-schemas`
+- [ ] Mutation testing job (scheduled):
+  - [ ] `cargo mutants --package depguard-domain`
+  - [ ] Fail if mutation score drops below threshold
+
+### 6.2 Self-Dogfooding Workflow
+- [ ] `.github/workflows/depguard.yml`:
+  - [ ] Full scan on push to main
+  - [ ] Diff-scope scan on PRs (`--scope diff --base origin/${{ github.base_ref }}`)
+  - [ ] Generate JSON report + Markdown summary
+  - [ ] Create GitHub annotations for findings
+  - [ ] Upload artifacts (90-day retention)
+  - [ ] Fail on policy violations (exit code 2)
+
+### 6.3 Conformance Workflow
+- [ ] `.github/workflows/conformance.yml`:
+  - [ ] Run `cargo xtask conform`
+  - [ ] Validate receipts against all schema versions
+  - [ ] Enforce explain coverage for every emitted code
+
+### 6.4 Release Workflow
+- [ ] `.github/workflows/release.yml`:
+  - [ ] Trigger on git tag (`v*`) or manual dispatch
+  - [ ] Build matrix: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64)
+  - [ ] Create GitHub Release with prebuilt binaries
+  - [ ] `cargo publish --dry-run` validation
+  - [ ] Optional: publish to crates.io
+
+### Tests
+- [ ] Workflow syntax validation via `actionlint`
+- [ ] Manual workflow dispatch test for release dry-run
+
+---
+
+## Phase 7 — Additional Checks 🆕
+
+Expand coverage with high-value dependency hygiene checks.
+
+### 7.1 deps.git_requires_version (High Priority)
+- [ ] Detect `{ git = "..." }` without `version = "..."`
+- [ ] Respect `ignore_publish_false` flag (like path_requires_version)
+- [ ] Code: `git_without_version`
+- [ ] Explain entry with before/after examples
+- [ ] BDD scenarios and golden fixtures
+
+**Justification**: Git deps without versions are non-reproducible and block crates.io publishing.
+
+### 7.2 deps.default_features_explicit (Medium Priority)
+- [ ] Flag dependencies with inline options but no explicit `default-features`
+- [ ] Suggest adding `default-features = true` or `false`
+- [ ] Configurable severity (default: warn)
+- [ ] Code: `default_features_implicit`
+- [ ] Explain entry and fixtures
+
+**Justification**: Explicit intent improves maintainability and supply chain auditing.
+
+### 7.3 deps.no_multiple_versions (Medium Priority)
+- [ ] Track (crate_name, version) pairs across workspace
+- [ ] Warn when same crate appears with different versions
+- [ ] Allowlist for intentional version splits
+- [ ] Code: `duplicate_different_versions`
+- [ ] Explain entry and fixtures
+
+**Justification**: Multiple versions bloat binaries and cause subtle interop bugs.
+
+### 7.4 deps.optional_unused (Medium Priority)
+- [ ] Parse `[features]` table from manifests
+- [ ] Flag `optional = true` deps without corresponding feature
+- [ ] Code: `optional_not_in_features`
+- [ ] Allowlist for custom feature naming patterns
+- [ ] Explain entry and fixtures
+
+**Justification**: Orphaned optional deps are unreachable dead weight.
+
+### 7.5 deps.dev_only_in_normal (Low Priority)
+- [ ] Curated list of dev/test crate names (proptest, insta, criterion, etc.)
+- [ ] Flag if they appear in `[dependencies]` section
+- [ ] Code: `dev_dep_in_normal`
+- [ ] Configurable via allowlist
+- [ ] Explain entry and fixtures
+
+**Justification**: Reduces transitive deps for consumers; catches copy-paste errors.
+
+### 7.6 deps.yanked_versions (Future, Optional)
+- [ ] Accept `--yanked-index` file (pre-computed offline list)
+- [ ] Flag pinned versions that are yanked
+- [ ] Code: `version_yanked`
+- [ ] Optional network mode for live crates.io lookup
+
+**Justification**: Yanked versions signal bugs/security issues; blocks publishing.
+
+### Architecture notes
+- All checks follow existing pattern: pure functions in `depguard-domain/src/checks/`
+- IDs and codes in `depguard-types/src/ids.rs`
+- Explanations in `depguard-types/src/explain.rs`
+- Parser extensions needed for 7.3 (workspace tracking) and 7.4 (features table)
+
+---
+
+## Phase 8 — Future Enhancements 🆕
+
+### 8.1 Enhanced Diff Scope
+- [ ] `--diff-file` option to accept pre-computed file list
+- [ ] Avoid git dependency for containerized/sandboxed environments
+- [ ] Support GitHub Actions changed-files action output format
+
+### 8.2 Suppression & Baseline
+- [ ] Inline suppression comments: `# depguard: allow(no_wildcards)`
+- [ ] Baseline file: ignore known violations during migration
+- [ ] `depguard baseline` command to generate suppression file
+- [ ] Gradual adoption: only fail on new violations
+
+### 8.3 Fix Suggestions
+- [ ] Machine-readable fix suggestions in report
+- [ ] `depguard fix` command for auto-remediation
+- [ ] Integration with buildfix.plan.v1 schema
+- [ ] Conservative: only safe, unambiguous fixes
+
+### 8.4 Extended Outputs
+- [ ] SARIF output for GitHub Advanced Security
+- [ ] JUnit XML for legacy CI systems
+- [ ] JSON Lines streaming for large workspaces
+
+### 8.5 Performance & Scale
+- [ ] Parallel manifest parsing for large workspaces
+- [ ] Incremental mode: cache parsed manifests
+- [ ] Memory-efficient streaming for 1000+ crate workspaces
+
+### 8.6 Ecosystem Integration
+- [ ] VS Code extension for inline diagnostics
+- [ ] Pre-commit hook integration
+- [ ] Cargo subcommand: `cargo depguard`
+
+---
+
+## Milestone Summary
+
+| Milestone | Target | Key Deliverables |
+|-----------|--------|------------------|
+| v0.1 | Phase 5 complete | Mutation testing, conformance harness |
+| v0.2 | Phase 6 complete | CI/CD workflows, prebuilt binaries |
+| v0.3 | Phase 7.1-7.2 | git_requires_version, default_features_explicit |
+| v0.4 | Phase 7.3-7.5 | Workspace-level checks, features parsing |
+| v1.0 | Phase 8.1-8.2 | Suppression, baseline, production-ready |
+| v1.1+ | Phase 8.3-8.6 | Fix suggestions, ecosystem integration |
+
+---
+
 ## See also
 
 - [Architecture](architecture.md) — System design

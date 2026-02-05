@@ -67,10 +67,14 @@ fn parse_manifest_doc(
     // Parse target-specific dependencies under `[target.'cfg(...)'.dependencies]` etc.
     deps.extend(parse_target_dependencies(doc, manifest_path, source));
 
+    // Parse features table
+    let features = parse_features(doc);
+
     ManifestModel {
         path: manifest_path.clone(),
         package,
         dependencies: deps,
+        features,
     }
 }
 
@@ -198,12 +202,34 @@ fn parse_target_dependencies(
     out
 }
 
+/// Parse the [features] table.
+fn parse_features(doc: &ImDocument<&str>) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+
+    let Some(features) = doc.get("features").and_then(|i| i.as_table()) else {
+        return out;
+    };
+
+    for (name, item) in features.iter() {
+        let mut deps = Vec::new();
+        if let Some(arr) = item.as_array() {
+            for val in arr.iter() {
+                if let Some(s) = val.as_str() {
+                    deps.push(s.to_string());
+                }
+            }
+        }
+        out.insert(name.to_string(), deps);
+    }
+
+    out
+}
+
 fn parse_spec(item: &Item) -> DepSpec {
     match item {
         Item::Value(Value::String(s)) => DepSpec {
             version: Some(s.value().to_string()),
-            path: None,
-            workspace: false,
+            ..DepSpec::default()
         },
         Item::Value(Value::InlineTable(t)) => parse_inline_table(t),
         Item::Table(t) => parse_table(t),
@@ -222,6 +248,26 @@ fn parse_inline_table(t: &toml_edit::InlineTable) -> DepSpec {
     if let Some(w) = t.get("workspace").and_then(|v| v.as_bool()) {
         spec.workspace = w;
     }
+    // Git dependency fields
+    if let Some(g) = t.get("git").and_then(|v| v.as_str()) {
+        spec.git = Some(g.to_string());
+    }
+    if let Some(b) = t.get("branch").and_then(|v| v.as_str()) {
+        spec.branch = Some(b.to_string());
+    }
+    if let Some(tag) = t.get("tag").and_then(|v| v.as_str()) {
+        spec.tag = Some(tag.to_string());
+    }
+    if let Some(r) = t.get("rev").and_then(|v| v.as_str()) {
+        spec.rev = Some(r.to_string());
+    }
+    // Optional and default-features
+    if let Some(df) = t.get("default-features").and_then(|v| v.as_bool()) {
+        spec.default_features = Some(df);
+    }
+    if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
+        spec.optional = o;
+    }
     spec
 }
 
@@ -235,6 +281,26 @@ fn parse_table(t: &toml_edit::Table) -> DepSpec {
     }
     if let Some(w) = t.get("workspace").and_then(|v| v.as_bool()) {
         spec.workspace = w;
+    }
+    // Git dependency fields
+    if let Some(g) = t.get("git").and_then(|v| v.as_str()) {
+        spec.git = Some(g.to_string());
+    }
+    if let Some(b) = t.get("branch").and_then(|v| v.as_str()) {
+        spec.branch = Some(b.to_string());
+    }
+    if let Some(tag) = t.get("tag").and_then(|v| v.as_str()) {
+        spec.tag = Some(tag.to_string());
+    }
+    if let Some(r) = t.get("rev").and_then(|v| v.as_str()) {
+        spec.rev = Some(r.to_string());
+    }
+    // Optional and default-features
+    if let Some(df) = t.get("default-features").and_then(|v| v.as_bool()) {
+        spec.default_features = Some(df);
+    }
+    if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
+        spec.optional = o;
     }
     spec
 }
