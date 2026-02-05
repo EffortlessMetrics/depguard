@@ -28,7 +28,7 @@ cargo build --release
 # Analyze all manifests in the workspace
 depguard check
 
-# Analyze only manifests changed since main
+# Analyze only manifests changed since main (great for PRs)
 depguard check --scope diff --base origin/main
 
 # Generate a Markdown report from existing JSON
@@ -36,10 +36,23 @@ depguard md --report artifacts/depguard/report.json
 
 # Get help for a specific check or code
 depguard explain deps.no_wildcards
-depguard explain wildcard_version
 ```
 
-By default, reports are written to `artifacts/depguard/report.json`. If you pass `--write-markdown`, Markdown is written to `artifacts/depguard/comment.md`.
+**Example output:**
+
+```
+$ depguard check
+Scanning workspace: /path/to/my-project
+Found 5 manifests
+
+X 2 findings (1 error, 1 warning)
+
+Report written to artifacts/depguard/report.json
+```
+
+By default, reports are written to `artifacts/depguard/report.json`. Use `--write-markdown` to also generate `artifacts/depguard/comment.md`.
+
+See [docs/quickstart.md](docs/quickstart.md) for a complete getting-started guide.
 
 ## Example output
 
@@ -101,17 +114,48 @@ See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and r
 ### GitHub Actions
 
 ```yaml
-- name: Run depguard
-  run: |
-    depguard check --scope diff --base origin/${{ github.base_ref }}
+name: Depguard
 
-- name: Comment on PR
-  if: failure()
-  run: |
-    depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  depguard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for diff scope
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install depguard
+        run: cargo install --path crates/depguard-cli
+
+      - name: Run depguard
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            depguard check --scope diff --base origin/${{ github.base_ref }}
+          else
+            depguard check
+          fi
+
+      - name: Add summary
+        if: always()
+        run: |
+          echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
+          depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
 ```
 
-See [docs/ci-integration.md](docs/ci-integration.md) for complete CI setup examples.
+**Key points:**
+- Use `--scope diff` in PRs to only check changed manifests
+- Exit code `2` means policy failure; `1` means tool error; `0` means pass
+- Use `depguard annotations` to generate inline PR annotations
+
+See [docs/ci-integration.md](docs/ci-integration.md) for GitLab CI, CircleCI, Azure Pipelines, and Jenkins examples.
 
 ## Exit codes
 

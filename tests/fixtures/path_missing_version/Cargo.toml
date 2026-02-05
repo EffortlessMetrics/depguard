@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 # This path dependency lacks a version field, triggering deps.path_requires_version check
-my-local = { path = "../my-local" }
+# Using a non-escaping path (sibling directory within the repo)
+my-local = { path = "./libs/my-local" }

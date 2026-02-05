@@ -258,6 +258,34 @@ fn fixture_no_manifest_passes() {
 }
 
 #[test]
+fn fixture_publish_false_passes() {
+    // Tests that deps.path_requires_version is skipped for crates with publish = false
+    // when ignore_publish_false is not set (default behavior)
+    let (exit_code, report) = run_check_on_fixture("publish_false");
+    let expected = load_expected_report("publish_false");
+
+    assert_eq!(
+        exit_code, 0,
+        "publish_false fixture should exit with 0 (pass) - path deps allowed for unpublished crates"
+    );
+    assert_reports_match(report, expected, "publish_false");
+}
+
+#[test]
+fn fixture_publish_false_enforced_fails() {
+    // Tests that deps.path_requires_version IS triggered for crates with publish = false
+    // when ignore_publish_false = true is set in the config
+    let (exit_code, report) = run_check_on_fixture("publish_false_enforced");
+    let expected = load_expected_report("publish_false_enforced");
+
+    assert_eq!(
+        exit_code, 2,
+        "publish_false_enforced fixture should exit with 2 (fail) - path deps flagged despite publish=false"
+    );
+    assert_reports_match(report, expected, "publish_false_enforced");
+}
+
+#[test]
 fn fixture_workspace_members_exclude_fails() {
     let (exit_code, report) = run_check_on_fixture("workspace_members_exclude");
     let expected = load_expected_report("workspace_members_exclude");

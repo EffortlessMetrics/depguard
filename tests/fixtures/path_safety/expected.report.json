@@ -14,7 +14,7 @@
     "counts": {
       "info": 0,
       "warn": 0,
-      "error": 3
+      "error": 5
     },
     "reasons": []
   },
@@ -40,15 +40,15 @@
       "severity": "error",
       "check_id": "deps.path_safety",
       "code": "absolute_path",
-      "message": "dependency 'abs-windows' uses an absolute path: C:\\libs\\abs-windows",
+      "message": "dependency 'abs-windows-backslash' uses an absolute path: C:\\libs\\abs-windows",
       "location": {
         "path": "Cargo.toml",
         "line": 12
       },
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
-      "fingerprint": "9f83c032a191185303de88933c1cb1bc6cd7e06daa9aa98f665afdb451e2c8b2",
+      "fingerprint": "cedcbc068f0f74a67725275c37bf27787589d0c6e272849d2a1de7276b63db89",
       "data": {
-        "dependency": "abs-windows",
+        "dependency": "abs-windows-backslash",
         "manifest": "Cargo.toml",
         "path": "C:\\libs\\abs-windows"
       }
@@ -56,18 +56,52 @@
     {
       "severity": "error",
       "check_id": "deps.path_safety",
-      "code": "parent_escape",
-      "message": "dependency 'escaping' uses a path that escapes the repo root: ../../../../../../../../outside-repo",
+      "code": "absolute_path",
+      "message": "dependency 'abs-windows-forward' uses an absolute path: D:/projects/shared-lib",
       "location": {
         "path": "Cargo.toml",
         "line": 16
       },
-      "help": "Avoid `..` segments that escape the repository root.",
-      "fingerprint": "f4512f4ed76af6390480e2023f60450e8dc73b418ff1358a25adfd7aea7cf6d4",
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "a3691dbc9eefc4bb1990509038dac8cd0f574f7110538bf8b14eaee7c746af4e",
       "data": {
-        "dependency": "escaping",
+        "dependency": "abs-windows-forward",
+        "manifest": "Cargo.toml",
+        "path": "D:/projects/shared-lib"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'escaping-deep' uses a path that escapes the repo root: ../../../../../../../../outside-repo",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 20
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "a4f5f18ae44a254c50b4fcbcf4cb857995b1d7b06bc82d7b24bdb0a2f4e49c48",
+      "data": {
+        "dependency": "escaping-deep",
         "manifest": "Cargo.toml",
         "path": "../../../../../../../../outside-repo"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'escaping-minimal' uses a path that escapes the repo root: ../outside",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 23
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "08ab1f78c4316cc117c1344f564d1a98f3a83e7553307f76d15e651e7819b1f3",
+      "data": {
+        "dependency": "escaping-minimal",
+        "manifest": "Cargo.toml",
+        "path": "../outside"
       }
     }
   ],
@@ -75,8 +109,8 @@
     "scope": "repo",
     "profile": "strict",
     "manifests_scanned": 1,
-    "dependencies_scanned": 3,
-    "findings_total": 3,
-    "findings_emitted": 3
+    "dependencies_scanned": 5,
+    "findings_total": 5,
+    "findings_emitted": 5
   }
 }

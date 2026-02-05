@@ -14,7 +14,7 @@
     "counts": {
       "info": 0,
       "warn": 0,
-      "error": 5
+      "error": 6
     },
     "reasons": []
   },
@@ -73,6 +73,23 @@
     {
       "severity": "error",
       "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'path-no-version' uses a path that escapes the repo root: ../sibling",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 15
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "76fb872ef63dc6313c72e6613e511432ffff2fcea697e069a60248eb579afb7a",
+      "data": {
+        "dependency": "path-no-version",
+        "manifest": "Cargo.toml",
+        "path": "../sibling"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
       "code": "absolute_path",
       "message": "dependency 'absolute-dep' uses an absolute path: /absolute/path",
       "location": {
@@ -110,7 +127,7 @@
     "profile": "strict",
     "manifests_scanned": 1,
     "dependencies_scanned": 5,
-    "findings_total": 5,
-    "findings_emitted": 5
+    "findings_total": 6,
+    "findings_emitted": 6
   }
 }

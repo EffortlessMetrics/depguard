@@ -1,0 +1,19 @@
+# Test fixture: publish = false crate with path dependencies
+# This fixture tests that deps.path_requires_version IS triggered when:
+# - The crate has `publish = false`
+# - The config DOES set `ignore_publish_false = true`
+#
+# Some teams may want to enforce version fields even on unpublished crates
+# for consistency or to ensure dependencies remain pinned.
+
+[package]
+name = "publish-false-enforced"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# This path dependency lacks a version field, and because
+# ignore_publish_false = true, it SHOULD trigger deps.path_requires_version
+# Using a non-escaping path to avoid deps.path_safety findings
+local-lib = { path = "./libs/local-lib" }

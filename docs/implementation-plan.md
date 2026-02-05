@@ -54,8 +54,8 @@ This plan is sequenced to ship value early while freezing the protocol and preve
 
 ### Tests
 - [x] Fixture: workspace with members + exclude + nested target deps
-- [ ] Proptest: normalization of spec shapes (string vs table vs workspace=true)
-- [ ] Golden snapshot for discovered manifest ordering
+- [x] Proptest: normalization of spec shapes (string vs table vs workspace=true)
+- [x] Golden snapshot for discovered manifest ordering
 
 ---
 
@@ -70,13 +70,13 @@ Implement one check at a time; each adds fixtures and explain entries.
 ### 2.2 deps.path_requires_version ✅
 - [x] Detect `path` with missing `version`
 - [x] Implement `ignore_publish_false` option
-- [ ] Fixture cases include publish=false crate
+- [x] Fixture cases include publish=false crate
 
 ### 2.3 deps.path_safety ✅
 - [x] Detect absolute paths
 - [x] Detect lexical escape from workspace root
 - [x] Add allowlist globs (config)
-- [ ] Fixtures include Windows-style paths and `..` chains
+- [x] Fixtures include Windows-style paths and `..` chains
 
 ### 2.4 deps.workspace_inheritance ✅
 - [x] Read `[workspace.dependencies]` keys
@@ -85,9 +85,9 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [x] Allowlist for exceptional deps
 
 ### Tests
-- [ ] BDD scenarios for each rule
+- [x] BDD scenarios for each rule
 - [ ] Mutation testing (cargo-mutants) enabled for domain crate
-- [ ] Determinism tests for stable findings ordering
+- [x] Determinism tests for stable findings ordering
 
 ---
 
@@ -117,8 +117,8 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [x] `--scope diff`:
   - [x] Changed-file list between base/head (shell-out to git with fixed args)
   - [x] Scan only changed manifests (still read root for workspace deps)
-- [ ] Missing/partial inputs policy:
-  - [ ] Treat shallow clone missing base as tool error with remediation message
+- [x] Missing/partial inputs policy:
+  - [x] Treat shallow clone missing base as tool error with remediation message
   - [ ] Optionally support `--diff-file` later to avoid git dependency
 
 ### Tests
@@ -130,11 +130,11 @@ Implement one check at a time; each adds fixtures and explain entries.
 ## Phase 5 — Hardening 🔄
 
 ### Deliverables
-- [ ] Fuzz targets (`cargo-fuzz`):
-  - [ ] TOML parser inputs (never panic)
-  - [ ] Workspace member discovery inputs (never panic)
-- [ ] Expanded property tests:
-  - [ ] Ordering invariants under randomized iteration order
+- [x] Fuzz targets (`cargo-fuzz`):
+  - [x] TOML parser inputs (never panic)
+  - [x] Workspace member discovery inputs (never panic)
+- [x] Expanded property tests:
+  - [x] Ordering invariants under randomized iteration order
   - [ ] Path normalization invariants
 - [ ] Conformance harness integration:
   - [ ] Validate receipt against schemas in CI
@@ -142,7 +142,7 @@ Implement one check at a time; each adds fixtures and explain entries.
 
 ### Release polish
 - [ ] Prebuilt binaries (Linux/macOS/Windows) via GitHub Releases
-- [ ] README quickstart + CI snippet
+- [x] README quickstart + CI snippet
 - [ ] `cargo publish --dry-run` gating (if publishing to crates.io)
 
 ---
@@ -154,8 +154,8 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [x] Deterministic ordering
 - [x] Diff scope mode works
 - [x] Renderers exist (md + annotations)
-- [ ] Golden snapshot tests pass
-- [ ] Fuzz targets exist and run in scheduled CI
+- [x] Golden snapshot tests pass
+- [x] Fuzz targets exist and run in scheduled CI
 - [ ] Mutation testing runs on domain crate
 
 ## See also

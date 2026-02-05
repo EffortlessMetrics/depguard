@@ -462,6 +462,8 @@ dependencies = [
  "depguard-domain",
  "depguard-types",
  "globset",
+ "proptest",
+ "serde_json",
  "toml_edit",
  "walkdir",
 ]

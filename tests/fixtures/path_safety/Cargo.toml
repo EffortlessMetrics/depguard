@@ -8,9 +8,16 @@ edition = "2021"
 # Using Unix-style absolute path
 abs-unix = { path = "/opt/libs/abs-unix", version = "0.1.0" }
 
-# Windows-style absolute path (drive letter)
-abs-windows = { path = "C:\\libs\\abs-windows", version = "0.1.0" }
+# Windows-style absolute path (drive letter with backslash)
+abs-windows-backslash = { path = "C:\\libs\\abs-windows", version = "0.1.0" }
+
+# Windows-style absolute path (drive letter with forward slash)
+# Both C:\ and C:/ are valid Windows absolute paths
+abs-windows-forward = { path = "D:/projects/shared-lib", version = "0.1.0" }
 
 # Relative path that escapes repo root with excessive parent traversal
 # triggers deps.path_safety/parent_escape
-escaping = { path = "../../../../../../../../outside-repo", version = "0.1.0" }
+escaping-deep = { path = "../../../../../../../../outside-repo", version = "0.1.0" }
+
+# Minimal parent escape (just two levels up from root-level Cargo.toml)
+escaping-minimal = { path = "../outside", version = "0.1.0" }

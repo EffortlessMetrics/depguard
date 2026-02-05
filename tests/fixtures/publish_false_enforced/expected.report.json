@@ -23,17 +23,17 @@
       "severity": "error",
       "check_id": "deps.path_requires_version",
       "code": "path_without_version",
-      "message": "dependency 'my-local' uses a path dependency without an explicit version",
+      "message": "dependency 'local-lib' uses a path dependency without an explicit version",
       "location": {
         "path": "Cargo.toml",
-        "line": 9
+        "line": 19
       },
       "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
-      "fingerprint": "da251da316933dd7c0d84c7dab800b1ca4b7a24f908c5aee28c9e251e28e2521",
+      "fingerprint": "ec30f0af57775e66c726c0a09db9d0265a8f5b9e8467fbb7942c7f5aa483f0c9",
       "data": {
-        "dependency": "my-local",
+        "dependency": "local-lib",
         "manifest": "Cargo.toml",
-        "path": "./libs/my-local"
+        "path": "./libs/local-lib"
       }
     }
   ],

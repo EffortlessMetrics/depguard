@@ -81,7 +81,7 @@ Feature: Individual check behaviors
     And a Cargo.toml with:
       """
       [dependencies]
-      sibling = { path = "../sibling-crate" }
+      sibling-crate = { path = "../sibling-crate", version = "0.1.0" }
       """
     When I run the check
     Then no finding is emitted for "deps.path_safety"

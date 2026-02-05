@@ -243,6 +243,332 @@ fn parse_table(t: &toml_edit::Table) -> DepSpec {
 mod tests {
     use super::*;
 
+    mod proptest_spec_normalization {
+        use super::*;
+        use proptest::prelude::*;
+
+        /// Strategy to generate valid semver-like version strings.
+        fn version_strategy() -> impl Strategy<Value = String> {
+            (0u32..100, 0u32..100, 0u32..100)
+                .prop_map(|(major, minor, patch)| format!("{}.{}.{}", major, minor, patch))
+        }
+
+        /// Strategy to generate valid relative path strings (no absolute paths or parent escapes).
+        fn path_strategy() -> impl Strategy<Value = String> {
+            prop::collection::vec("[a-z][a-z0-9_-]{0,10}", 1..=3).prop_map(|parts| parts.join("/"))
+        }
+
+        /// Strategy to generate valid crate names.
+        fn crate_name_strategy() -> impl Strategy<Value = String> {
+            "[a-z][a-z0-9_-]{1,15}".prop_filter("must not be empty", |s| !s.is_empty())
+        }
+
+        proptest! {
+            /// Property: A simple string version "X.Y.Z" and an inline table { version = "X.Y.Z" }
+            /// must normalize to equivalent DepSpec values.
+            #[test]
+            fn string_and_inline_table_normalize_same(version in version_strategy()) {
+                // String form: serde = "1.0.0"
+                let string_manifest = format!(
+                    r#"[dependencies]
+dep = "{version}"
+"#
+                );
+
+                // Inline table form: serde = {{ version = "1.0.0" }}
+                let inline_manifest = format!(
+                    r#"[dependencies]
+dep = {{ version = "{version}" }}
+"#
+                );
+
+                let path = RepoPath::new("Cargo.toml");
+                let string_model = parse_member_manifest(&path, &string_manifest)
+                    .expect("string form should parse");
+                let inline_model = parse_member_manifest(&path, &inline_manifest)
+                    .expect("inline table form should parse");
+
+                prop_assert_eq!(string_model.dependencies.len(), 1);
+                prop_assert_eq!(inline_model.dependencies.len(), 1);
+
+                let string_spec = &string_model.dependencies[0].spec;
+                let inline_spec = &inline_model.dependencies[0].spec;
+
+                // Both should have the same version
+                prop_assert_eq!(&string_spec.version, &inline_spec.version);
+                prop_assert_eq!(string_spec.version.as_deref(), Some(version.as_str()));
+
+                // Neither should have path or workspace set
+                prop_assert!(string_spec.path.is_none());
+                prop_assert!(inline_spec.path.is_none());
+                prop_assert!(!string_spec.workspace);
+                prop_assert!(!inline_spec.workspace);
+            }
+
+            /// Property: Inline table { version = "X.Y.Z" } and expanded table [dependencies.dep]
+            /// must normalize to equivalent DepSpec values.
+            #[test]
+            fn inline_and_expanded_table_normalize_same(version in version_strategy()) {
+                // Inline table form
+                let inline_manifest = format!(
+                    r#"[dependencies]
+dep = {{ version = "{version}" }}
+"#
+                );
+
+                // Expanded table form
+                let expanded_manifest = format!(
+                    r#"[dependencies.dep]
+version = "{version}"
+"#
+                );
+
+                let path = RepoPath::new("Cargo.toml");
+                let inline_model = parse_member_manifest(&path, &inline_manifest)
+                    .expect("inline table form should parse");
+                let expanded_model = parse_member_manifest(&path, &expanded_manifest)
+                    .expect("expanded table form should parse");
+
+                prop_assert_eq!(inline_model.dependencies.len(), 1);
+                prop_assert_eq!(expanded_model.dependencies.len(), 1);
+
+                let inline_spec = &inline_model.dependencies[0].spec;
+                let expanded_spec = &expanded_model.dependencies[0].spec;
+
+                // Both should normalize to the same version
+                prop_assert_eq!(&inline_spec.version, &expanded_spec.version);
+                prop_assert_eq!(&inline_spec.path, &expanded_spec.path);
+                prop_assert_eq!(inline_spec.workspace, expanded_spec.workspace);
+            }
+
+            /// Property: workspace = true should be extracted regardless of table form.
+            #[test]
+            fn workspace_inheritance_normalizes_correctly(
+                use_inline in proptest::bool::ANY
+            ) {
+                let manifest = if use_inline {
+                    r#"[dependencies]
+dep = { workspace = true }
+"#.to_string()
+                } else {
+                    r#"[dependencies.dep]
+workspace = true
+"#.to_string()
+                };
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("workspace dep should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 1);
+                let spec = &model.dependencies[0].spec;
+
+                prop_assert!(spec.workspace, "workspace flag should be true");
+                prop_assert!(spec.version.is_none(), "workspace deps should not have version");
+                prop_assert!(spec.path.is_none(), "workspace deps should not have path");
+            }
+
+            /// Property: Path dependencies should preserve the path regardless of table form.
+            #[test]
+            fn path_deps_normalize_same(
+                rel_path in path_strategy(),
+                use_inline in proptest::bool::ANY
+            ) {
+                let manifest = if use_inline {
+                    format!(
+                        r#"[dependencies]
+dep = {{ path = "{rel_path}" }}
+"#
+                    )
+                } else {
+                    format!(
+                        r#"[dependencies.dep]
+path = "{rel_path}"
+"#
+                    )
+                };
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("path dep should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 1);
+                let spec = &model.dependencies[0].spec;
+
+                prop_assert_eq!(spec.path.as_deref(), Some(rel_path.as_str()));
+                prop_assert!(!spec.workspace);
+            }
+
+            /// Property: Mixed specs (version + path) should preserve both fields.
+            #[test]
+            fn mixed_version_and_path_normalize(
+                version in version_strategy(),
+                rel_path in path_strategy(),
+                use_inline in proptest::bool::ANY
+            ) {
+                let manifest = if use_inline {
+                    format!(
+                        r#"[dependencies]
+dep = {{ version = "{version}", path = "{rel_path}" }}
+"#
+                    )
+                } else {
+                    format!(
+                        r#"[dependencies.dep]
+version = "{version}"
+path = "{rel_path}"
+"#
+                    )
+                };
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("mixed dep should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 1);
+                let spec = &model.dependencies[0].spec;
+
+                prop_assert_eq!(spec.version.as_deref(), Some(version.as_str()));
+                prop_assert_eq!(spec.path.as_deref(), Some(rel_path.as_str()));
+                prop_assert!(!spec.workspace);
+            }
+
+            /// Property: The crate name should be preserved regardless of spec form.
+            #[test]
+            fn crate_name_preserved_across_forms(
+                crate_name in crate_name_strategy(),
+                version in version_strategy()
+            ) {
+                // Test all three forms preserve the crate name
+                let string_manifest = format!(
+                    r#"[dependencies]
+{crate_name} = "{version}"
+"#
+                );
+
+                let inline_manifest = format!(
+                    r#"[dependencies]
+{crate_name} = {{ version = "{version}" }}
+"#
+                );
+
+                let expanded_manifest = format!(
+                    r#"[dependencies.{crate_name}]
+version = "{version}"
+"#
+                );
+
+                let path = RepoPath::new("Cargo.toml");
+
+                let string_model = parse_member_manifest(&path, &string_manifest)
+                    .expect("string form should parse");
+                let inline_model = parse_member_manifest(&path, &inline_manifest)
+                    .expect("inline form should parse");
+                let expanded_model = parse_member_manifest(&path, &expanded_manifest)
+                    .expect("expanded form should parse");
+
+                prop_assert_eq!(&string_model.dependencies[0].name, &crate_name);
+                prop_assert_eq!(&inline_model.dependencies[0].name, &crate_name);
+                prop_assert_eq!(&expanded_model.dependencies[0].name, &crate_name);
+            }
+
+            /// Property: Multiple dependencies in various forms should all be parsed.
+            #[test]
+            fn multiple_deps_all_parsed(
+                v1 in version_strategy(),
+                v2 in version_strategy(),
+                rel_path in path_strategy()
+            ) {
+                let manifest = format!(
+                    r#"[dependencies]
+dep_a = "{v1}"
+dep_b = {{ version = "{v2}" }}
+dep_c = {{ path = "{rel_path}" }}
+dep_d = {{ workspace = true }}
+"#
+                );
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("multi-dep manifest should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 4);
+
+                // Find each dependency by name
+                let find_dep = |name: &str| {
+                    model.dependencies.iter().find(|d| d.name == name)
+                };
+
+                let dep_a = find_dep("dep_a").expect("dep_a should exist");
+                let dep_b = find_dep("dep_b").expect("dep_b should exist");
+                let dep_c = find_dep("dep_c").expect("dep_c should exist");
+                let dep_d = find_dep("dep_d").expect("dep_d should exist");
+
+                // Verify each was parsed correctly
+                prop_assert_eq!(dep_a.spec.version.as_deref(), Some(v1.as_str()));
+                prop_assert_eq!(dep_b.spec.version.as_deref(), Some(v2.as_str()));
+                prop_assert_eq!(dep_c.spec.path.as_deref(), Some(rel_path.as_str()));
+                prop_assert!(dep_d.spec.workspace);
+            }
+
+            /// Property: workspace = true with features should still have workspace = true.
+            #[test]
+            fn workspace_with_features_still_workspace(
+                use_inline in proptest::bool::ANY
+            ) {
+                let manifest = if use_inline {
+                    r#"[dependencies]
+dep = { workspace = true, features = ["foo", "bar"] }
+"#.to_string()
+                } else {
+                    r#"[dependencies.dep]
+workspace = true
+features = ["foo", "bar"]
+"#.to_string()
+                };
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("workspace with features should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 1);
+                let spec = &model.dependencies[0].spec;
+
+                prop_assert!(spec.workspace, "workspace flag should be true");
+            }
+
+            /// Property: DepKind should be correctly assigned for all three dep sections.
+            #[test]
+            fn dep_kind_correctly_assigned(version in version_strategy()) {
+                let manifest = format!(
+                    r#"[dependencies]
+normal_dep = "{version}"
+
+[dev-dependencies]
+dev_dep = "{version}"
+
+[build-dependencies]
+build_dep = "{version}"
+"#
+                );
+
+                let path = RepoPath::new("Cargo.toml");
+                let model = parse_member_manifest(&path, &manifest)
+                    .expect("multi-section manifest should parse");
+
+                prop_assert_eq!(model.dependencies.len(), 3);
+
+                let find_dep = |name: &str| {
+                    model.dependencies.iter().find(|d| d.name == name).unwrap()
+                };
+
+                prop_assert_eq!(find_dep("normal_dep").kind, DepKind::Normal);
+                prop_assert_eq!(find_dep("dev_dep").kind, DepKind::Dev);
+                prop_assert_eq!(find_dep("build_dep").kind, DepKind::Build);
+            }
+        }
+    }
+
     #[test]
     fn test_parse_target_specific_dependencies() {
         let manifest = r#"

@@ -254,6 +254,55 @@ fn scope_from_config(cfg_text: &str) -> Option<&str> {
     None
 }
 
+/// Error type for git diff operations, providing specific remediation guidance.
+#[derive(Debug)]
+enum GitDiffError {
+    /// Git executable not found or failed to spawn.
+    SpawnFailed(std::io::Error),
+    /// The base commit is not reachable (common in shallow clones).
+    BaseCommitNotReachable { base: String, stderr: String },
+    /// The head commit is not reachable.
+    HeadCommitNotReachable { head: String, stderr: String },
+    /// Generic git error.
+    Other { stderr: String },
+}
+
+impl std::fmt::Display for GitDiffError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GitDiffError::SpawnFailed(e) => {
+                write!(f, "failed to run git: {e}")
+            }
+            GitDiffError::BaseCommitNotReachable { base, stderr } => {
+                write!(
+                    f,
+                    "git base revision '{base}' is not reachable.\n\n\
+                    This commonly happens in CI environments with shallow clones.\n\n\
+                    Remediation options:\n\
+                    1. Fetch more history: git fetch --deepen=100\n\
+                    2. Fetch the full history: git fetch --unshallow\n\
+                    3. Fetch the specific base ref: git fetch origin {base}\n\
+                    4. Use --scope repo instead of --scope diff\n\n\
+                    Git error: {stderr}"
+                )
+            }
+            GitDiffError::HeadCommitNotReachable { head, stderr } => {
+                write!(
+                    f,
+                    "git head revision '{head}' is not reachable.\n\n\
+                    Remediation: ensure the head ref exists locally.\n\n\
+                    Git error: {stderr}"
+                )
+            }
+            GitDiffError::Other { stderr } => {
+                write!(f, "git diff failed: {stderr}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for GitDiffError {}
+
 fn git_changed_files(
     repo_root: &camino::Utf8Path,
     base: &str,
@@ -263,10 +312,43 @@ fn git_changed_files(
         .current_dir(repo_root)
         .args(["diff", "--name-only", &format!("{base}..{head}")])
         .output()
-        .context("spawn git")?;
+        .map_err(GitDiffError::SpawnFailed)?;
 
     if !output.status.success() {
-        anyhow::bail!("git diff returned non-zero exit status");
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let stderr_lower = stderr.to_lowercase();
+
+        // Detect shallow clone / missing base commit errors.
+        // Git produces various error messages depending on the situation:
+        // - "fatal: ambiguous argument 'origin/main': unknown revision or path"
+        // - "fatal: bad revision 'origin/main..HEAD'"
+        // - "fatal: Invalid revision range"
+        let is_base_unreachable = stderr_lower.contains("unknown revision")
+            || stderr_lower.contains("bad revision")
+            || stderr_lower.contains("invalid revision range")
+            || (stderr_lower.contains("fatal:")
+                && stderr_lower.contains(base.to_lowercase().as_str()));
+
+        // Check if the error specifically mentions the head ref.
+        let is_head_unreachable = !is_base_unreachable
+            && stderr_lower.contains("fatal:")
+            && stderr_lower.contains(head.to_lowercase().as_str());
+
+        let err = if is_base_unreachable {
+            GitDiffError::BaseCommitNotReachable {
+                base: base.to_string(),
+                stderr,
+            }
+        } else if is_head_unreachable {
+            GitDiffError::HeadCommitNotReachable {
+                head: head.to_string(),
+                stderr,
+            }
+        } else {
+            GitDiffError::Other { stderr }
+        };
+
+        return Err(err.into());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -362,5 +444,60 @@ fn cmd_explain(identifier: &str) -> anyhow::Result<()> {
             );
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_diff_error_display_base_unreachable() {
+        let err = GitDiffError::BaseCommitNotReachable {
+            base: "origin/main".to_string(),
+            stderr: "fatal: ambiguous argument 'origin/main': unknown revision".to_string(),
+        };
+        let msg = format!("{err}");
+
+        assert!(msg.contains("origin/main"));
+        assert!(msg.contains("not reachable"));
+        assert!(msg.contains("shallow clone"));
+        assert!(msg.contains("git fetch --deepen=100"));
+        assert!(msg.contains("git fetch --unshallow"));
+        assert!(msg.contains("--scope repo"));
+    }
+
+    #[test]
+    fn git_diff_error_display_head_unreachable() {
+        let err = GitDiffError::HeadCommitNotReachable {
+            head: "feature-branch".to_string(),
+            stderr: "fatal: bad revision 'feature-branch'".to_string(),
+        };
+        let msg = format!("{err}");
+
+        assert!(msg.contains("feature-branch"));
+        assert!(msg.contains("not reachable"));
+        assert!(msg.contains("ensure the head ref exists"));
+    }
+
+    #[test]
+    fn git_diff_error_display_other() {
+        let err = GitDiffError::Other {
+            stderr: "fatal: Not a git repository".to_string(),
+        };
+        let msg = format!("{err}");
+
+        assert!(msg.contains("git diff failed"));
+        assert!(msg.contains("Not a git repository"));
+    }
+
+    #[test]
+    fn git_diff_error_display_spawn_failed() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "git not found");
+        let err = GitDiffError::SpawnFailed(io_err);
+        let msg = format!("{err}");
+
+        assert!(msg.contains("failed to run git"));
+        assert!(msg.contains("git not found"));
     }
 }

@@ -1,0 +1,11 @@
+[workspace]
+# Members listed in intentionally non-alphabetical order to test
+# that discovery produces a stable, deterministic ordering.
+members = [
+    "crates/zeta",
+    "crates/alpha",
+    "crates/mu",
+    "apps/web",
+    "apps/cli",
+]
+resolver = "2"

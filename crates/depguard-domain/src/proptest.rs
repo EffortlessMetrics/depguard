@@ -350,6 +350,73 @@ proptest! {
 // Property tests: Findings ordering determinism
 // ============================================================================
 
+/// Helper: Sort findings using the same comparator as the engine.
+/// This must stay in sync with the compare_findings function in engine.rs.
+fn sort_findings(f: &mut [Finding]) {
+    f.sort_by(|a, b| {
+        let rank = |s: Severity| match s {
+            Severity::Error => 0u8,
+            Severity::Warning => 1u8,
+            Severity::Info => 2u8,
+        };
+        let (ap, al) = match &a.location {
+            Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
+            None => ("~", u32::MAX),
+        };
+        let (bp, bl) = match &b.location {
+            Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
+            None => ("~", u32::MAX),
+        };
+        rank(a.severity)
+            .cmp(&rank(b.severity))
+            .then(ap.cmp(bp))
+            .then(al.cmp(&bl))
+            .then(a.check_id.cmp(&b.check_id))
+            .then(a.code.cmp(&b.code))
+            .then(a.message.cmp(&b.message))
+    });
+}
+
+/// Helper: Verify that a slice of findings is sorted according to the documented order.
+fn assert_sorted(findings: &[Finding]) -> Result<(), proptest::test_runner::TestCaseError> {
+    for i in 1..findings.len() {
+        let prev = &findings[i - 1];
+        let curr = &findings[i];
+
+        let rank = |s: Severity| match s {
+            Severity::Error => 0u8,
+            Severity::Warning => 1u8,
+            Severity::Info => 2u8,
+        };
+        let (prev_path, prev_line) = match &prev.location {
+            Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
+            None => ("~", u32::MAX),
+        };
+        let (curr_path, curr_line) = match &curr.location {
+            Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
+            None => ("~", u32::MAX),
+        };
+
+        let cmp = rank(prev.severity)
+            .cmp(&rank(curr.severity))
+            .then(prev_path.cmp(curr_path))
+            .then(prev_line.cmp(&curr_line))
+            .then(prev.check_id.cmp(&curr.check_id))
+            .then(prev.code.cmp(&curr.code))
+            .then(prev.message.cmp(&curr.message));
+
+        prop_assert!(
+            cmp != std::cmp::Ordering::Greater,
+            "Findings at index {} and {} are not in correct order: {:?} should come before {:?}",
+            i - 1,
+            i,
+            prev,
+            curr
+        );
+    }
+    Ok(())
+}
+
 proptest! {
     /// Given any permutation of the same findings, output order should be identical.
     #[test]
@@ -367,32 +434,6 @@ proptest! {
         permutation1.shuffle(&mut rng);
         permutation2.shuffle(&mut rng);
         permutation3.shuffle(&mut rng);
-
-        // Sort all permutations using the same comparator as the engine
-        fn sort_findings(f: &mut [Finding]) {
-            f.sort_by(|a, b| {
-                let rank = |s: Severity| match s {
-                    Severity::Error => 0u8,
-                    Severity::Warning => 1u8,
-                    Severity::Info => 2u8,
-                };
-                let (ap, al) = match &a.location {
-                    Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
-                    None => ("~", u32::MAX),
-                };
-                let (bp, bl) = match &b.location {
-                    Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
-                    None => ("~", u32::MAX),
-                };
-                rank(a.severity)
-                    .cmp(&rank(b.severity))
-                    .then(ap.cmp(bp))
-                    .then(al.cmp(&bl))
-                    .then(a.check_id.cmp(&b.check_id))
-                    .then(a.code.cmp(&b.code))
-                    .then(a.message.cmp(&b.message))
-            });
-        }
 
         sort_findings(&mut permutation1);
         sort_findings(&mut permutation2);
@@ -432,31 +473,6 @@ proptest! {
     /// Same input should always produce the same output (idempotence of sorting).
     #[test]
     fn findings_ordering_is_stable(findings in prop::collection::vec(arb_finding(), 0..20)) {
-        fn sort_findings(f: &mut [Finding]) {
-            f.sort_by(|a, b| {
-                let rank = |s: Severity| match s {
-                    Severity::Error => 0u8,
-                    Severity::Warning => 1u8,
-                    Severity::Info => 2u8,
-                };
-                let (ap, al) = match &a.location {
-                    Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
-                    None => ("~", u32::MAX),
-                };
-                let (bp, bl) = match &b.location {
-                    Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
-                    None => ("~", u32::MAX),
-                };
-                rank(a.severity)
-                    .cmp(&rank(b.severity))
-                    .then(ap.cmp(bp))
-                    .then(al.cmp(&bl))
-                    .then(a.check_id.cmp(&b.check_id))
-                    .then(a.code.cmp(&b.code))
-                    .then(a.message.cmp(&b.message))
-            });
-        }
-
         let mut sorted1 = findings.clone();
         let mut sorted2 = findings.clone();
 
@@ -480,6 +496,119 @@ proptest! {
                 &sorted2[i].message,
                 "message mismatch at index {}", i
             );
+        }
+    }
+
+    /// Severity ordering: Error < Warning < Info (Error comes first)
+    #[test]
+    fn severity_ordering_is_error_warning_info(findings in prop::collection::vec(arb_finding(), 2..30)) {
+        let mut sorted = findings.clone();
+        sort_findings(&mut sorted);
+
+        // Verify all errors come before warnings, and all warnings come before infos
+        let mut seen_warning = false;
+        let mut seen_info = false;
+
+        for f in &sorted {
+            match f.severity {
+                Severity::Error => {
+                    prop_assert!(!seen_warning && !seen_info,
+                        "Error found after Warning or Info");
+                }
+                Severity::Warning => {
+                    seen_warning = true;
+                    prop_assert!(!seen_info,
+                        "Warning found after Info");
+                }
+                Severity::Info => {
+                    seen_info = true;
+                }
+            }
+        }
+    }
+
+    /// After sorting, the findings slice should be in sorted order according to all criteria.
+    #[test]
+    fn sorted_findings_are_in_correct_order(findings in prop::collection::vec(arb_finding(), 0..30)) {
+        let mut sorted = findings.clone();
+        sort_findings(&mut sorted);
+        assert_sorted(&sorted)?;
+    }
+
+    /// Shuffling and re-sorting produces the same result every time.
+    #[test]
+    fn shuffle_and_resort_is_idempotent(
+        findings in prop::collection::vec(arb_finding(), 1..25),
+        seed in any::<u64>(),
+    ) {
+        use rand::seq::SliceRandom;
+        use rand::SeedableRng;
+
+        // First sort to establish baseline
+        let mut baseline = findings.clone();
+        sort_findings(&mut baseline);
+
+        // Shuffle with random seed and re-sort
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let mut shuffled = findings.clone();
+        shuffled.shuffle(&mut rng);
+        sort_findings(&mut shuffled);
+
+        // Should match baseline
+        prop_assert_eq!(baseline.len(), shuffled.len());
+        for i in 0..baseline.len() {
+            prop_assert_eq!(
+                &baseline[i].severity,
+                &shuffled[i].severity,
+                "severity mismatch at index {}", i
+            );
+            prop_assert_eq!(
+                &baseline[i].check_id,
+                &shuffled[i].check_id,
+                "check_id mismatch at index {}", i
+            );
+            prop_assert_eq!(
+                &baseline[i].code,
+                &shuffled[i].code,
+                "code mismatch at index {}", i
+            );
+            prop_assert_eq!(
+                &baseline[i].message,
+                &shuffled[i].message,
+                "message mismatch at index {}", i
+            );
+        }
+    }
+
+    /// Within the same severity level, paths are sorted alphabetically.
+    #[test]
+    fn paths_sorted_alphabetically_within_severity(
+        findings in prop::collection::vec(arb_finding(), 2..20),
+    ) {
+        let mut sorted = findings.clone();
+        sort_findings(&mut sorted);
+
+        // Group by severity and verify path ordering within each group
+        let mut prev_severity: Option<Severity> = None;
+        let mut prev_path: Option<String> = None;
+
+        for f in &sorted {
+            let curr_path = f.location.as_ref().map(|l| l.path.as_str().to_string()).unwrap_or_else(|| "~".to_string());
+
+            if prev_severity == Some(f.severity) {
+                if let Some(ref pp) = prev_path {
+                    prop_assert!(
+                        pp <= &curr_path,
+                        "Path order violation within severity {:?}: {} > {}",
+                        f.severity,
+                        pp,
+                        curr_path
+                    );
+                }
+            }
+
+            prev_severity = Some(f.severity);
+            prev_path = Some(curr_path);
         }
     }
 }

@@ -97,10 +97,14 @@ fn is_absolute_path(p: &str) -> bool {
 
 fn manifest_dir_depth(manifest_path: &str) -> i32 {
     // repo-relative path like `crates/foo/Cargo.toml`
+    // Returns number of directory segments (not including the filename)
+    // For root-level `Cargo.toml`, returns 0
+    // For `crates/foo/Cargo.toml`, returns 2
     let trimmed = manifest_path.trim_matches('/');
     let mut parts: Vec<&str> = trimmed.split('/').collect();
-    if parts.len() > 1 {
-        parts.pop(); // drop filename
+    // Always drop the filename (last segment)
+    if !parts.is_empty() {
+        parts.pop();
     }
     parts
         .into_iter()
