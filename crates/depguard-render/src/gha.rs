@@ -1,17 +1,17 @@
-use depguard_types::{DepguardReport, Severity};
+use crate::{RenderableReport, RenderableSeverity};
 
 /// Render findings as GitHub Actions workflow command annotations.
 ///
 /// Format:
 /// `::{level} file={path},line={line},col={col}::{message}`
-pub fn render_github_annotations(report: &DepguardReport) -> Vec<String> {
+pub fn render_github_annotations(report: &RenderableReport) -> Vec<String> {
     let mut out = Vec::new();
 
     for f in &report.findings {
         let level = match f.severity {
-            Severity::Error => "error",
-            Severity::Warning => "warning",
-            Severity::Info => "notice",
+            RenderableSeverity::Error => "error",
+            RenderableSeverity::Warning => "warning",
+            RenderableSeverity::Info => "notice",
         };
 
         let mut meta = String::new();
@@ -25,7 +25,8 @@ pub fn render_github_annotations(report: &DepguardReport) -> Vec<String> {
             }
         }
 
-        let message = format!("[{}:{}] {}", f.check_id, f.code, f.message)
+        let check_id = f.check_id.as_deref().unwrap_or("depguard");
+        let message = format!("[{}:{}] {}", check_id, f.code, f.message)
             .replace('%', "%25")
             .replace('\r', "%0D")
             .replace('\n', "%0A");

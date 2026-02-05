@@ -7,7 +7,7 @@ Feature: Individual check behaviors
   # ===========================================================================
 
   Scenario Outline: Wildcard version patterns are detected
-    Given a Cargo.toml with dependency "<dependency>"
+    Given a Cargo.toml with dependency '<dependency>'
     When I run the check
     Then a finding is emitted with check_id "deps.no_wildcards" and code "wildcard_version"
 
@@ -18,7 +18,7 @@ Feature: Individual check behaviors
       | regex = "1.2.*"      | Minor-pinned wildcard    |
 
   Scenario Outline: Valid version constraints pass
-    Given a Cargo.toml with dependency "<dependency>"
+    Given a Cargo.toml with dependency '<dependency>'
     When I run the check
     Then no finding is emitted for "deps.no_wildcards"
 
@@ -101,6 +101,11 @@ Feature: Individual check behaviors
       [dependencies]
       serde = "1.0"
       """
+    And a depguard.toml with:
+      """
+      [checks."deps.workspace_inheritance"]
+      enabled = true
+      """
     When I run the check
     Then a finding is emitted with check_id "deps.workspace_inheritance" and code "missing_workspace_true"
 
@@ -115,6 +120,11 @@ Feature: Individual check behaviors
       [dependencies]
       serde = { workspace = true }
       """
+    And a depguard.toml with:
+      """
+      [checks."deps.workspace_inheritance"]
+      enabled = true
+      """
     When I run the check
     Then no finding is emitted for "deps.workspace_inheritance"
 
@@ -128,6 +138,11 @@ Feature: Individual check behaviors
       """
       [dependencies]
       rand = "0.8"
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.workspace_inheritance"]
+      enabled = true
       """
     When I run the check
     Then no finding is emitted for "deps.workspace_inheritance"

@@ -1,12 +1,23 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": "__TIMESTAMP__",
-  "finished_at": "__TIMESTAMP__",
-  "verdict": "fail",
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 3
+    },
+    "reasons": []
+  },
   "findings": [
     {
       "severity": "error",
@@ -18,6 +29,7 @@
         "line": 9
       },
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "50731d8c1aa18b6d8d83023e748c7eb412abaf99a3ccb4021f7afc7790829fc4",
       "data": {
         "dependency": "abs-unix",
         "manifest": "Cargo.toml",
@@ -34,6 +46,7 @@
         "line": 12
       },
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "9f83c032a191185303de88933c1cb1bc6cd7e06daa9aa98f665afdb451e2c8b2",
       "data": {
         "dependency": "abs-windows",
         "manifest": "Cargo.toml",
@@ -50,6 +63,7 @@
         "line": 16
       },
       "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "f4512f4ed76af6390480e2023f60450e8dc73b418ff1358a25adfd7aea7cf6d4",
       "data": {
         "dependency": "escaping",
         "manifest": "Cargo.toml",

@@ -1,32 +1,23 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": [
-    2026,
-    34,
-    10,
-    53,
-    9,
-    142934600,
-    0,
-    0,
-    0
-  ],
-  "finished_at": [
-    2026,
-    34,
-    10,
-    53,
-    9,
-    150760800,
-    0,
-    0,
-    0
-  ],
-  "verdict": "fail",
+  "run": {
+    "started_at": "2026-02-04T21:35:14.3181651Z",
+    "ended_at": "2026-02-04T21:35:14.3197291Z",
+    "duration_ms": 1
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
   "findings": [
     {
       "severity": "error",
@@ -38,6 +29,7 @@
         "line": 8
       },
       "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
+      "fingerprint": "f757d47212dd098c613d6bc121c093ca5f76e5f600a0e666e29f69ef78713e9b",
       "data": {
         "dependency": "my-local",
         "manifest": "Cargo.toml",

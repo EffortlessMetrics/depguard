@@ -37,6 +37,7 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CHECK_DEPS_PATH_REQUIRES_VERSION => Some(explain_path_requires_version()),
         ids::CHECK_DEPS_PATH_SAFETY => Some(explain_path_safety()),
         ids::CHECK_DEPS_WORKSPACE_INHERITANCE => Some(explain_workspace_inheritance()),
+        ids::CHECK_TOOL_RUNTIME => Some(explain_tool_runtime()),
 
         // Codes
         ids::CODE_WILDCARD_VERSION => Some(explain_wildcard_version()),
@@ -44,6 +45,7 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CODE_ABSOLUTE_PATH => Some(explain_absolute_path()),
         ids::CODE_PARENT_ESCAPE => Some(explain_parent_escape()),
         ids::CODE_MISSING_WORKSPACE_TRUE => Some(explain_missing_workspace_true()),
+        ids::CODE_RUNTIME_ERROR => Some(explain_runtime_error()),
 
         _ => None,
     }
@@ -56,6 +58,7 @@ pub fn all_check_ids() -> &'static [&'static str] {
         ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
         ids::CHECK_DEPS_PATH_SAFETY,
         ids::CHECK_DEPS_WORKSPACE_INHERITANCE,
+        ids::CHECK_TOOL_RUNTIME,
     ]
 }
 
@@ -67,6 +70,7 @@ pub fn all_codes() -> &'static [&'static str] {
         ids::CODE_ABSOLUTE_PATH,
         ids::CODE_PARENT_ESCAPE,
         ids::CODE_MISSING_WORKSPACE_TRUE,
+        ids::CODE_RUNTIME_ERROR,
     ]
 }
 
@@ -227,6 +231,29 @@ serde = { workspace = true, features = ["derive"] }"#,
     }
 }
 
+fn explain_tool_runtime() -> Explanation {
+    Explanation {
+        title: "Tool Runtime Error",
+        description: "\
+Depguard encountered an internal error or invalid environment while running.
+
+This indicates the tool could not complete analysis due to a runtime failure
+such as an invalid config file, missing repository root, or a git error.",
+        remediation: "\
+Fix the underlying error and re-run depguard:
+- Check the error message in stderr
+- Fix invalid depguard.toml syntax or values
+- Ensure the repo root exists and is accessible
+- Provide required git history for diff scope",
+        examples: ExamplePair {
+            before: r#"# Fails with a tool runtime error
+depguard check --repo-root /missing/path"#,
+            after: r#"# Succeeds after fixing the input
+depguard check --repo-root ."#,
+        },
+    }
+}
+
 // --- Code-level explanations ---
 
 fn explain_wildcard_version() -> Explanation {
@@ -322,6 +349,12 @@ fn explain_missing_workspace_true() -> Explanation {
     exp
 }
 
+fn explain_runtime_error() -> Explanation {
+    let mut exp = explain_tool_runtime();
+    exp.title = "Runtime Error";
+    exp
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,6 +365,7 @@ mod tests {
         assert!(lookup_explanation(ids::CHECK_DEPS_PATH_REQUIRES_VERSION).is_some());
         assert!(lookup_explanation(ids::CHECK_DEPS_PATH_SAFETY).is_some());
         assert!(lookup_explanation(ids::CHECK_DEPS_WORKSPACE_INHERITANCE).is_some());
+        assert!(lookup_explanation(ids::CHECK_TOOL_RUNTIME).is_some());
     }
 
     #[test]
@@ -341,6 +375,7 @@ mod tests {
         assert!(lookup_explanation(ids::CODE_ABSOLUTE_PATH).is_some());
         assert!(lookup_explanation(ids::CODE_PARENT_ESCAPE).is_some());
         assert!(lookup_explanation(ids::CODE_MISSING_WORKSPACE_TRUE).is_some());
+        assert!(lookup_explanation(ids::CODE_RUNTIME_ERROR).is_some());
     }
 
     #[test]

@@ -5,8 +5,13 @@ use camino::Utf8Path;
 use depguard_domain::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
-use depguard_types::{DepguardReport, ReportEnvelope, ToolMeta, Verdict};
+use depguard_types::{
+    ReportEnvelope, ReportEnvelopeV2, RunMeta, ToolMeta, ToolMetaV2, Verdict, VerdictCounts,
+    VerdictStatus, VerdictV2, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2,
+};
 use time::OffsetDateTime;
+
+use crate::report::{ReportVariant, ReportVersion};
 
 /// Input for the check use case.
 #[derive(Clone, Debug)]
@@ -19,13 +24,15 @@ pub struct CheckInput<'a> {
     pub overrides: Overrides,
     /// For diff scope: list of changed files (relative to repo root).
     pub changed_files: Option<Vec<depguard_types::RepoPath>>,
+    /// Report schema version to emit.
+    pub report_version: ReportVersion,
 }
 
 /// Output from the check use case.
 #[derive(Clone, Debug)]
 pub struct CheckOutput {
     /// The generated report.
-    pub report: DepguardReport,
+    pub report: ReportVariant,
     /// The resolved configuration used.
     pub resolved_config: ResolvedConfig,
 }
@@ -59,20 +66,86 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
         .context("build workspace model")?;
 
     let domain_report = depguard_domain::evaluate(&model, &resolved.effective);
+    let depguard_domain::report::DomainReport {
+        verdict: domain_verdict,
+        findings: domain_findings,
+        data: domain_data,
+        counts: domain_counts,
+    } = domain_report;
 
     let finished_at = OffsetDateTime::now_utc();
+    let duration_ms = (finished_at - started_at).whole_milliseconds().max(0) as u64;
 
-    let report: DepguardReport = ReportEnvelope {
-        schema: "receipt.envelope.v1".to_string(),
-        tool: ToolMeta {
-            name: "depguard".to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-        },
-        started_at,
-        finished_at,
-        verdict: domain_report.verdict,
-        findings: domain_report.findings,
-        data: domain_report.data,
+    let report = match input.report_version {
+        ReportVersion::V1 => ReportVariant::V1(ReportEnvelope {
+            schema: SCHEMA_REPORT_V1.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            },
+            started_at,
+            finished_at,
+            verdict: domain_verdict,
+            findings: domain_findings,
+            data: domain_data,
+        }),
+        ReportVersion::V2 => {
+            let verdict = VerdictV2 {
+                status: match domain_verdict {
+                    Verdict::Pass => VerdictStatus::Pass,
+                    Verdict::Warn => VerdictStatus::Warn,
+                    Verdict::Fail => VerdictStatus::Fail,
+                },
+                counts: VerdictCounts {
+                    info: domain_counts.info,
+                    warn: domain_counts.warning,
+                    error: domain_counts.error,
+                },
+                reasons: Vec::new(),
+            };
+
+            let run = RunMeta {
+                started_at,
+                ended_at: Some(finished_at),
+                duration_ms: Some(duration_ms),
+                host: None,
+                ci: None,
+                git: None,
+            };
+
+            // Convert v1 findings to v2 findings (severity naming change).
+            let findings = domain_findings
+                .into_iter()
+                .map(|f| depguard_types::FindingV2 {
+                    severity: match f.severity {
+                        depguard_types::Severity::Info => depguard_types::SeverityV2::Info,
+                        depguard_types::Severity::Warning => depguard_types::SeverityV2::Warn,
+                        depguard_types::Severity::Error => depguard_types::SeverityV2::Error,
+                    },
+                    check_id: f.check_id,
+                    code: f.code,
+                    message: f.message,
+                    location: f.location,
+                    help: f.help,
+                    url: f.url,
+                    fingerprint: f.fingerprint,
+                    data: f.data,
+                })
+                .collect();
+
+            ReportVariant::V2(ReportEnvelopeV2 {
+                schema: SCHEMA_REPORT_V2.to_string(),
+                tool: ToolMetaV2 {
+                    name: "depguard".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    commit: None,
+                },
+                run,
+                verdict,
+                findings,
+                data: domain_data,
+            })
+        }
     };
 
     Ok(CheckOutput {
@@ -81,11 +154,11 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
     })
 }
 
-/// Map verdict to exit code: 0 = pass, 1 = warn, 2 = fail.
+/// Map verdict to exit code: 0 = pass/warn, 2 = fail.
 pub fn verdict_exit_code(verdict: Verdict) -> i32 {
     match verdict {
         Verdict::Pass => 0,
-        Verdict::Warn => 1,
+        Verdict::Warn => 0,
         Verdict::Fail => 2,
     }
 }
@@ -116,6 +189,7 @@ edition = "2021"
             config_text: "",
             overrides: Overrides::default(),
             changed_files: None,
+            report_version: ReportVersion::V1,
         };
 
         let output = run_check(input).expect("run_check");
@@ -125,7 +199,7 @@ edition = "2021"
     #[test]
     fn verdict_exit_codes() {
         assert_eq!(verdict_exit_code(Verdict::Pass), 0);
-        assert_eq!(verdict_exit_code(Verdict::Warn), 1);
+        assert_eq!(verdict_exit_code(Verdict::Warn), 0);
         assert_eq!(verdict_exit_code(Verdict::Fail), 2);
     }
 }

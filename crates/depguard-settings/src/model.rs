@@ -43,4 +43,8 @@ pub struct CheckConfig {
     /// Generic allowlist patterns (semantics are check-specific).
     #[serde(default)]
     pub allow: Vec<String>,
+
+    /// deps.path_requires_version: ignore publish = false and still enforce.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignore_publish_false: Option<bool>,
 }

@@ -175,6 +175,21 @@ mod tests {
     }
 
     #[test]
+    fn invalid_allowlist_glob_returns_error() {
+        let toml = r#"
+            [checks."deps.no_wildcards"]
+            allow = ["["]
+        "#;
+        let cfg = parse_config_toml(toml).unwrap();
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid allow glob for deps.no_wildcards"));
+    }
+
+    #[test]
     fn fail_on_config_overrides_profile() {
         let cfg = DepguardConfigV1 {
             profile: Some("strict".to_string()),

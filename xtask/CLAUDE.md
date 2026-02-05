@@ -10,9 +10,9 @@ Developer automation tasks. Kept separate from the main CLI to avoid bloating th
 cargo xtask <COMMAND>
 
 Commands:
-  schemas     Generate JSON schemas to schemas/ directory
-  fixtures    Regenerate test fixtures
-  release     Prepare release artifacts
+  emit-schemas      Generate JSON schemas to schemas/ directory
+  validate-schemas  Check schemas/ against generated output
+  print-schema-ids  Print known schema IDs
 ```
 
 ## Schema Generation
@@ -21,18 +21,11 @@ Generates schemas from Rust types using `schemars`:
 
 | Schema | Source |
 |--------|--------|
-| `depguard.report.v1.json` | `DepguardReport` from depguard-types |
+| `depguard.report.v1.json` | `DepguardReportV1` from depguard-types |
+| `depguard.report.v2.json` | `DepguardReportV2` from depguard-types |
 | `depguard.config.v1.json` | `DepguardConfigV1` from depguard-settings |
 
 Note: `receipt.envelope.v1.json` is **vendored** (external contract, not generated).
-
-## Fixture Generation
-
-Regenerates golden test files in `tests/fixtures/`:
-- `report.json` — Expected JSON output
-- `comment.md` — Expected Markdown output
-
-Run after changing output format to update expectations.
 
 ## Design Constraints
 
@@ -52,11 +45,8 @@ Run after changing output format to update expectations.
 
 ```bash
 # Generate all schemas
-cargo xtask schemas
+cargo xtask emit-schemas
 
-# Regenerate test fixtures
-cargo xtask fixtures
-
-# Prepare release
-cargo xtask release
+# Validate schema files
+cargo xtask validate-schemas
 ```

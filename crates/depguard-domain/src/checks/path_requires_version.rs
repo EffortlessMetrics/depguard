@@ -1,3 +1,5 @@
+use crate::checks::utils::{build_allowlist, is_allowed};
+use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
 use depguard_types::{ids, Finding};
@@ -7,19 +9,27 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     let Some(policy) = cfg.check_policy(ids::CHECK_DEPS_PATH_REQUIRES_VERSION) else {
         return;
     };
+    let allow = build_allowlist(&policy.allow);
 
     for manifest in &model.manifests {
         // Common policy: only enforce for crates that can be published.
-        if !manifest.is_publishable() {
+        if !policy.ignore_publish_false && !manifest.is_publishable() {
             continue;
         }
 
         for dep in &manifest.dependencies {
             if dep.spec.path.is_some() && dep.spec.version.is_none() && !dep.spec.workspace {
                 // Allowlist hook (simple exact match for scaffold).
-                if policy.allow.iter().any(|a| a == &dep.name) {
+                if is_allowed(allow.as_ref(), &dep.name) {
                     continue;
                 }
+                let fingerprint = fingerprint_for_dep(
+                    ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
+                    ids::CODE_PATH_WITHOUT_VERSION,
+                    manifest.path.as_str(),
+                    &dep.name,
+                    dep.spec.path.as_deref(),
+                );
 
                 out.push(Finding {
                     severity: policy.severity,
@@ -35,7 +45,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                             .to_string(),
                     ),
                     url: None,
-                    fingerprint: None,
+                    fingerprint: Some(fingerprint),
                     data: json!({
                         "dependency": dep.name,
                         "manifest": manifest.path.as_str(),

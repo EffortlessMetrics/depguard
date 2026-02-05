@@ -103,7 +103,7 @@ depguard check --repo-root /path/to/your/workspace
 **Symptom**: Exit code 1 when writing output files.
 
 **Causes**:
-- `.depguard/` directory doesn't exist
+- `artifacts/depguard/` directory doesn't exist
 - No write permission
 - Path is a file, not a directory
 
@@ -111,7 +111,7 @@ depguard check --repo-root /path/to/your/workspace
 
 1. Create the directory:
    ```bash
-   mkdir -p .depguard
+   mkdir -p artifacts/depguard
    depguard check
    ```
 
@@ -122,7 +122,7 @@ depguard check --repo-root /path/to/your/workspace
 
 3. Check permissions:
    ```bash
-   ls -la .depguard/
+   ls -la artifacts/depguard/
    ```
 
 ## Finding-specific issues
@@ -249,14 +249,14 @@ depguard check --repo-root /path/to/your/workspace
 
    - name: Show report
      if: always()
-     run: cat .depguard/report.json | jq .
+     run: cat artifacts/depguard/report.json | jq .
    ```
 
 2. Use markdown output:
    ```yaml
    - name: Show findings
      if: always()
-     run: depguard md --report .depguard/report.json
+     run: depguard md --report artifacts/depguard/report.json
    ```
 
 ### Annotations not appearing on PR
@@ -272,7 +272,7 @@ depguard check --repo-root /path/to/your/workspace
 
 1. Verify annotation format:
    ```bash
-   depguard annotations --report .depguard/report.json
+   depguard annotations --report artifacts/depguard/report.json
    # Should output lines like:
    # ::error file=path/to/Cargo.toml,line=12::message
    ```
@@ -429,3 +429,4 @@ exclude = ["crates/experimental/*"]
 - [Configuration](config.md) — Full config reference
 - [Checks Catalog](checks.md) — Understanding findings
 - [CI Integration](ci-integration.md) — CI setup guides
+

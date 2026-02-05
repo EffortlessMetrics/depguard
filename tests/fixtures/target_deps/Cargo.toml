@@ -1,0 +1,16 @@
+[package]
+name = "target-deps"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0"
+
+[target.'cfg(unix)'.dependencies]
+nix = "*"
+
+[target.'cfg(windows)'.dependencies]
+winapi = "*"
+
+[target.x86_64-unknown-linux-gnu.build-dependencies]
+cc = "*"

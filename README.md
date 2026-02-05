@@ -32,20 +32,23 @@ depguard check
 depguard check --scope diff --base origin/main
 
 # Generate a Markdown report from existing JSON
-depguard md --report .depguard/report.json
+depguard md --report artifacts/depguard/report.json
 
 # Get help for a specific check or code
 depguard explain deps.no_wildcards
 depguard explain wildcard_version
 ```
 
+By default, reports are written to `artifacts/depguard/report.json`. If you pass `--write-markdown`, Markdown is written to `artifacts/depguard/comment.md`.
+
 ## Example output
 
 ```json
 {
-  "schema": "depguard.report.v1",
+  "schema": "depguard.report.v2",
   "tool": { "name": "depguard", "version": "0.1.0" },
-  "verdict": "fail",
+  "run": { "started_at": "...", "ended_at": "...", "duration_ms": 12 },
+  "verdict": { "status": "fail", "counts": { "info": 0, "warn": 0, "error": 1 }, "reasons": [] },
   "findings": [
     {
       "severity": "error",
@@ -57,6 +60,8 @@ depguard explain wildcard_version
   ]
 }
 ```
+
+To emit the legacy v1 schema, use `depguard check --report-version v1`.
 
 ## Configuration
 
@@ -74,7 +79,8 @@ severity = "error"
 
 [checks."deps.path_requires_version"]
 enabled = true
-allow = ["internal-dev-tool"]  # Crates exempt from this check
+allow = ["internal-*"]  # Glob patterns; case-sensitive
+ignore_publish_false = true
 ```
 
 See [docs/config.md](docs/config.md) for the full configuration reference.
@@ -86,7 +92,7 @@ See [docs/config.md](docs/config.md) for the full configuration reference.
 | `deps.no_wildcards` | Detect wildcard versions (`*`, `1.*`) |
 | `deps.path_requires_version` | Require version alongside path dependencies |
 | `deps.path_safety` | Prevent absolute paths and workspace escapes |
-| `deps.workspace_inheritance` | Enforce `workspace = true` for shared deps |
+| `deps.workspace_inheritance` | Enforce `workspace = true` for shared deps (disabled by default) |
 
 See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and remediation guidance.
 
@@ -102,7 +108,7 @@ See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and r
 - name: Comment on PR
   if: failure()
   run: |
-    depguard md --report .depguard/report.json >> $GITHUB_STEP_SUMMARY
+    depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
 ```
 
 See [docs/ci-integration.md](docs/ci-integration.md) for complete CI setup examples.
@@ -156,3 +162,4 @@ See [docs/architecture.md](docs/architecture.md) for the full design.
 ## License
 
 [MIT](LICENSE) OR [Apache-2.0](LICENSE-APACHE)
+

@@ -1,7 +1,7 @@
 use crate::checks;
 use crate::model::WorkspaceModel;
 use crate::policy::{EffectiveConfig, FailOn};
-use crate::report::DomainReport;
+use crate::report::{DomainReport, SeverityCounts};
 use depguard_types::{DepguardData, Finding, Severity, Verdict};
 
 pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
@@ -25,6 +25,7 @@ pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
     }
 
     let verdict = compute_verdict(&emitted, cfg.fail_on);
+    let counts = SeverityCounts::from_findings(&emitted);
 
     let data = DepguardData {
         scope: match cfg.scope {
@@ -47,6 +48,7 @@ pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
         verdict,
         findings: emitted,
         data,
+        counts,
     }
 }
 
@@ -69,11 +71,17 @@ fn compute_verdict(findings: &[Finding], fail_on: FailOn) -> Verdict {
 
 fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
     // Ordering priority:
-    // 1) location.path (missing last)
-    // 2) location.line (missing last)
-    // 3) check_id
-    // 4) code
-    // 5) message
+    // 1) severity (error -> warning -> info)
+    // 2) location.path (missing last)
+    // 3) location.line (missing last)
+    // 4) check_id
+    // 5) code
+    // 6) message
+    let severity_rank = |sev: Severity| match sev {
+        Severity::Error => 0,
+        Severity::Warning => 1,
+        Severity::Info => 2,
+    };
     let (ap, al) = match &a.location {
         Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
         None => ("~", u32::MAX),
@@ -83,7 +91,9 @@ fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
         None => ("~", u32::MAX),
     };
 
-    ap.cmp(bp)
+    severity_rank(a.severity)
+        .cmp(&severity_rank(b.severity))
+        .then(ap.cmp(bp))
         .then(al.cmp(&bl))
         .then(a.check_id.cmp(&b.check_id))
         .then(a.code.cmp(&b.code))

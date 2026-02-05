@@ -1,3 +1,5 @@
+use crate::checks::utils::{build_allowlist, is_allowed};
+use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
 use depguard_types::{ids, Finding};
@@ -7,6 +9,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     let Some(policy) = cfg.check_policy(ids::CHECK_DEPS_WORKSPACE_INHERITANCE) else {
         return;
     };
+    let allow = build_allowlist(&policy.allow);
 
     if model.workspace_dependencies.is_empty() {
         return;
@@ -22,9 +25,16 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
             }
 
             // Allowlist hook (simple exact match for scaffold).
-            if policy.allow.iter().any(|a| a == &dep.name) {
+            if is_allowed(allow.as_ref(), &dep.name) {
                 continue;
             }
+            let fingerprint = fingerprint_for_dep(
+                ids::CHECK_DEPS_WORKSPACE_INHERITANCE,
+                ids::CODE_MISSING_WORKSPACE_TRUE,
+                manifest.path.as_str(),
+                &dep.name,
+                dep.spec.path.as_deref(),
+            );
 
             out.push(Finding {
                 severity: policy.severity,
@@ -40,7 +50,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                         .to_string(),
                 ),
                 url: None,
-                fingerprint: None,
+                fingerprint: Some(fingerprint),
                 data: json!({
                     "dependency": dep.name,
                     "manifest": manifest.path.as_str(),

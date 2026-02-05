@@ -1,12 +1,18 @@
-use depguard_types::{DepguardReport, Severity};
+use crate::{RenderableReport, RenderableSeverity, RenderableVerdictStatus};
 
-pub fn render_markdown(report: &DepguardReport) -> String {
+pub fn render_markdown(report: &RenderableReport) -> String {
     let mut out = String::new();
 
     out.push_str("# Depguard report\n\n");
+    let verdict = match report.verdict {
+        RenderableVerdictStatus::Pass => "PASS",
+        RenderableVerdictStatus::Warn => "WARN",
+        RenderableVerdictStatus::Fail => "FAIL",
+        RenderableVerdictStatus::Skip => "SKIP",
+    };
     out.push_str(&format!(
-        "- Verdict: **{:?}**\n- Findings: {} (emitted) / {} (total)\n\n",
-        report.verdict, report.data.findings_emitted, report.data.findings_total
+        "- Verdict: **{}**\n- Findings: {} (emitted) / {} (total)\n\n",
+        verdict, report.data.findings_emitted, report.data.findings_total
     ));
 
     if let Some(r) = &report.data.truncated_reason {
@@ -22,16 +28,16 @@ pub fn render_markdown(report: &DepguardReport) -> String {
 
     for f in &report.findings {
         let sev = match f.severity {
-            Severity::Info => "INFO",
-            Severity::Warning => "WARN",
-            Severity::Error => "ERROR",
+            RenderableSeverity::Info => "INFO",
+            RenderableSeverity::Warning => "WARN",
+            RenderableSeverity::Error => "ERROR",
         };
 
         if let Some(loc) = &f.location {
             out.push_str(&format!(
                 "- [{}] `{}` / `{}` — {} (`{}`:{} )\n",
                 sev,
-                f.check_id,
+                f.check_id.as_deref().unwrap_or(""),
                 f.code,
                 f.message,
                 loc.path.as_str(),
@@ -40,7 +46,10 @@ pub fn render_markdown(report: &DepguardReport) -> String {
         } else {
             out.push_str(&format!(
                 "- [{}] `{}` / `{}` — {}\n",
-                sev, f.check_id, f.code, f.message
+                sev,
+                f.check_id.as_deref().unwrap_or(""),
+                f.code,
+                f.message
             ));
         }
 
@@ -58,22 +67,18 @@ pub fn render_markdown(report: &DepguardReport) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use depguard_types::{DepguardData, ReportEnvelope, ToolMeta, Verdict};
-    use time::macros::datetime;
+    use crate::{RenderableData, RenderableVerdictStatus};
 
     #[test]
     fn renders_empty_report() {
-        let report: DepguardReport = ReportEnvelope {
-            schema: "receipt.envelope.v1".to_string(),
-            tool: ToolMeta {
-                name: "depguard".to_string(),
-                version: "0.0.0".to_string(),
-            },
-            started_at: datetime!(2024-01-01 0:00 UTC),
-            finished_at: datetime!(2024-01-01 0:00 UTC),
-            verdict: Verdict::Pass,
+        let report = RenderableReport {
+            verdict: RenderableVerdictStatus::Pass,
             findings: Vec::new(),
-            data: DepguardData::default(),
+            data: RenderableData {
+                findings_emitted: 0,
+                findings_total: 0,
+                truncated_reason: None,
+            },
         };
         let md = render_markdown(&report);
         assert!(md.contains("No findings"));

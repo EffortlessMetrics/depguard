@@ -32,6 +32,43 @@ fn fixtures_dir() -> PathBuf {
         .join("fixtures")
 }
 
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("depguard-cli crate should have a parent directory")
+        .parent()
+        .expect("crates directory should have a parent (repo root)")
+        .to_path_buf()
+}
+
+fn validate_report_schema(report: &Value, schema_file: &str) {
+    use jsonschema::{Draft, JSONSchema};
+
+    let schema_path = repo_root().join("schemas").join(schema_file);
+    let schema_text = std::fs::read_to_string(&schema_path).expect("Failed to read schema file");
+    let schema_json: Value = serde_json::from_str(&schema_text).expect("Invalid schema JSON");
+
+    let draft = match schema_json.get("$schema").and_then(|v| v.as_str()) {
+        Some(s) if s.contains("2020-12") => Draft::Draft202012,
+        _ => Draft::Draft7,
+    };
+
+    let compiled = JSONSchema::options()
+        .with_draft(draft)
+        .compile(&schema_json)
+        .expect("Failed to compile schema");
+
+    let errors = match compiled.validate(report) {
+        Ok(()) => return,
+        Err(errors) => errors.map(|e| e.to_string()).collect::<Vec<_>>(),
+    };
+    panic!(
+        "Report failed schema validation against {}:\n{}",
+        schema_file,
+        errors.join("\n")
+    );
+}
+
 /// Normalize a JSON value by replacing timestamp fields with a placeholder.
 /// This allows comparison of outputs that contain non-deterministic timestamps.
 fn normalize_timestamps(mut value: Value) -> Value {
@@ -48,6 +85,15 @@ fn normalize_timestamps(mut value: Value) -> Value {
                 Value::String("__TIMESTAMP__".to_string()),
             );
         }
+        if obj.contains_key("ended_at") {
+            obj.insert(
+                "ended_at".to_string(),
+                Value::String("__TIMESTAMP__".to_string()),
+            );
+        }
+        if obj.contains_key("duration_ms") {
+            obj.insert("duration_ms".to_string(), Value::Number(0.into()));
+        }
         for (_, v) in obj.iter_mut() {
             *v = normalize_timestamps(v.take());
         }
@@ -61,14 +107,20 @@ fn normalize_timestamps(mut value: Value) -> Value {
 
 /// Run the CLI check command against a fixture and return the JSON report.
 fn run_check_on_fixture(fixture_name: &str) -> (i32, Value) {
+    run_check_on_fixture_args(fixture_name, &[])
+}
+
+fn run_check_on_fixture_args(fixture_name: &str, extra_args: &[&str]) -> (i32, Value) {
     let fixture_path = fixtures_dir().join(fixture_name);
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let report_path = temp_dir.path().join("report.json");
 
-    let output = depguard_cmd()
-        .arg("--repo-root")
-        .arg(&fixture_path)
-        .arg("check")
+    let mut cmd = depguard_cmd();
+    cmd.arg("--repo-root").arg(&fixture_path).arg("check");
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    let output = cmd
         .arg("--report-out")
         .arg(&report_path)
         .output()
@@ -176,16 +228,69 @@ fn fixture_multi_violation_fails() {
 
     // Verify deterministic ordering: findings should be sorted by line number
     // (all have same severity and path, so line is the tiebreaker)
-    let findings = report["findings"].as_array().expect("findings should be array");
+    let findings = report["findings"]
+        .as_array()
+        .expect("findings should be array");
     let lines: Vec<i64> = findings
         .iter()
         .map(|f| f["location"]["line"].as_i64().unwrap())
         .collect();
     let mut sorted_lines = lines.clone();
     sorted_lines.sort();
-    assert_eq!(lines, sorted_lines, "findings should be sorted by line number");
+    assert_eq!(
+        lines, sorted_lines,
+        "findings should be sorted by line number"
+    );
 
     assert_reports_match(report, expected, "multi_violation");
+}
+
+#[test]
+fn fixture_no_manifest_passes() {
+    let (exit_code, report) = run_check_on_fixture("no_manifest");
+    let expected = load_expected_report("no_manifest");
+
+    assert_eq!(
+        exit_code, 0,
+        "no_manifest fixture should exit with 0 (pass)"
+    );
+    assert_reports_match(report, expected, "no_manifest");
+}
+
+#[test]
+fn fixture_workspace_members_exclude_fails() {
+    let (exit_code, report) = run_check_on_fixture("workspace_members_exclude");
+    let expected = load_expected_report("workspace_members_exclude");
+
+    assert_eq!(
+        exit_code, 2,
+        "workspace_members_exclude fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "workspace_members_exclude");
+}
+
+#[test]
+fn fixture_nested_workspace_fails() {
+    let (exit_code, report) = run_check_on_fixture("nested_workspace");
+    let expected = load_expected_report("nested_workspace");
+
+    assert_eq!(
+        exit_code, 2,
+        "nested_workspace fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "nested_workspace");
+}
+
+#[test]
+fn fixture_target_deps_fails() {
+    let (exit_code, report) = run_check_on_fixture("target_deps");
+    let expected = load_expected_report("target_deps");
+
+    assert_eq!(
+        exit_code, 2,
+        "target_deps fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "target_deps");
 }
 
 // ============================================================================
@@ -271,7 +376,7 @@ fn md_command_renders_from_report() {
     assert!(output.status.success(), "md command should succeed");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("fail") || stdout.contains("Fail"),
+        stdout.to_lowercase().contains("fail"),
         "Should contain verdict"
     );
 }
@@ -309,6 +414,71 @@ fn annotations_command_renders_gha_format() {
         stdout.contains("::error"),
         "Should contain GHA error annotation format"
     );
+}
+
+#[test]
+fn markdown_matches_golden_fixture() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let expected_path = fixture_path.join("expected.comment.md");
+    let expected = std::fs::read_to_string(&expected_path).expect("read expected markdown");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .code(2);
+
+    let output = depguard_cmd()
+        .arg("md")
+        .arg("--report")
+        .arg(&report_path)
+        .output()
+        .expect("Failed to run md command");
+
+    assert!(output.status.success(), "md command should succeed");
+    let actual = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    let expected = expected.replace("\r\n", "\n");
+    assert_eq!(actual, expected, "Markdown output did not match golden");
+}
+
+#[test]
+fn annotations_match_golden_fixture() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let expected_path = fixture_path.join("expected.annotations.txt");
+    let expected = std::fs::read_to_string(&expected_path).expect("read expected annotations");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .code(2);
+
+    let output = depguard_cmd()
+        .arg("annotations")
+        .arg("--report")
+        .arg(&report_path)
+        .output()
+        .expect("Failed to run annotations command");
+
+    assert!(
+        output.status.success(),
+        "annotations command should succeed"
+    );
+    let actual = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    let expected = expected.replace("\r\n", "\n");
+    assert_eq!(actual, expected, "Annotations output did not match golden");
 }
 
 #[test]
@@ -362,13 +532,32 @@ fn version_flag_works() {
 fn missing_repo_root_returns_error() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let report_path = temp_dir.path().join("report.json");
+    let missing_root = temp_dir.path().join("missing-repo");
 
     depguard_cmd()
         .arg("--repo-root")
-        .arg("/nonexistent/path/to/repo")
+        .arg(&missing_root)
         .arg("check")
         .arg("--report-out")
         .arg(&report_path)
         .assert()
         .failure();
+}
+
+#[test]
+fn report_schema_v2_validates() {
+    let (_exit, report) = run_check_on_fixture("clean");
+    validate_report_schema(&report, "depguard.report.v2.json");
+}
+
+#[test]
+fn report_schema_v1_validates() {
+    let (_exit, report) = run_check_on_fixture_args("clean", &["--report-version", "v1"]);
+    validate_report_schema(&report, "depguard.report.v1.json");
+}
+
+#[test]
+fn report_schema_envelope_validates() {
+    let (_exit, report) = run_check_on_fixture("clean");
+    validate_report_schema(&report, "receipt.envelope.v1.json");
 }

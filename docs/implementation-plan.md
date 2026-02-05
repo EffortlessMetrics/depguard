@@ -21,6 +21,7 @@ This plan is sequenced to ship value early while freezing the protocol and preve
 - [x] Schemas:
   - `schemas/receipt.envelope.v1.json` (vendored)
   - `schemas/depguard.report.v1.json`
+  - `schemas/depguard.report.v2.json`
 - [x] DTOs aligned to schema (types crate)
 - [x] Explain registry skeleton + `depguard explain`
 - [x] CLI skeleton with `depguard check` producing a minimal receipt
@@ -29,10 +30,10 @@ This plan is sequenced to ship value early while freezing the protocol and preve
 - [x] `cargo test` (all)
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets --all-features`
-- [ ] Schema validation job (validate a known sample report against schema)
+- [x] Schema validation job (validate a known sample report against schema)
 
 ### Tests
-- [ ] "no manifest" fixture: root without `Cargo.toml` → `skip` receipt
+- [x] "no manifest" fixture: root without `Cargo.toml` → empty pass receipt
 - [x] Golden snapshot for `report.json` bytes
 
 ---
@@ -52,7 +53,7 @@ This plan is sequenced to ship value early while freezing the protocol and preve
 - [x] Normalized dependency entry model
 
 ### Tests
-- [ ] Fixture: workspace with members + exclude + nested target deps
+- [x] Fixture: workspace with members + exclude + nested target deps
 - [ ] Proptest: normalization of spec shapes (string vs table vs workspace=true)
 - [ ] Golden snapshot for discovered manifest ordering
 
@@ -64,24 +65,24 @@ Implement one check at a time; each adds fixtures and explain entries.
 
 ### 2.1 deps.no_wildcards ✅
 - [x] Detect `*` in versions (string + table)
-- [ ] Fixture cases include target deps
+- [x] Fixture cases include target deps
 
 ### 2.2 deps.path_requires_version ✅
 - [x] Detect `path` with missing `version`
-- [ ] Implement `ignore_publish_false` option
+- [x] Implement `ignore_publish_false` option
 - [ ] Fixture cases include publish=false crate
 
 ### 2.3 deps.path_safety ✅
 - [x] Detect absolute paths
 - [x] Detect lexical escape from workspace root
-- [ ] Add allowlist globs (config)
+- [x] Add allowlist globs (config)
 - [ ] Fixtures include Windows-style paths and `..` chains
 
 ### 2.4 deps.workspace_inheritance ✅
 - [x] Read `[workspace.dependencies]` keys
 - [x] Detect member override without `{ workspace = true }`
-- [ ] Profile gate defaults (off in oss)
-- [ ] Allowlist for exceptional deps
+- [x] Profile gate defaults (off by default)
+- [x] Allowlist for exceptional deps
 
 ### Tests
 - [ ] BDD scenarios for each rule
@@ -102,8 +103,8 @@ Implement one check at a time; each adds fixtures and explain entries.
   - [x] Stable ordering
 
 ### Tests
-- [ ] Golden comment.md snapshots
-- [ ] Golden annotation stream snapshots
+- [x] Golden comment.md snapshots
+- [x] Golden annotation stream snapshots
 
 ---
 

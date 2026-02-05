@@ -1,12 +1,23 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": "__TIMESTAMP__",
-  "finished_at": "__TIMESTAMP__",
-  "verdict": "pass",
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "pass",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 0
+    },
+    "reasons": []
+  },
   "findings": [],
   "data": {
     "scope": "repo",

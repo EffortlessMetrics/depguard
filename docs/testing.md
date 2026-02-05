@@ -59,10 +59,11 @@ Canonical fixtures live in `tests/fixtures/`:
 
 | File | Purpose |
 |------|---------|
-| `report.json` | Expected JSON report output |
-| `comment.md` | Expected Markdown comment |
+| `expected.report.json` | Expected JSON report output |
+| `expected.comment.md` | Expected Markdown comment |
+| `expected.annotations.txt` | Expected GitHub Actions annotations |
 
-Regenerate with: `cargo xtask fixtures`
+Regenerate by running depguard on each fixture and updating the `expected.*` files.
 
 These tests catch unintentional output drift.
 
@@ -122,15 +123,9 @@ Discipline:
 
 CI validates that emitted reports conform to JSON schemas:
 
-```bash
-# Using xtask or standalone validator
-cargo xtask validate-schema tests/fixtures/report.json
-```
-
-Also validates:
-- Every emitted `(check_id, code)` pair has an explain entry
-- Report envelope matches `schemas/receipt.envelope.v1.json`
-- Report body matches `schemas/depguard.report.v1.json`
+The CLI integration tests validate reports against:
+- `schemas/depguard.report.v1.json`
+- `schemas/depguard.report.v2.json`
 
 ## Test data locations
 

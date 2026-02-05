@@ -1,0 +1,398 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReportEnvelopeV2_for_DepguardData",
+  "description": "V2 report (cockpit-aligned envelope).",
+  "type": "object",
+  "required": [
+    "data",
+    "findings",
+    "run",
+    "schema",
+    "tool",
+    "verdict"
+  ],
+  "properties": {
+    "data": {
+      "$ref": "#/definitions/DepguardData"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/FindingV2"
+      }
+    },
+    "run": {
+      "$ref": "#/definitions/RunMeta"
+    },
+    "schema": {
+      "type": "string"
+    },
+    "tool": {
+      "$ref": "#/definitions/ToolMetaV2"
+    },
+    "verdict": {
+      "$ref": "#/definitions/VerdictV2"
+    }
+  },
+  "definitions": {
+    "DepguardData": {
+      "description": "Depguard-specific summary payload for the report.",
+      "type": "object",
+      "required": [
+        "dependencies_scanned",
+        "findings_emitted",
+        "findings_total",
+        "manifests_scanned",
+        "profile",
+        "scope"
+      ],
+      "properties": {
+        "dependencies_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "findings_emitted": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "findings_total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "manifests_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "profile": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "truncated_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "FindingV2": {
+      "type": "object",
+      "required": [
+        "check_id",
+        "code",
+        "message",
+        "severity"
+      ],
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "data": true,
+        "fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/definitions/SeverityV2"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Location": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "col": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "path": {
+          "type": "string"
+        }
+      }
+    },
+    "RunCi": {
+      "type": "object",
+      "properties": {
+        "job": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunGit": {
+      "type": "object",
+      "properties": {
+        "base_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_base": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunHost": {
+      "type": "object",
+      "properties": {
+        "arch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostname": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunMeta": {
+      "type": "object",
+      "required": [
+        "started_at"
+      ],
+      "properties": {
+        "ci": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RunCi"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RunGit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RunHost"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        }
+      }
+    },
+    "SeverityV2": {
+      "description": "Severity used in v2 receipts (\"warn\" instead of \"warning\").",
+      "type": "string",
+      "enum": [
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "ToolMetaV2": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "VerdictCounts": {
+      "type": "object",
+      "required": [
+        "error",
+        "info",
+        "warn"
+      ],
+      "properties": {
+        "error": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "info": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "warn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "VerdictStatus": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warn",
+        "fail",
+        "skip"
+      ]
+    },
+    "VerdictV2": {
+      "type": "object",
+      "required": [
+        "counts",
+        "status"
+      ],
+      "properties": {
+        "counts": {
+          "$ref": "#/definitions/VerdictCounts"
+        },
+        "reasons": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/VerdictStatus"
+        }
+      }
+    }
+  }
+}

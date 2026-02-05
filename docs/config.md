@@ -31,7 +31,8 @@ allow = []
 [checks."deps.path_requires_version"]
 enabled = true
 severity = "error"
-allow = ["internal-dev-tool"]
+allow = ["internal-*"]  # Glob patterns (case-sensitive)
+ignore_publish_false = true
 
 [checks."deps.path_safety"]
 enabled = true
@@ -39,30 +40,34 @@ severity = "error"
 allow = []
 
 [checks."deps.workspace_inheritance"]
-enabled = true
+enabled = true  # default is disabled
 severity = "warning"
-allow = ["legacy-crate"]
+allow = ["legacy-*"]
 ```
 
 ## Profiles
 
 Profiles provide opinionated defaults. Override individual settings as needed.
 
+Aliases:
+- `team` → `warn`
+- `oss` → `compat`
+
 | Profile | Description |
 |---------|-------------|
 | `strict` | All checks enabled at `error` severity. Fails on any error. **(Default)** |
-| `warn` | All checks enabled at `warning` severity. Fails on errors only. |
+| `warn` | All checks enabled at `warning` severity. Fails on warnings and errors. |
 | `compat` | Lenient defaults for gradual adoption. All checks at `warning`. |
 
 ### Profile defaults
 
 | Setting | `strict` | `warn` | `compat` |
 |---------|----------|--------|----------|
-| `fail_on` | `error` | `error` | `error` |
+| `fail_on` | `error` | `warning` | `error` |
 | `no_wildcards` severity | `error` | `warning` | `warning` |
 | `path_requires_version` severity | `error` | `warning` | `warning` |
 | `path_safety` severity | `error` | `warning` | `warning` |
-| `workspace_inheritance` severity | `error` | `warning` | `warning` |
+| `workspace_inheritance` | `disabled` | `disabled` | `disabled` |
 
 ## Scope
 
@@ -89,8 +94,9 @@ Each check can be configured independently:
 ```toml
 [checks."<check_id>"]
 enabled = true|false     # Enable/disable the check
-severity = "info|warning|error"  # Override severity
-allow = ["pattern", ...]  # Allowlist (check-specific semantics)
+severity = "info|warning|error"  # Override severity (warning/warn accepted)
+allow = ["pattern", ...]  # Allowlist (glob patterns; case-sensitive)
+ignore_publish_false = true|false  # deps.path_requires_version only
 ```
 
 ### Check IDs
@@ -108,8 +114,10 @@ Unknown check IDs are allowed for forward compatibility.
 
 The `allow` list is check-specific:
 
-- **`deps.path_requires_version`**: Crate names that don't need version
-- **`deps.workspace_inheritance`**: Crate names allowed to override workspace deps
+Allowlists are **glob patterns** (case-sensitive).
+
+- **`deps.path_requires_version`**: Crate name patterns that don't need a version
+- **`deps.workspace_inheritance`**: Crate name patterns allowed to override workspace deps
 - **`deps.path_safety`**: Path patterns allowed despite safety concerns
 
 ## CLI overrides
@@ -132,6 +140,9 @@ depguard check \
 | `--max-findings <N>` | Override max findings limit |
 | `--base <REF>` | Git base ref for diff scope |
 | `--head <REF>` | Git head ref for diff scope |
+| `--report-version <v1|v2>` | Report schema version to emit (default: `v2`) |
+| `--report-out <PATH>` | JSON report output path |
+| `--markdown-out <PATH>` | Markdown output path (with `--write-markdown`) |
 | `--config <PATH>` | Path to config file (default: `depguard.toml`) |
 | `--repo-root <PATH>` | Repository root (default: current directory) |
 

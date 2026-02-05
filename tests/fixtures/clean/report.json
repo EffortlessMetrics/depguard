@@ -1,32 +1,23 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": [
-    2026,
-    34,
-    20,
-    42,
-    50,
-    297678500,
-    0,
-    0,
-    0
-  ],
-  "finished_at": [
-    2026,
-    34,
-    20,
-    42,
-    50,
-    299147600,
-    0,
-    0,
-    0
-  ],
-  "verdict": "pass",
+  "run": {
+    "started_at": "2026-02-04T21:35:13.3812941Z",
+    "ended_at": "2026-02-04T21:35:13.3826111Z",
+    "duration_ms": 1
+  },
+  "verdict": {
+    "status": "pass",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 0
+    },
+    "reasons": []
+  },
   "findings": [],
   "data": {
     "scope": "repo",

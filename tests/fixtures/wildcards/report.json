@@ -1,39 +1,48 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": [
-    2026,
-    34,
-    20,
-    42,
-    50,
-    180696400,
-    0,
-    0,
-    0
+  "run": {
+    "started_at": "2026-02-04T21:35:13.914226Z",
+    "ended_at": "2026-02-04T21:35:13.9151553Z",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'serde' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 7
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "157bc9aee66a5aaf94de931c73988ed120f75c0178d597d32fd3ba19c72543d8",
+      "data": {
+        "dependency": "serde",
+        "manifest": "Cargo.toml",
+        "version": "*"
+      }
+    }
   ],
-  "finished_at": [
-    2026,
-    34,
-    20,
-    42,
-    50,
-    182038600,
-    0,
-    0,
-    0
-  ],
-  "verdict": "pass",
-  "findings": [],
   "data": {
     "scope": "repo",
     "profile": "strict",
     "manifests_scanned": 1,
     "dependencies_scanned": 1,
-    "findings_total": 0,
-    "findings_emitted": 0
+    "findings_total": 1,
+    "findings_emitted": 1
   }
 }

@@ -16,5 +16,8 @@ pub mod receipt;
 pub use explain::{lookup_explanation, ExamplePair, Explanation};
 pub use path::RepoPath;
 pub use receipt::{
-    DepguardData, DepguardReport, Finding, Location, ReportEnvelope, Severity, ToolMeta, Verdict,
+    DepguardData, DepguardReport, DepguardReportV1, DepguardReportV2, Finding, FindingV2, Location,
+    ReportEnvelope, ReportEnvelopeV2, RunCi, RunGit, RunHost, RunMeta, Severity, SeverityV2,
+    ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus, VerdictV2, SCHEMA_REPORT_V1,
+    SCHEMA_REPORT_V2,
 };

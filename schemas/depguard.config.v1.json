@@ -12,6 +12,13 @@
         "$ref": "#/definitions/CheckConfig"
       }
     },
+    "fail_on": {
+      "description": "When to fail the check: `error` (default) or `warn`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "max_findings": {
       "description": "How many findings to emit before truncating the list.",
       "type": [
@@ -55,6 +62,13 @@
         },
         "enabled": {
           "description": "Override preset enable/disable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ignore_publish_false": {
+          "description": "deps.path_requires_version: ignore publish = false and still enforce.",
           "type": [
             "boolean",
             "null"

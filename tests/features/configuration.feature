@@ -19,7 +19,7 @@ Feature: Configuration and profiles
     Given a workspace with violations
     When I run "depguard check --profile warn"
     Then findings have severity "warning"
-    And the verdict is "warn" with exit code 0
+    And the verdict is "fail" with exit code 2
 
   Scenario: Compat profile is permissive for legacy codebases
     Given a workspace with violations
@@ -35,8 +35,7 @@ Feature: Configuration and profiles
     Given a workspace fixture "wildcards"
     And a depguard.toml with:
       """
-      [profile]
-      default = "warn"
+      profile = "warn"
       """
     When I run "depguard check --repo-root ."
     Then findings have severity "warning"
@@ -45,8 +44,7 @@ Feature: Configuration and profiles
     Given a workspace fixture "wildcards"
     And a depguard.toml with:
       """
-      [profile]
-      default = "warn"
+      profile = "warn"
       """
     When I run "depguard check --repo-root . --profile strict"
     Then findings have severity "error"

@@ -58,7 +58,11 @@ pub fn format_explanation(exp: &Explanation) -> String {
 }
 
 /// Format the "not found" error message for terminal display.
-pub fn format_not_found(identifier: &str, check_ids: &[&'static str], codes: &[&'static str]) -> String {
+pub fn format_not_found(
+    identifier: &str,
+    check_ids: &[&'static str],
+    codes: &[&'static str],
+) -> String {
     let mut out = String::new();
 
     out.push_str(&format!("Unknown check_id or code: {}\n\n", identifier));

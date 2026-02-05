@@ -129,11 +129,12 @@ Feature: Dependency manifest hygiene (depguard)
   Scenario: Receipt contains required envelope fields
     Given a workspace fixture "clean"
     When I run "depguard check --repo-root . --report-out report.json"
-    Then the receipt has field "schema_id" with value "receipt.envelope.v1"
+    Then the receipt has field "schema" with value "depguard.report.v2"
     And the receipt has field "tool_name" with value "depguard"
     And the receipt has field "tool_version"
-    And the receipt has field "started_at"
-    And the receipt has field "finished_at"
+    And the receipt has field "run.started_at"
+    And the receipt has field "run.ended_at"
+    And the receipt has field "run.duration_ms"
 
   Scenario: Findings are deterministically ordered
     Given a workspace with multiple violations

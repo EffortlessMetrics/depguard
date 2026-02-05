@@ -41,22 +41,30 @@ Each scenario backed by a fixture has a corresponding directory in `tests/fixtur
 
 ```
 tests/fixtures/
-├── clean/                    # Passing workspace
+├── clean/                       # Passing workspace
 │   ├── Cargo.toml
 │   └── expected.report.json
-├── wildcards/                # deps.no_wildcards violation
+├── wildcards/                   # deps.no_wildcards violation
+│   ├── Cargo.toml
+│   ├── expected.report.json
+│   ├── expected.comment.md
+│   └── expected.annotations.txt
+├── path_missing_version/        # deps.path_requires_version violation
 │   ├── Cargo.toml
 │   └── expected.report.json
-├── path_missing_version/     # deps.path_requires_version violation
+├── path_safety/                 # deps.path_safety violations
 │   ├── Cargo.toml
 │   └── expected.report.json
-├── path_safety/              # deps.path_safety violations
+├── workspace_inheritance/       # deps.workspace_inheritance violation
 │   ├── Cargo.toml
+│   ├── member-crate/
+│   │   └── Cargo.toml
 │   └── expected.report.json
-└── workspace_inheritance/    # deps.workspace_inheritance violation
-    ├── Cargo.toml
-    ├── member-crate/
-    │   └── Cargo.toml
+├── workspace_members_exclude/   # workspace members + exclude
+│   └── expected.report.json
+├── nested_workspace/            # nested workspace exclusion
+│   └── expected.report.json
+└── target_deps/                 # target-specific deps
     └── expected.report.json
 ```
 
@@ -70,7 +78,7 @@ cargo test --test '*'
 cargo test fixture_wildcards_fails
 
 # Update golden fixtures after intentional changes
-cargo xtask fixtures
+# (Run depguard against each fixture and update expected.* files)
 ```
 
 ## Adding New Scenarios

@@ -10,6 +10,8 @@ Depguard checks are identified by a stable `check_id` and a stable `code`.
 
 The code registry lives in `crates/depguard-types/src/ids.rs`.
 
+Allowlists are **glob patterns** (case-sensitive) across checks unless otherwise noted.
+
 ---
 
 ## `deps.no_wildcards`
@@ -44,6 +46,8 @@ Pin to a specific version or version range. Use `cargo update` to find the lates
 
 Detects path dependencies without an explicit version, which can cause issues when publishing.
 
+By default, this check is skipped for crates with `publish = false`. Set `ignore_publish_false = true` to enforce regardless of publishability.
+
 ### Codes
 
 | Code | Trigger |
@@ -70,7 +74,8 @@ Add a `version` field alongside `path`. This ensures the crate can be published 
 [checks."deps.path_requires_version"]
 enabled = true
 severity = "error"
-allow = ["internal-dev-tool"]  # Crates that don't need version
+allow = ["internal-*"]  # Glob patterns (case-sensitive)
+ignore_publish_false = true  # Enforce even when publish = false
 ```
 
 ---
@@ -120,6 +125,8 @@ allow = []  # No allowlist by default
 
 Detects dependencies that should use `workspace = true` but don't.
 
+> **Note**: This check is **disabled by default** in all profiles. Enable it explicitly if you want enforcement.
+
 ### Codes
 
 | Code | Trigger |
@@ -152,7 +159,7 @@ Change the dependency to `{ workspace = true }` to inherit the version from the 
 [checks."deps.workspace_inheritance"]
 enabled = true
 severity = "warning"
-allow = ["special-crate"]  # Crates allowed to override
+allow = ["special-*"]  # Glob patterns allowed to override
 ```
 
 ---
@@ -198,7 +205,7 @@ Configure per-check severity in `depguard.toml`:
 
 ```toml
 [checks."deps.no_wildcards"]
-severity = "warning"  # Downgrade from default "error"
+severity = "warning"  # Downgrade from default "error" (alias: "warn")
 ```
 
 ## See also

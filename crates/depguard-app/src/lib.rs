@@ -10,10 +10,12 @@
 mod check;
 mod explain;
 mod render;
+mod report;
 
 pub use check::{run_check, verdict_exit_code, CheckInput, CheckOutput};
 pub use explain::{format_explanation, format_not_found, run_explain, ExplainOutput};
-pub use render::{
-    run_annotations, run_markdown, serialize_report, write_report, write_text, AnnotationsInput,
-    MarkdownInput,
+pub use render::{render_annotations, render_markdown};
+pub use report::{
+    empty_report, parse_report_json, runtime_error_report, serialize_report, to_renderable,
+    ReportVariant, ReportVersion,
 };

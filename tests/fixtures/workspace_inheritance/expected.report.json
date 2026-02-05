@@ -1,12 +1,23 @@
 {
-  "schema": "receipt.envelope.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
   },
-  "started_at": "__TIMESTAMP__",
-  "finished_at": "__TIMESTAMP__",
-  "verdict": "fail",
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
   "findings": [
     {
       "severity": "error",
@@ -18,6 +29,7 @@
         "line": 9
       },
       "help": "Prefer `workspace = true` to inherit the workspace dependency version and features.",
+      "fingerprint": "f649405d13514f6abd47f0bf46a305b5a4f1add687946010a71c44ab13806a75",
       "data": {
         "dependency": "serde",
         "manifest": "member-crate/Cargo.toml"

@@ -14,6 +14,8 @@ Understanding exit codes is essential for CI integration:
 
 ## GitHub Actions
 
+By default, depguard writes `artifacts/depguard/report.json`. Use `--report-version v1` if you need the legacy schema.
+
 ### Basic workflow
 
 ```yaml
@@ -74,7 +76,7 @@ Only analyze changed manifests:
   if: always()
   run: |
     echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
-    depguard md --report .depguard/report.json >> $GITHUB_STEP_SUMMARY
+    depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
 
 - name: Check result
   if: steps.depguard.outputs.exit_code == '2'
@@ -92,7 +94,7 @@ GitHub Actions supports inline annotations on PRs:
 - name: Create annotations
   if: failure()
   run: |
-    depguard annotations --report .depguard/report.json >> $GITHUB_OUTPUT
+    depguard annotations --report artifacts/depguard/report.json >> $GITHUB_OUTPUT
 ```
 
 The annotations command outputs GitHub workflow commands:
@@ -141,18 +143,18 @@ jobs:
         run: |
           echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          depguard md --report .depguard/report.json >> $GITHUB_STEP_SUMMARY
+          depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
 
       - name: Create annotations
         if: failure()
-        run: depguard annotations --report .depguard/report.json
+        run: depguard annotations --report artifacts/depguard/report.json
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: depguard-report
-          path: .depguard/report.json
+          path: artifacts/depguard/report.json
 
       - name: Fail on policy violation
         if: steps.check.outcome == 'failure'
@@ -172,7 +174,7 @@ depguard:
     - depguard check
   artifacts:
     paths:
-      - .depguard/report.json
+      - artifacts/depguard/report.json
     when: always
 ```
 
@@ -193,7 +195,7 @@ depguard:
       fi
   artifacts:
     paths:
-      - .depguard/report.json
+      - artifacts/depguard/report.json
     when: always
 ```
 
@@ -206,11 +208,11 @@ depguard:
   script:
     - cargo install --path crates/depguard-cli
     - depguard check || true
-    - depguard md --report .depguard/report.json > comment.md
+    - depguard md --report artifacts/depguard/report.json > artifacts/depguard/comment.md
   artifacts:
     paths:
-      - .depguard/report.json
-      - comment.md
+      - artifacts/depguard/report.json
+      - artifacts/depguard/comment.md
     when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -234,7 +236,7 @@ jobs:
           name: Run depguard
           command: depguard check
       - store_artifacts:
-          path: .depguard/report.json
+          path: artifacts/depguard/report.json
           destination: depguard-report
 
 workflows:
@@ -265,7 +267,7 @@ steps:
 
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: .depguard/report.json
+      targetPath: artifacts/depguard/report.json
       artifact: depguard-report
     condition: always()
 ```
@@ -284,7 +286,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: '.depguard/report.json'
+                    archiveArtifacts artifacts: 'artifacts/depguard/report.json'
                 }
             }
         }
@@ -393,11 +395,11 @@ depguard check --scope diff --base origin/main
 
 ### Permission issues
 
-Ensure the CI user can write to `.depguard/`:
+Ensure the CI user can write to `artifacts/depguard/`:
 
 ```yaml
 - name: Create output directory
-  run: mkdir -p .depguard
+  run: mkdir -p artifacts/depguard
 ```
 
 ## Artifact management
@@ -411,7 +413,7 @@ Keep reports for trend analysis:
 - uses: actions/upload-artifact@v4
   with:
     name: depguard-report-${{ github.sha }}
-    path: .depguard/report.json
+    path: artifacts/depguard/report.json
     retention-days: 90
 ```
 
@@ -422,7 +424,7 @@ For monorepos, you may want to aggregate reports:
 ```bash
 # Run on multiple workspaces
 for dir in workspace1 workspace2; do
-  (cd $dir && depguard check --report-out ../.depguard/$dir-report.json)
+  (cd $dir && depguard check --report-out ../artifacts/depguard/$dir-report.json)
 done
 ```
 
@@ -431,3 +433,4 @@ done
 - [Configuration](config.md) — Full config reference
 - [Troubleshooting](troubleshooting.md) — Common issues
 - [Exit codes](#exit-codes) — CI behavior reference
+

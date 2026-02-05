@@ -1,3 +1,5 @@
+use crate::checks::utils::{build_allowlist, is_allowed};
+use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
 use depguard_types::{ids, Finding};
@@ -7,6 +9,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     let Some(policy) = cfg.check_policy(ids::CHECK_DEPS_PATH_SAFETY) else {
         return;
     };
+    let allow = build_allowlist(&policy.allow);
 
     for manifest in &model.manifests {
         let manifest_depth = manifest_dir_depth(manifest.path.as_str());
@@ -16,7 +19,18 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                 continue;
             };
 
+            if is_allowed(allow.as_ref(), path) {
+                continue;
+            }
+
             if is_absolute_path(path) {
+                let fingerprint = fingerprint_for_dep(
+                    ids::CHECK_DEPS_PATH_SAFETY,
+                    ids::CODE_ABSOLUTE_PATH,
+                    manifest.path.as_str(),
+                    &dep.name,
+                    Some(path),
+                );
                 out.push(Finding {
                     severity: policy.severity,
                     check_id: ids::CHECK_DEPS_PATH_SAFETY.to_string(),
@@ -25,7 +39,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                     location: dep.location.clone(),
                     help: Some("Use repo-relative paths. Absolute paths are not portable and may leak host layout.".to_string()),
                     url: None,
-                    fingerprint: None,
+                    fingerprint: Some(fingerprint),
                     data: json!({
                         "dependency": dep.name,
                         "manifest": manifest.path.as_str(),
@@ -36,6 +50,13 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
             }
 
             if escapes_repo_root(manifest_depth, path) {
+                let fingerprint = fingerprint_for_dep(
+                    ids::CHECK_DEPS_PATH_SAFETY,
+                    ids::CODE_PARENT_ESCAPE,
+                    manifest.path.as_str(),
+                    &dep.name,
+                    Some(path),
+                );
                 out.push(Finding {
                     severity: policy.severity,
                     check_id: ids::CHECK_DEPS_PATH_SAFETY.to_string(),
@@ -47,7 +68,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                     location: dep.location.clone(),
                     help: Some("Avoid `..` segments that escape the repository root.".to_string()),
                     url: None,
-                    fingerprint: None,
+                    fingerprint: Some(fingerprint),
                     data: json!({
                         "dependency": dep.name,
                         "manifest": manifest.path.as_str(),

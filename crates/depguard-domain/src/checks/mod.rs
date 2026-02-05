@@ -5,6 +5,7 @@ use depguard_types::Finding;
 mod no_wildcards;
 mod path_requires_version;
 mod path_safety;
+mod utils;
 mod workspace_inheritance;
 
 pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>) {

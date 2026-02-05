@@ -2,6 +2,7 @@ use crate::{model::DepguardConfigV1, presets};
 use anyhow::Context;
 use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
+use globset::Glob;
 
 #[derive(Clone, Debug, Default)]
 pub struct Overrides {
@@ -52,7 +53,11 @@ pub fn resolve_config(
                 parse_severity(sev).with_context(|| format!("invalid severity for {check_id}"))?;
         }
         if !cc.allow.is_empty() {
+            validate_allowlist(check_id, &cc.allow)?;
             entry.allow = cc.allow.clone();
+        }
+        if let Some(ignore_publish_false) = cc.ignore_publish_false {
+            entry.ignore_publish_false = ignore_publish_false;
         }
     }
 
@@ -62,6 +67,14 @@ pub fn resolve_config(
     }
 
     Ok(ResolvedConfig { effective })
+}
+
+fn validate_allowlist(check_id: &str, patterns: &[String]) -> anyhow::Result<()> {
+    for pattern in patterns {
+        Glob::new(pattern)
+            .with_context(|| format!("invalid allow glob for {check_id}: {pattern}"))?;
+    }
+    Ok(())
 }
 
 fn parse_scope(v: &str) -> anyhow::Result<Scope> {

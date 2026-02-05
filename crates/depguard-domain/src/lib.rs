@@ -11,6 +11,7 @@ pub mod report;
 
 pub mod checks;
 mod engine;
+mod fingerprint;
 
 #[cfg(test)]
 mod proptest;

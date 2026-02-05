@@ -40,7 +40,12 @@ struct SchemaSpec {
 
 /// Generate the DepguardReport schema.
 fn generate_report_schema() -> schemars::schema::RootSchema {
-    schema_for!(depguard_types::DepguardReport)
+    schema_for!(depguard_types::DepguardReportV1)
+}
+
+/// Generate the DepguardReport v2 schema.
+fn generate_report_schema_v2() -> schemars::schema::RootSchema {
+    schema_for!(depguard_types::DepguardReportV2)
 }
 
 /// Generate the DepguardConfigV1 schema.
@@ -55,6 +60,10 @@ fn schema_specs() -> Vec<SchemaSpec> {
         SchemaSpec {
             filename: "depguard.report.v1.json",
             generate: generate_report_schema,
+        },
+        SchemaSpec {
+            filename: "depguard.report.v2.json",
+            generate: generate_report_schema_v2,
         },
         SchemaSpec {
             filename: "depguard.config.v1.json",

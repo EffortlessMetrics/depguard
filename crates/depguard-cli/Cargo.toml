@@ -29,6 +29,9 @@ serde_json.workspace = true
 cucumber.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+jsonschema.workspace = true
+walkdir.workspace = true
+time.workspace = true
 
 [[test]]
 name = "bdd"

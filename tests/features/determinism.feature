@@ -36,9 +36,9 @@ Feature: Deterministic output
   Scenario: Timestamps are ISO 8601 format
     Given a workspace fixture "clean"
     When I run the check
-    Then "started_at" is ISO 8601 format
-    And "finished_at" is ISO 8601 format
-    And "finished_at" >= "started_at"
+    Then "run.started_at" is ISO 8601 format
+    And "run.ended_at" is ISO 8601 format
+    And "run.ended_at" >= "run.started_at"
 
   # ===========================================================================
   # Golden file compatibility

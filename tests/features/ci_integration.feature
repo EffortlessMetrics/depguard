@@ -79,9 +79,9 @@ Feature: CI/CD integration
   Scenario: Report conforms to JSON schema
     Given any workspace
     When I run "depguard check --report-out report.json"
-    Then report.json validates against "schemas/depguard.report.v1.json"
+    Then report.json validates against "schemas/depguard.report.v2.json"
 
   Scenario: Report contains schema_id for consumers
     Given any workspace
     When I run "depguard check --report-out report.json"
-    Then report.json has "schema_id" = "receipt.envelope.v1"
+    Then report.json has "schema" = "depguard.report.v2"

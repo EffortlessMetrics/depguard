@@ -18,6 +18,8 @@ pub struct CheckPolicy {
     pub enabled: bool,
     pub severity: Severity,
     pub allow: Vec<String>,
+    /// Check-specific option for deps.path_requires_version.
+    pub ignore_publish_false: bool,
 }
 
 impl CheckPolicy {
@@ -26,6 +28,7 @@ impl CheckPolicy {
             enabled: true,
             severity,
             allow: Vec::new(),
+            ignore_publish_false: false,
         }
     }
 
@@ -34,6 +37,7 @@ impl CheckPolicy {
             enabled: false,
             severity: Severity::Info,
             allow: Vec::new(),
+            ignore_publish_false: false,
         }
     }
 }

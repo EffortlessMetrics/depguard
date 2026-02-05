@@ -371,6 +371,11 @@ proptest! {
         // Sort all permutations using the same comparator as the engine
         fn sort_findings(f: &mut [Finding]) {
             f.sort_by(|a, b| {
+                let rank = |s: Severity| match s {
+                    Severity::Error => 0u8,
+                    Severity::Warning => 1u8,
+                    Severity::Info => 2u8,
+                };
                 let (ap, al) = match &a.location {
                     Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                     None => ("~", u32::MAX),
@@ -379,7 +384,9 @@ proptest! {
                     Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                     None => ("~", u32::MAX),
                 };
-                ap.cmp(bp)
+                rank(a.severity)
+                    .cmp(&rank(b.severity))
+                    .then(ap.cmp(bp))
                     .then(al.cmp(&bl))
                     .then(a.check_id.cmp(&b.check_id))
                     .then(a.code.cmp(&b.code))
@@ -427,6 +434,11 @@ proptest! {
     fn findings_ordering_is_stable(findings in prop::collection::vec(arb_finding(), 0..20)) {
         fn sort_findings(f: &mut [Finding]) {
             f.sort_by(|a, b| {
+                let rank = |s: Severity| match s {
+                    Severity::Error => 0u8,
+                    Severity::Warning => 1u8,
+                    Severity::Info => 2u8,
+                };
                 let (ap, al) = match &a.location {
                     Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                     None => ("~", u32::MAX),
@@ -435,7 +447,9 @@ proptest! {
                     Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                     None => ("~", u32::MAX),
                 };
-                ap.cmp(bp)
+                rank(a.severity)
+                    .cmp(&rank(b.severity))
+                    .then(ap.cmp(bp))
                     .then(al.cmp(&bl))
                     .then(a.check_id.cmp(&b.check_id))
                     .then(a.code.cmp(&b.code))
@@ -895,7 +909,7 @@ proptest! {
         let cfg = config_all_enabled(Severity::Warning);
         let report = evaluate(&model, &cfg);
 
-        // Verify findings are sorted by path, then line, then check_id, then code, then message
+        // Verify findings are sorted by severity, path, line, check_id, code, message
         for i in 1..report.findings.len() {
             let prev = &report.findings[i - 1];
             let curr = &report.findings[i];
@@ -909,7 +923,14 @@ proptest! {
                 None => ("~", u32::MAX),
             };
 
-            let cmp = prev_path.cmp(curr_path)
+            let rank = |s: Severity| match s {
+                Severity::Error => 0u8,
+                Severity::Warning => 1u8,
+                Severity::Info => 2u8,
+            };
+            let cmp = rank(prev.severity)
+                .cmp(&rank(curr.severity))
+                .then(prev_path.cmp(curr_path))
                 .then(prev_line.cmp(&curr_line))
                 .then(prev.check_id.cmp(&curr.check_id))
                 .then(prev.code.cmp(&curr.code))
@@ -1049,6 +1070,11 @@ mod unit_tests {
 
         let mut sorted = findings.clone();
         sorted.sort_by(|a, b| {
+            let rank = |s: Severity| match s {
+                Severity::Error => 0u8,
+                Severity::Warning => 1u8,
+                Severity::Info => 2u8,
+            };
             let (ap, al) = match &a.location {
                 Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                 None => ("~", u32::MAX),
@@ -1057,18 +1083,20 @@ mod unit_tests {
                 Some(l) => (l.path.as_str(), l.line.unwrap_or(u32::MAX)),
                 None => ("~", u32::MAX),
             };
-            ap.cmp(bp)
+            rank(a.severity)
+                .cmp(&rank(b.severity))
+                .then(ap.cmp(bp))
                 .then(al.cmp(&bl))
                 .then(a.check_id.cmp(&b.check_id))
                 .then(a.code.cmp(&b.code))
                 .then(a.message.cmp(&b.message))
         });
 
-        // Expected order: Cargo.toml:5, Cargo.toml:10 (a.check), Cargo.toml:10 (b.check), crates/foo/Cargo.toml:1
+        // Expected order: Error Cargo.toml:5, Error Cargo.toml:10 (b.check), Warning Cargo.toml:10 (a.check), Info crates/foo/Cargo.toml:1
         assert_eq!(sorted[0].location.as_ref().unwrap().line, Some(5));
-        assert_eq!(sorted[1].check_id, "a.check");
+        assert_eq!(sorted[1].check_id, "b.check");
         assert_eq!(sorted[1].location.as_ref().unwrap().line, Some(10));
-        assert_eq!(sorted[2].check_id, "b.check");
+        assert_eq!(sorted[2].check_id, "a.check");
         assert_eq!(sorted[2].location.as_ref().unwrap().line, Some(10));
         assert_eq!(
             sorted[3].location.as_ref().unwrap().path.as_str(),

@@ -23,7 +23,8 @@ Navigate to your Rust workspace and run:
 depguard check
 ```
 
-This analyzes all `Cargo.toml` files and outputs a JSON report to `.depguard/report.json`.
+This analyzes all `Cargo.toml` files and outputs a JSON report to `artifacts/depguard/report.json`.
+Use `--write-markdown` to also write `artifacts/depguard/comment.md`.
 
 ### Example output
 
@@ -34,7 +35,7 @@ Found 5 manifests
 
 ✗ 2 findings (1 error, 1 warning)
 
-Report written to .depguard/report.json
+Report written to artifacts/depguard/report.json
 ```
 
 ## Understanding the output
@@ -45,9 +46,10 @@ The JSON report contains:
 
 ```json
 {
-  "schema": "depguard.report.v1",
+  "schema": "depguard.report.v2",
   "tool": { "name": "depguard", "version": "0.1.0" },
-  "verdict": "fail",
+  "run": { "started_at": "...", "ended_at": "...", "duration_ms": 12 },
+  "verdict": { "status": "fail", "counts": { "info": 0, "warn": 0, "error": 1 }, "reasons": [] },
   "findings": [...],
   "data": {
     "scope": "repo",
@@ -57,6 +59,8 @@ The JSON report contains:
   }
 }
 ```
+
+Need the legacy schema? Run `depguard check --report-version v1`.
 
 ### Verdicts
 
@@ -70,7 +74,7 @@ The JSON report contains:
 
 Each finding includes:
 
-- **severity**: `info`, `warning`, or `error`
+- **severity**: `info`, `warn`, or `error`
 - **check_id**: Which check triggered (e.g., `deps.no_wildcards`)
 - **code**: Specific condition (e.g., `wildcard_version`)
 - **message**: Human-readable description
@@ -113,7 +117,7 @@ Remediation:
 ### Markdown report
 
 ```bash
-depguard md --report .depguard/report.json
+depguard md --report artifacts/depguard/report.json
 ```
 
 Outputs a Markdown summary suitable for PR comments or documentation.
@@ -121,7 +125,7 @@ Outputs a Markdown summary suitable for PR comments or documentation.
 ### GitHub annotations
 
 ```bash
-depguard annotations --report .depguard/report.json
+depguard annotations --report artifacts/depguard/report.json
 ```
 
 Outputs GitHub Actions workflow commands that create inline annotations on your PR.
@@ -137,9 +141,9 @@ profile = "warn"
 # Only fail on errors, not warnings
 fail_on = "error"
 
-# Disable a specific check
+# Enable workspace inheritance enforcement
 [checks."deps.workspace_inheritance"]
-enabled = false
+enabled = true
 ```
 
 ### Profiles
@@ -206,3 +210,4 @@ exclude = ["experiments/*"]
 ```
 
 All discovered manifests are analyzed unless scoped by diff.
+

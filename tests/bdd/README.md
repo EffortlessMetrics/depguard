@@ -30,6 +30,11 @@ The project uses a **hybrid approach**:
 This trades a Gherkin interpreter for simpler Rust-native tests while keeping policy
 semantics readable by non-developers.
 
+## BDD Guardrails
+
+- All executable BDD scenarios must run in a temporary workspace (fixtures are copied into temp).
+- A `pass` verdict is only accepted if `data.manifests_scanned > 0`.
+
 ## Running Tests
 
 ```bash

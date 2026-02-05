@@ -63,11 +63,6 @@ Feature: Workspace handling
     Then all matched directories are analyzed
 
   Scenario: Excluded members are skipped
-    Given a workspace Cargo.toml with:
-      """
-      [workspace]
-      members = ["crates/*"]
-      exclude = ["crates/legacy"]
-      """
+    Given a workspace fixture "workspace_members_exclude"
     When I run "depguard check --repo-root ."
     Then "crates/legacy" is not analyzed

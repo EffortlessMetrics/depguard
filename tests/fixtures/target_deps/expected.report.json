@@ -1,0 +1,82 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 3
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'nix' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 10
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "38be3123a38a82ede27eb20d4d4d917866221d7c967119a9017858545da8e25b",
+      "data": {
+        "dependency": "nix",
+        "manifest": "Cargo.toml",
+        "version": "*"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'winapi' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 13
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "00918e957963ecf4e1e2f3d9420f615be1c1f139935a09d5010872463a93f2de",
+      "data": {
+        "dependency": "winapi",
+        "manifest": "Cargo.toml",
+        "version": "*"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'cc' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 16
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "34a645a376dafd3557b5decf28b3a375c32a9ad74bab860fe51a597fe9e6dd2e",
+      "data": {
+        "dependency": "cc",
+        "manifest": "Cargo.toml",
+        "version": "*"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 4,
+    "findings_total": 3,
+    "findings_emitted": 3
+  }
+}
