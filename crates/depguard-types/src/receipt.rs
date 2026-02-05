@@ -7,6 +7,7 @@ use time::OffsetDateTime;
 /// Stable schema identifiers for depguard reports.
 pub const SCHEMA_REPORT_V1: &str = "depguard.report.v1";
 pub const SCHEMA_REPORT_V2: &str = "depguard.report.v2";
+pub const SCHEMA_SENSOR_REPORT_V1: &str = "sensor.report.v1";
 
 /// Severity is intentionally small: it maps cleanly to CI signals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -87,11 +88,19 @@ pub enum VerdictStatus {
     Skip,
 }
 
+/// Helper function for skip_serializing_if on suppressed field.
+fn is_zero(val: &u32) -> bool {
+    *val == 0
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct VerdictCounts {
     pub info: u32,
     pub warn: u32,
     pub error: u32,
+    /// Count of findings suppressed by baseline filtering.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub suppressed: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -148,6 +157,38 @@ pub struct RunGit {
     pub merge_base: Option<String>,
 }
 
+// ============================================================================
+// Capability reporting for No Green By Omission
+// ============================================================================
+
+/// Status of a capability (available, missing, or degraded).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum CapabilityAvailability {
+    Available,
+    Missing,
+    Degraded,
+}
+
+/// Status of a single capability with optional reason.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CapabilityStatus {
+    pub status: CapabilityAvailability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Capabilities block for No Green By Omission reporting.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Capabilities {
+    /// Git integration status (for diff scope, blame, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git: Option<CapabilityStatus>,
+    /// Configuration file status.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<CapabilityStatus>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RunMeta {
     #[schemars(with = "String")]
@@ -165,6 +206,9 @@ pub struct RunMeta {
     pub ci: Option<RunCi>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git: Option<RunGit>,
+    /// Capability status for No Green By Omission reporting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<Capabilities>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -188,6 +232,36 @@ pub struct FindingV2 {
     #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub data: JsonValue,
 }
+
+// ============================================================================
+// Artifact pointers
+// ============================================================================
+
+/// Type classification for artifact pointers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ArtifactType {
+    Comment,
+    Annotation,
+    Extra,
+}
+
+/// Pointer to an additional artifact produced by a sensor run.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ArtifactPointer {
+    /// Type classification for this artifact.
+    #[serde(rename = "type")]
+    pub artifact_type: ArtifactType,
+    /// Path to the artifact file, relative to artifacts directory.
+    pub path: String,
+    /// MIME type or format identifier (e.g., "text/markdown").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+}
+
+// ============================================================================
+// Depguard-specific data
+// ============================================================================
 
 /// Depguard-specific summary payload for the report.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
@@ -235,6 +309,9 @@ pub struct ReportEnvelopeV2<TData = DepguardData> {
     pub run: RunMeta,
     pub verdict: VerdictV2,
     pub findings: Vec<FindingV2>,
+    /// Optional list of additional artifacts produced by this run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifacts: Option<Vec<ArtifactPointer>>,
     pub data: TData,
 }
 

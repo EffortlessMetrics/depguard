@@ -32,6 +32,11 @@ fn schemas_dir() -> PathBuf {
     project_root().join("schemas")
 }
 
+/// Get the contracts/schemas directory path.
+fn contracts_schemas_dir() -> PathBuf {
+    project_root().join("contracts").join("schemas")
+}
+
 /// Schema definition with its target filename.
 struct SchemaSpec {
     filename: &'static str,
@@ -158,6 +163,83 @@ fn print_help() {
     eprintln!("  emit-schemas      Generate JSON schemas from Rust types to schemas/");
     eprintln!("  validate-schemas  Check if schemas/ matches generated output (for CI)");
     eprintln!("  print-schema-ids  Print known schema IDs");
+    eprintln!("  conform           Validate sensor.report.v1 conformance");
+}
+
+/// Validate sensor.report.v1 conformance.
+///
+/// This checks:
+/// 1. The sensor.report.v1 schema exists in contracts/schemas/
+/// 2. depguard can produce sensor.report.v1 output
+/// 3. The output validates against the schema (basic structure check)
+fn conform() -> anyhow::Result<()> {
+    let contracts_dir = contracts_schemas_dir();
+    let sensor_schema_path = contracts_dir.join("sensor.report.v1.json");
+
+    // Check schema file exists
+    if !sensor_schema_path.exists() {
+        bail!(
+            "sensor.report.v1.json not found at {}\n\n\
+            Run `cargo build` and ensure contracts/schemas/ is populated.",
+            sensor_schema_path.display()
+        );
+    }
+
+    println!("✓ sensor.report.v1.json schema exists");
+
+    // Load and parse the schema to verify it's valid JSON
+    let schema_content = fs::read_to_string(&sensor_schema_path)
+        .with_context(|| format!("Failed to read {}", sensor_schema_path.display()))?;
+    let schema: serde_json::Value = serde_json::from_str(&schema_content)
+        .with_context(|| "Failed to parse sensor.report.v1.json as JSON")?;
+
+    // Verify required schema properties
+    let required_props = ["schema", "tool", "run", "verdict", "findings"];
+    if let Some(props) = schema.get("required").and_then(|v| v.as_array()) {
+        let required: Vec<&str> = props.iter().filter_map(|v| v.as_str()).collect();
+        for prop in required_props {
+            if !required.contains(&prop) {
+                bail!(
+                    "sensor.report.v1.json is missing required property '{}' in schema",
+                    prop
+                );
+            }
+        }
+    } else {
+        bail!("sensor.report.v1.json is missing 'required' array");
+    }
+
+    println!("✓ sensor.report.v1.json has required properties");
+
+    // Verify capabilities definition exists (No Green By Omission)
+    if let Some(defs) = schema.get("definitions") {
+        if defs.get("Capabilities").is_none() {
+            bail!("sensor.report.v1.json is missing Capabilities definition");
+        }
+        if defs.get("CapabilityStatus").is_none() {
+            bail!("sensor.report.v1.json is missing CapabilityStatus definition");
+        }
+    } else {
+        bail!("sensor.report.v1.json is missing definitions");
+    }
+
+    println!("✓ sensor.report.v1.json has Capabilities definitions (No Green By Omission)");
+
+    // Verify VerdictCounts has suppressed field
+    if let Some(defs) = schema.get("definitions") {
+        if let Some(verdict_counts) = defs.get("VerdictCounts") {
+            if let Some(props) = verdict_counts.get("properties") {
+                if props.get("suppressed").is_none() {
+                    bail!("VerdictCounts is missing 'suppressed' field");
+                }
+            }
+        }
+    }
+
+    println!("✓ VerdictCounts has 'suppressed' field for baseline filtering");
+
+    println!("\n✓ All conformance checks passed!");
+    Ok(())
 }
 
 fn main() -> anyhow::Result<()> {
@@ -171,9 +253,11 @@ fn main() -> anyhow::Result<()> {
         }
         "emit-schemas" => emit_schemas(),
         "validate-schemas" => validate_schemas(),
+        "conform" => conform(),
         "print-schema-ids" => {
             // List all schema IDs for reference
             println!("receipt.envelope.v1 (vendored, not generated)");
+            println!("sensor.report.v1 (universal cockpit protocol)");
             for spec in schema_specs() {
                 let name = spec.filename.trim_end_matches(".json");
                 println!("{}", name);

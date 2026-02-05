@@ -4,8 +4,9 @@ use depguard_render::{
     RenderableVerdictStatus,
 };
 use depguard_types::{
-    DepguardData, DepguardReportV1, DepguardReportV2, FindingV2, Severity, SeverityV2, Verdict,
-    VerdictStatus, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2,
+    Capabilities, CapabilityAvailability, CapabilityStatus, DepguardData, DepguardReportV1,
+    DepguardReportV2, FindingV2, Severity, SeverityV2, Verdict, VerdictStatus, SCHEMA_REPORT_V1,
+    SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
 };
 use time::OffsetDateTime;
 
@@ -13,6 +14,8 @@ use time::OffsetDateTime;
 pub enum ReportVersion {
     V1,
     V2,
+    /// Universal sensor.report.v1 format for cockpit ecosystem.
+    SensorV1,
 }
 
 #[derive(Clone, Debug)]
@@ -32,7 +35,7 @@ pub fn parse_report_json(text: &str) -> anyhow::Result<ReportVariant> {
         .to_string();
 
     match schema.as_str() {
-        SCHEMA_REPORT_V2 => {
+        SCHEMA_REPORT_V2 | SCHEMA_SENSOR_REPORT_V1 => {
             let report: DepguardReportV2 =
                 serde_json::from_value(value).context("parse depguard v2 report")?;
             Ok(ReportVariant::V2(report))
@@ -160,33 +163,56 @@ pub fn empty_report(version: ReportVersion, scope: &str, profile: &str) -> Repor
             findings: Vec::new(),
             data,
         }),
-        ReportVersion::V2 => ReportVariant::V2(DepguardReportV2 {
-            schema: SCHEMA_REPORT_V2.to_string(),
-            tool: depguard_types::ToolMetaV2 {
-                name: "depguard".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                commit: None,
-            },
-            run: depguard_types::RunMeta {
-                started_at: now,
-                ended_at: Some(now),
-                duration_ms: Some(0),
-                host: None,
-                ci: None,
-                git: None,
-            },
-            verdict: depguard_types::VerdictV2 {
-                status: VerdictStatus::Pass,
-                counts: depguard_types::VerdictCounts {
-                    info: 0,
-                    warn: 0,
-                    error: 0,
+        ReportVersion::V2 | ReportVersion::SensorV1 => {
+            let schema = match version {
+                ReportVersion::SensorV1 => SCHEMA_SENSOR_REPORT_V1.to_string(),
+                _ => SCHEMA_REPORT_V2.to_string(),
+            };
+            let capabilities = if version == ReportVersion::SensorV1 {
+                Some(Capabilities {
+                    git: Some(CapabilityStatus {
+                        status: CapabilityAvailability::Missing,
+                        reason: Some("No manifest found".to_string()),
+                    }),
+                    config: Some(CapabilityStatus {
+                        status: CapabilityAvailability::Available,
+                        reason: None,
+                    }),
+                })
+            } else {
+                None
+            };
+            ReportVariant::V2(DepguardReportV2 {
+                schema,
+                tool: depguard_types::ToolMetaV2 {
+                    name: "depguard".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    commit: None,
                 },
-                reasons: Vec::new(),
-            },
-            findings: Vec::new(),
-            data,
-        }),
+                run: depguard_types::RunMeta {
+                    started_at: now,
+                    ended_at: Some(now),
+                    duration_ms: Some(0),
+                    host: None,
+                    ci: None,
+                    git: None,
+                    capabilities,
+                },
+                verdict: depguard_types::VerdictV2 {
+                    status: VerdictStatus::Pass,
+                    counts: depguard_types::VerdictCounts {
+                        info: 0,
+                        warn: 0,
+                        error: 0,
+                        suppressed: 0,
+                    },
+                    reasons: Vec::new(),
+                },
+                findings: Vec::new(),
+                artifacts: None,
+                data,
+            })
+        }
     }
 }
 
@@ -225,42 +251,65 @@ pub fn runtime_error_report(version: ReportVersion, message: &str) -> ReportVari
             }],
             data,
         }),
-        ReportVersion::V2 => ReportVariant::V2(DepguardReportV2 {
-            schema: SCHEMA_REPORT_V2.to_string(),
-            tool: depguard_types::ToolMetaV2 {
-                name: "depguard".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                commit: None,
-            },
-            run: depguard_types::RunMeta {
-                started_at: now,
-                ended_at: Some(now),
-                duration_ms: Some(0),
-                host: None,
-                ci: None,
-                git: None,
-            },
-            verdict: depguard_types::VerdictV2 {
-                status: VerdictStatus::Fail,
-                counts: depguard_types::VerdictCounts {
-                    info: 0,
-                    warn: 0,
-                    error: 1,
+        ReportVersion::V2 | ReportVersion::SensorV1 => {
+            let schema = match version {
+                ReportVersion::SensorV1 => SCHEMA_SENSOR_REPORT_V1.to_string(),
+                _ => SCHEMA_REPORT_V2.to_string(),
+            };
+            let capabilities = if version == ReportVersion::SensorV1 {
+                Some(Capabilities {
+                    git: Some(CapabilityStatus {
+                        status: CapabilityAvailability::Missing,
+                        reason: Some("Runtime error".to_string()),
+                    }),
+                    config: Some(CapabilityStatus {
+                        status: CapabilityAvailability::Missing,
+                        reason: Some("Runtime error".to_string()),
+                    }),
+                })
+            } else {
+                None
+            };
+            ReportVariant::V2(DepguardReportV2 {
+                schema,
+                tool: depguard_types::ToolMetaV2 {
+                    name: "depguard".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    commit: None,
                 },
-                reasons: vec!["tool_error".to_string()],
-            },
-            findings: vec![depguard_types::FindingV2 {
-                severity: depguard_types::SeverityV2::Error,
-                check_id: depguard_types::ids::CHECK_TOOL_RUNTIME.to_string(),
-                code: depguard_types::ids::CODE_RUNTIME_ERROR.to_string(),
-                message: message.to_string(),
-                location: None,
-                help: Some("Fix the tool error and re-run depguard.".to_string()),
-                url: None,
-                fingerprint: None,
-                data: serde_json::Value::Null,
-            }],
-            data,
-        }),
+                run: depguard_types::RunMeta {
+                    started_at: now,
+                    ended_at: Some(now),
+                    duration_ms: Some(0),
+                    host: None,
+                    ci: None,
+                    git: None,
+                    capabilities,
+                },
+                verdict: depguard_types::VerdictV2 {
+                    status: VerdictStatus::Fail,
+                    counts: depguard_types::VerdictCounts {
+                        info: 0,
+                        warn: 0,
+                        error: 1,
+                        suppressed: 0,
+                    },
+                    reasons: vec!["tool_error".to_string()],
+                },
+                findings: vec![depguard_types::FindingV2 {
+                    severity: depguard_types::SeverityV2::Error,
+                    check_id: depguard_types::ids::CHECK_TOOL_RUNTIME.to_string(),
+                    code: depguard_types::ids::CODE_RUNTIME_ERROR.to_string(),
+                    message: message.to_string(),
+                    location: None,
+                    help: Some("Fix the tool error and re-run depguard.".to_string()),
+                    url: None,
+                    fingerprint: None,
+                    data: serde_json::Value::Null,
+                }],
+                artifacts: None,
+                data,
+            })
+        }
     }
 }

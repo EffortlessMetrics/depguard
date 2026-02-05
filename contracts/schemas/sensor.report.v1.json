@@ -1,0 +1,377 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "sensor.report.v1",
+  "title": "Sensor Report v1",
+  "description": "Universal envelope schema for cockpit ecosystem sensors. Sensors emit structured findings with capability reporting for No Green By Omission.",
+  "type": "object",
+  "required": [
+    "schema",
+    "tool",
+    "run",
+    "verdict",
+    "findings"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "sensor.report.v1",
+      "description": "Schema identifier for this envelope format."
+    },
+    "tool": {
+      "$ref": "#/definitions/ToolMeta",
+      "description": "Metadata about the sensor tool that produced this report."
+    },
+    "run": {
+      "$ref": "#/definitions/RunMeta",
+      "description": "Execution context including timing, environment, and capabilities."
+    },
+    "verdict": {
+      "$ref": "#/definitions/Verdict",
+      "description": "Overall result of the analysis."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Finding"
+      },
+      "description": "List of individual findings from the analysis."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ArtifactPointer"
+      },
+      "description": "Optional list of additional artifacts produced by this run."
+    },
+    "data": {
+      "type": "object",
+      "description": "Tool-specific extension payload. Structure varies by sensor."
+    }
+  },
+  "definitions": {
+    "ToolMeta": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool identifier (e.g., 'depguard', 'license-checker')."
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version of the tool."
+        },
+        "commit": {
+          "type": "string",
+          "description": "Git commit hash of the tool build."
+        }
+      }
+    },
+    "RunMeta": {
+      "type": "object",
+      "required": [
+        "started_at"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the run started."
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the run completed."
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Run duration in milliseconds."
+        },
+        "host": {
+          "$ref": "#/definitions/HostInfo"
+        },
+        "ci": {
+          "$ref": "#/definitions/CiInfo"
+        },
+        "git": {
+          "$ref": "#/definitions/GitInfo"
+        },
+        "capabilities": {
+          "$ref": "#/definitions/Capabilities",
+          "description": "Capability status for No Green By Omission reporting."
+        }
+      }
+    },
+    "HostInfo": {
+      "type": "object",
+      "properties": {
+        "os": {
+          "type": "string",
+          "description": "Operating system name."
+        },
+        "arch": {
+          "type": "string",
+          "description": "CPU architecture."
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Machine hostname."
+        }
+      }
+    },
+    "CiInfo": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "CI provider name (e.g., 'github-actions', 'gitlab-ci')."
+        },
+        "run_id": {
+          "type": "string",
+          "description": "Unique identifier for this CI run."
+        },
+        "job": {
+          "type": "string",
+          "description": "Job name within the CI pipeline."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the CI run."
+        }
+      }
+    },
+    "GitInfo": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Repository URL or identifier."
+        },
+        "base_ref": {
+          "type": "string",
+          "description": "Base branch name (e.g., 'main')."
+        },
+        "head_ref": {
+          "type": "string",
+          "description": "Head branch name."
+        },
+        "base_sha": {
+          "type": "string",
+          "description": "Base commit SHA."
+        },
+        "head_sha": {
+          "type": "string",
+          "description": "Head commit SHA."
+        },
+        "merge_base": {
+          "type": "string",
+          "description": "Merge base commit SHA."
+        }
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "description": "Reports availability of optional capabilities. Used for No Green By Omission: a pass verdict with degraded capabilities indicates incomplete analysis.",
+      "properties": {
+        "git": {
+          "$ref": "#/definitions/CapabilityStatus",
+          "description": "Git integration status (for diff scope, blame, etc.)."
+        },
+        "config": {
+          "$ref": "#/definitions/CapabilityStatus",
+          "description": "Configuration file status."
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/CapabilityStatus"
+      }
+    },
+    "CapabilityStatus": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "available",
+            "missing",
+            "degraded"
+          ],
+          "description": "Capability availability status."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable explanation for non-available status."
+        }
+      }
+    },
+    "Verdict": {
+      "type": "object",
+      "required": [
+        "status",
+        "counts"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "description": "Overall verdict status."
+        },
+        "counts": {
+          "$ref": "#/definitions/VerdictCounts"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Machine-readable reason codes for the verdict."
+        }
+      }
+    },
+    "VerdictCounts": {
+      "type": "object",
+      "required": [
+        "info",
+        "warn",
+        "error"
+      ],
+      "properties": {
+        "info": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of informational findings."
+        },
+        "warn": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of warning findings."
+        },
+        "error": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of error findings."
+        },
+        "suppressed": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Count of findings suppressed by baseline filtering."
+        }
+      }
+    },
+    "Finding": {
+      "type": "object",
+      "required": [
+        "severity",
+        "check_id",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ],
+          "description": "Finding severity level."
+        },
+        "check_id": {
+          "type": "string",
+          "description": "Stable identifier for the check that produced this finding (e.g., 'deps.no_wildcards')."
+        },
+        "code": {
+          "type": "string",
+          "description": "Stable code within the check (e.g., 'wildcard_version')."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the finding."
+        },
+        "location": {
+          "$ref": "#/definitions/Location"
+        },
+        "help": {
+          "type": "string",
+          "description": "Remediation guidance."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Link to documentation for this finding."
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Stable hash for deduplication and trending."
+        },
+        "data": {
+          "type": "object",
+          "description": "Check-specific structured payload."
+        }
+      }
+    },
+    "Location": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Repo-relative file path."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-indexed line number."
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-indexed column number."
+        }
+      }
+    },
+    "ArtifactPointer": {
+      "type": "object",
+      "required": [
+        "type",
+        "path"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "comment",
+            "annotation",
+            "extra"
+          ],
+          "description": "Artifact type classification."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the artifact file, relative to artifacts directory."
+        },
+        "format": {
+          "type": "string",
+          "description": "MIME type or format identifier (e.g., 'text/markdown', 'application/json')."
+        }
+      }
+    }
+  }
+}

@@ -12,6 +12,16 @@
     "verdict"
   ],
   "properties": {
+    "artifacts": {
+      "description": "Optional list of additional artifacts produced by this run.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ArtifactPointer"
+      }
+    },
     "data": {
       "$ref": "#/definitions/DepguardData"
     },
@@ -35,6 +45,99 @@
     }
   },
   "definitions": {
+    "ArtifactPointer": {
+      "description": "Pointer to an additional artifact produced by a sensor run.",
+      "type": "object",
+      "required": [
+        "path",
+        "type"
+      ],
+      "properties": {
+        "format": {
+          "description": "MIME type or format identifier (e.g., \"text/markdown\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path to the artifact file, relative to artifacts directory.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type classification for this artifact.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ArtifactType"
+            }
+          ]
+        }
+      }
+    },
+    "ArtifactType": {
+      "description": "Type classification for artifact pointers.",
+      "type": "string",
+      "enum": [
+        "comment",
+        "annotation",
+        "extra"
+      ]
+    },
+    "Capabilities": {
+      "description": "Capabilities block for No Green By Omission reporting.",
+      "type": "object",
+      "properties": {
+        "config": {
+          "description": "Configuration file status.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CapabilityStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "git": {
+          "description": "Git integration status (for diff scope, blame, etc.).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CapabilityStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CapabilityAvailability": {
+      "description": "Status of a capability (available, missing, or degraded).",
+      "type": "string",
+      "enum": [
+        "available",
+        "missing",
+        "degraded"
+      ]
+    },
+    "CapabilityStatus": {
+      "description": "Status of a single capability with optional reason.",
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/definitions/CapabilityAvailability"
+        }
+      }
+    },
     "DepguardData": {
       "description": "Depguard-specific summary payload for the report.",
       "type": "object",
@@ -259,6 +362,17 @@
         "started_at"
       ],
       "properties": {
+        "capabilities": {
+          "description": "Capability status for No Green By Omission reporting.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Capabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "ci": {
           "anyOf": [
             {
@@ -352,6 +466,12 @@
           "minimum": 0.0
         },
         "info": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "suppressed": {
+          "description": "Count of findings suppressed by baseline filtering.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0

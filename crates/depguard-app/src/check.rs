@@ -6,8 +6,9 @@ use depguard_domain::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
 use depguard_types::{
-    ReportEnvelope, ReportEnvelopeV2, RunMeta, ToolMeta, ToolMetaV2, Verdict, VerdictCounts,
-    VerdictStatus, VerdictV2, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2,
+    Capabilities, CapabilityAvailability, CapabilityStatus, ReportEnvelope, ReportEnvelopeV2,
+    RunMeta, ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus, VerdictV2,
+    SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
 };
 use time::OffsetDateTime;
 
@@ -89,7 +90,44 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
             findings: domain_findings,
             data: domain_data,
         }),
-        ReportVersion::V2 => {
+        ReportVersion::V2 | ReportVersion::SensorV1 => {
+            let schema = match input.report_version {
+                ReportVersion::SensorV1 => SCHEMA_SENSOR_REPORT_V1.to_string(),
+                _ => SCHEMA_REPORT_V2.to_string(),
+            };
+
+            // Build capabilities block for SensorV1 (No Green By Omission).
+            let capabilities = if input.report_version == ReportVersion::SensorV1 {
+                Some(Capabilities {
+                    git: Some(CapabilityStatus {
+                        status: if input.changed_files.is_some() {
+                            CapabilityAvailability::Available
+                        } else {
+                            CapabilityAvailability::Missing
+                        },
+                        reason: if input.changed_files.is_none() {
+                            Some("Diff scope not enabled".to_string())
+                        } else {
+                            None
+                        },
+                    }),
+                    config: Some(CapabilityStatus {
+                        status: if !input.config_text.is_empty() {
+                            CapabilityAvailability::Available
+                        } else {
+                            CapabilityAvailability::Missing
+                        },
+                        reason: if input.config_text.is_empty() {
+                            Some("No config file found, using defaults".to_string())
+                        } else {
+                            None
+                        },
+                    }),
+                })
+            } else {
+                None
+            };
+
             let verdict = VerdictV2 {
                 status: match domain_verdict {
                     Verdict::Pass => VerdictStatus::Pass,
@@ -100,6 +138,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                     info: domain_counts.info,
                     warn: domain_counts.warning,
                     error: domain_counts.error,
+                    suppressed: 0,
                 },
                 reasons: Vec::new(),
             };
@@ -111,6 +150,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                 host: None,
                 ci: None,
                 git: None,
+                capabilities,
             };
 
             // Convert v1 findings to v2 findings (severity naming change).
@@ -134,7 +174,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                 .collect();
 
             ReportVariant::V2(ReportEnvelopeV2 {
-                schema: SCHEMA_REPORT_V2.to_string(),
+                schema,
                 tool: ToolMetaV2 {
                     name: "depguard".to_string(),
                     version: env!("CARGO_PKG_VERSION").to_string(),
@@ -143,6 +183,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                 run,
                 verdict,
                 findings,
+                artifacts: None,
                 data: domain_data,
             })
         }

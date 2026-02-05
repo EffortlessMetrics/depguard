@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "buildfix.plan.v1",
+  "title": "Buildfix Plan v1",
+  "description": "Actuator protocol for automated fixes. Maps sensor findings to fix actions.",
+  "type": "object",
+  "required": [
+    "schema",
+    "source",
+    "fixes"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "buildfix.plan.v1",
+      "description": "Schema identifier for this envelope format."
+    },
+    "source": {
+      "$ref": "#/definitions/SourceReport",
+      "description": "Reference to the sensor report this plan addresses."
+    },
+    "fixes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/FixAction"
+      },
+      "description": "List of fix actions to apply."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata about the plan.",
+      "properties": {
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generator": {
+          "type": "string",
+          "description": "Tool that generated this plan."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, this plan should only be previewed, not applied."
+        }
+      }
+    }
+  },
+  "definitions": {
+    "SourceReport": {
+      "type": "object",
+      "required": [
+        "tool",
+        "report_path"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Sensor tool name that produced the findings."
+        },
+        "report_path": {
+          "type": "string",
+          "description": "Path to the source sensor report."
+        },
+        "report_schema": {
+          "type": "string",
+          "description": "Schema version of the source report."
+        }
+      }
+    },
+    "FixAction": {
+      "type": "object",
+      "required": [
+        "finding_ref",
+        "action"
+      ],
+      "properties": {
+        "finding_ref": {
+          "$ref": "#/definitions/FindingRef",
+          "description": "Reference to the finding this fix addresses."
+        },
+        "action": {
+          "$ref": "#/definitions/Action",
+          "description": "The fix action to perform."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
+          "description": "Confidence level of this fix being correct."
+        },
+        "requires_review": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, this fix should be reviewed before applying."
+        }
+      }
+    },
+    "FindingRef": {
+      "type": "object",
+      "required": [
+        "check_id",
+        "code"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Sensor tool name."
+        },
+        "check_id": {
+          "type": "string",
+          "description": "Check ID from the finding."
+        },
+        "code": {
+          "type": "string",
+          "description": "Code from the finding."
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Finding fingerprint for precise matching."
+        },
+        "location": {
+          "$ref": "#/definitions/Location",
+          "description": "Location of the finding."
+        }
+      }
+    },
+    "Location": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "col": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "insert",
+            "delete",
+            "command"
+          ],
+          "description": "Type of fix action."
+        },
+        "target": {
+          "$ref": "#/definitions/ActionTarget",
+          "description": "Target location for the fix."
+        },
+        "content": {
+          "type": "string",
+          "description": "New content for replace/insert actions."
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command for command-type actions."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this action does."
+        }
+      }
+    },
+    "ActionTarget": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path to modify."
+        },
+        "line_start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Starting line (1-indexed)."
+        },
+        "line_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ending line (1-indexed, inclusive)."
+        },
+        "col_start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Starting column (1-indexed)."
+        },
+        "col_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ending column (1-indexed, inclusive)."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to match for replacement."
+        }
+      }
+    }
+  }
+}

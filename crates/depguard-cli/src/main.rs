@@ -15,6 +15,16 @@ use depguard_settings::Overrides;
 use depguard_types::RepoPath;
 use std::process::Command;
 
+/// Run mode for depguard check command.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+enum RunMode {
+    /// Standard mode: exit 2 on policy failure, exit 1 on error.
+    #[default]
+    Standard,
+    /// Cockpit mode: exit 0 if receipt written, regardless of verdict.
+    Cockpit,
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "depguard",
@@ -61,7 +71,7 @@ enum Commands {
         #[arg(long, default_value = "artifacts/depguard/report.json")]
         report_out: Utf8PathBuf,
 
-        /// Report schema version to emit (v1 or v2).
+        /// Report schema version to emit (v1, v2, or sensor-v1).
         #[arg(long, default_value = "v2")]
         report_version: String,
 
@@ -72,6 +82,10 @@ enum Commands {
         /// Where to write the Markdown report (if enabled).
         #[arg(long, default_value = "artifacts/depguard/comment.md")]
         markdown_out: Utf8PathBuf,
+
+        /// Run mode: standard (exit 2 on fail) or cockpit (exit 0 if receipt written).
+        #[arg(long, value_enum, default_value = "standard")]
+        mode: RunMode,
     },
 
     /// Render markdown from an existing JSON report.
@@ -114,6 +128,7 @@ fn main() -> anyhow::Result<()> {
             ref report_version,
             write_markdown,
             ref markdown_out,
+            mode,
         } => cmd_check(
             &cli,
             base.clone(),
@@ -122,6 +137,7 @@ fn main() -> anyhow::Result<()> {
             report_version.clone(),
             write_markdown,
             markdown_out.clone(),
+            mode,
         ),
         Commands::Md { report, output } => cmd_md(report, output),
         Commands::Annotations { report, max } => cmd_annotations(report, max),
@@ -137,6 +153,7 @@ fn cmd_check(
     report_version: String,
     write_markdown: bool,
     markdown_out: Utf8PathBuf,
+    mode: RunMode,
 ) -> anyhow::Result<()> {
     let repo_root = cli
         .repo_root
@@ -224,16 +241,26 @@ fn cmd_check(
 
     match result {
         Ok(code) => {
-            if code != 0 {
-                std::process::exit(code);
+            // In cockpit mode, always exit 0 if receipt was written successfully.
+            let final_code = match mode {
+                RunMode::Cockpit => 0,
+                RunMode::Standard => code,
+            };
+            if final_code != 0 {
+                std::process::exit(final_code);
             }
             Ok(())
         }
         Err(err) => {
             let report = runtime_error_report(report_version, &format!("{err:#}"));
-            let _ = write_report_file(&report_out, &report);
+            let receipt_written = write_report_file(&report_out, &report).is_ok();
             eprintln!("depguard error: {err:#}");
-            std::process::exit(1);
+
+            // In cockpit mode, exit 0 if we successfully wrote an error receipt.
+            match (mode, receipt_written) {
+                (RunMode::Cockpit, true) => Ok(()),
+                _ => std::process::exit(1),
+            }
         }
     }
 }
@@ -364,7 +391,8 @@ fn parse_report_version(v: &str) -> anyhow::Result<ReportVersion> {
     match v {
         "v1" | "1" | "depguard.report.v1" => Ok(ReportVersion::V1),
         "v2" | "2" | "depguard.report.v2" => Ok(ReportVersion::V2),
-        other => anyhow::bail!("unknown report version: {other} (expected v1 or v2)"),
+        "sensor-v1" | "sensor.report.v1" => Ok(ReportVersion::SensorV1),
+        other => anyhow::bail!("unknown report version: {other} (expected v1, v2, or sensor-v1)"),
     }
 }
 
