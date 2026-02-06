@@ -1,16 +1,17 @@
 [package]
 name = "depguard-fuzz"
 version = "0.0.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 publish = false
-license = "MIT OR Apache-2.0"
 
 [package.metadata]
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
-arbitrary = { version = "1", features = ["derive"] }
+libfuzzer-sys = "0.4.10"
+arbitrary = { version = "1.4.2", features = ["derive"] }
 
 [dependencies.depguard-repo]
 path = "../crates/depguard-repo"

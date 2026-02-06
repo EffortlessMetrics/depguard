@@ -1,7 +1,9 @@
 [package]
 name = "path-safety"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 # Absolute path dependency - triggers deps.path_safety/absolute_path

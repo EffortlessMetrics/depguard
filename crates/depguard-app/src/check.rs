@@ -220,7 +220,9 @@ mod tests {
 [package]
 name = "test"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 "#,
         )
         .expect("write Cargo.toml");
