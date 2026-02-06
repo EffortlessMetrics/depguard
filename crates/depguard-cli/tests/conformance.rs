@@ -503,12 +503,7 @@ fn contract_fixtures_validate_against_sensor_schema() {
     );
 
     let schema_content = std::fs::read_to_string(&schema_path).unwrap();
-    let mut schema_value: Value = serde_json::from_str(&schema_content).unwrap();
-    // Remove $id since it's a logical identifier, not a resolvable URL.
-    // The jsonschema crate tries to resolve $id as a URI.
-    if let Some(obj) = schema_value.as_object_mut() {
-        obj.remove("$id");
-    }
+    let schema_value: Value = serde_json::from_str(&schema_content).unwrap();
     let compiled = jsonschema::draft7::new(&schema_value).expect("Failed to compile schema");
 
     let mut checked = 0;

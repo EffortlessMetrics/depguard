@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "buildfix.plan.v1",
+  "$id": "urn:effortless:buildfix.plan.v1",
   "title": "Buildfix Plan v1",
   "description": "Actuator protocol for automated fixes. Maps sensor findings to fix actions.",
   "type": "object",

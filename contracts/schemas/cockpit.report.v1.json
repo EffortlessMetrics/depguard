@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "cockpit.report.v1",
+  "$id": "urn:effortless:cockpit.report.v1",
   "title": "Cockpit Report v1",
   "description": "Director aggregation output schema. Aggregates multiple sensor reports with policy evaluation.",
   "type": "object",

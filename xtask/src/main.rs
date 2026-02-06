@@ -219,13 +219,8 @@ fn conform() -> anyhow::Result<()> {
     // Load and compile the schema
     let schema_content = fs::read_to_string(&sensor_schema_path)
         .with_context(|| format!("Failed to read {}", sensor_schema_path.display()))?;
-    let mut schema_value: serde_json::Value = serde_json::from_str(&schema_content)
+    let schema_value: serde_json::Value = serde_json::from_str(&schema_content)
         .with_context(|| "Failed to parse sensor.report.v1.json as JSON")?;
-    // Remove $id since it's a logical identifier, not a resolvable URL.
-    // The jsonschema crate tries to resolve $id as a URI.
-    if let Some(obj) = schema_value.as_object_mut() {
-        obj.remove("$id");
-    }
 
     let compiled = jsonschema::draft7::new(&schema_value)
         .map_err(|e| anyhow::anyhow!("Failed to compile schema: {}", e))?;
@@ -371,10 +366,7 @@ fn conform_full() -> anyhow::Result<()> {
     let contracts_dir = contracts_schemas_dir();
     let sensor_schema_path = contracts_dir.join("sensor.report.v1.json");
     let schema_content = fs::read_to_string(&sensor_schema_path)?;
-    let mut schema_value: serde_json::Value = serde_json::from_str(&schema_content)?;
-    if let Some(obj) = schema_value.as_object_mut() {
-        obj.remove("$id");
-    }
+    let schema_value: serde_json::Value = serde_json::from_str(&schema_content)?;
     let compiled = jsonschema::draft7::new(&schema_value)
         .map_err(|e| anyhow::anyhow!("Failed to compile schema: {}", e))?;
 
