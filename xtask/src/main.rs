@@ -431,7 +431,9 @@ fn conform_full() -> anyhow::Result<()> {
             .output()
             .with_context(|| format!("Failed to run depguard on fixture '{}'", fixture_name))?;
 
-        if !output.status.success() && output.status.code() != Some(2) {
+        // Cockpit mode must exit 0 when a receipt is written.
+        // Exit 2 here would indicate a regression to standard-mode semantics.
+        if !output.status.success() {
             errors.push(format!(
                 "fixture '{}': depguard exited with {:?}: {}",
                 fixture_name,
