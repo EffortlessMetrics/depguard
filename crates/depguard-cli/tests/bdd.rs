@@ -5,13 +5,13 @@
 //! Run with: `cargo test --test bdd`
 
 use assert_cmd::Command;
-use cucumber::{given, then, when, World};
+use cucumber::{World, given, then, when};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;

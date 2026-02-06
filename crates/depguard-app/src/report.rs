@@ -5,8 +5,8 @@ use depguard_render::{
 };
 use depguard_types::{
     Capabilities, CapabilityAvailability, CapabilityStatus, DepguardData, DepguardReportV1,
-    DepguardReportV2, FindingV2, Severity, SeverityV2, Verdict, VerdictStatus, SCHEMA_REPORT_V1,
-    SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
+    DepguardReportV2, FindingV2, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
+    Severity, SeverityV2, Verdict, VerdictStatus,
 };
 use time::OffsetDateTime;
 

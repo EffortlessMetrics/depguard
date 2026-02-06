@@ -6,9 +6,9 @@ use depguard_domain::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
 use depguard_types::{
-    ids, Capabilities, CapabilityAvailability, CapabilityStatus, ReportEnvelope, ReportEnvelopeV2,
-    RunMeta, ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus, VerdictV2,
-    SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
+    Capabilities, CapabilityAvailability, CapabilityStatus, ReportEnvelope, ReportEnvelopeV2,
+    RunMeta, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1, ToolMeta, ToolMetaV2,
+    Verdict, VerdictCounts, VerdictStatus, VerdictV2, ids,
 };
 use time::OffsetDateTime;
 

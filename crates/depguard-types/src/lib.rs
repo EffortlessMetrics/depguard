@@ -13,12 +13,12 @@ pub mod ids;
 pub mod path;
 pub mod receipt;
 
-pub use explain::{lookup_explanation, ExamplePair, Explanation};
+pub use explain::{ExamplePair, Explanation, lookup_explanation};
 pub use path::RepoPath;
 pub use receipt::{
     ArtifactPointer, ArtifactType, Capabilities, CapabilityAvailability, CapabilityStatus,
     DepguardData, DepguardReport, DepguardReportV1, DepguardReportV2, Finding, FindingV2, Location,
-    ReportEnvelope, ReportEnvelopeV2, RunCi, RunGit, RunHost, RunMeta, Severity, SeverityV2,
-    ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus, VerdictV2, SCHEMA_REPORT_V1,
-    SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
+    ReportEnvelope, ReportEnvelopeV2, RunCi, RunGit, RunHost, RunMeta, SCHEMA_REPORT_V1,
+    SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1, Severity, SeverityV2, ToolMeta, ToolMetaV2, Verdict,
+    VerdictCounts, VerdictStatus, VerdictV2,
 };

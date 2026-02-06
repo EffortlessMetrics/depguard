@@ -1,7 +1,7 @@
 use crate::checks::utils::{build_allowlist, is_allowed};
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
-use depguard_types::{ids, Finding};
+use depguard_types::{Finding, ids};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 

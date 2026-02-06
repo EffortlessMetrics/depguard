@@ -7,9 +7,9 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use depguard_app::{
-    empty_report, parse_report_json, render_annotations, render_markdown, run_check, run_explain,
-    runtime_error_report, serialize_report, to_renderable, verdict_exit_code, CheckInput,
-    ExplainOutput, ReportVariant, ReportVersion,
+    CheckInput, ExplainOutput, ReportVariant, ReportVersion, empty_report, parse_report_json,
+    render_annotations, render_markdown, run_check, run_explain, runtime_error_report,
+    serialize_report, to_renderable, verdict_exit_code,
 };
 use depguard_settings::Overrides;
 use depguard_types::RepoPath;

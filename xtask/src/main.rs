@@ -2,7 +2,7 @@
 //!
 //! Keeping this separate avoids bloating the end-user CLI.
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use schemars::schema_for;
 use std::fs;
 use std::path::PathBuf;

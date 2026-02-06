@@ -46,10 +46,12 @@ fn validate_report_schema(report: &Value, schema_file: &str) {
     let schema_text = std::fs::read_to_string(&schema_path).expect("Failed to read schema file");
     let schema_json: Value = serde_json::from_str(&schema_text).expect("Invalid schema JSON");
 
-    let compiled =
-        jsonschema::validator_for(&schema_json).expect("Failed to compile schema");
+    let compiled = jsonschema::validator_for(&schema_json).expect("Failed to compile schema");
 
-    let errors: Vec<String> = compiled.iter_errors(report).map(|e| e.to_string()).collect();
+    let errors: Vec<String> = compiled
+        .iter_errors(report)
+        .map(|e| e.to_string())
+        .collect();
     if errors.is_empty() {
         return;
     }

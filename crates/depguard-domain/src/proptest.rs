@@ -11,7 +11,7 @@ use crate::model::{
     WorkspaceModel,
 };
 use crate::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
-use depguard_types::{ids, Finding, Location, RepoPath, Severity};
+use depguard_types::{Finding, Location, RepoPath, Severity, ids};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 

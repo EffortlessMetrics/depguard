@@ -2,7 +2,7 @@ use crate::checks::utils::{build_allowlist, is_allowed};
 use crate::fingerprint::fingerprint_for_dep;
 use crate::model::{DepKind, WorkspaceModel};
 use crate::policy::EffectiveConfig;
-use depguard_types::{ids, Finding};
+use depguard_types::{Finding, ids};
 use serde_json::json;
 
 /// Crates that are typically only used in dev/test contexts.

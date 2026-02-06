@@ -183,10 +183,12 @@ mod tests {
         let cfg = parse_config_toml(toml).unwrap();
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid allow glob for deps.no_wildcards"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid allow glob for deps.no_wildcards")
+        );
     }
 
     #[test]

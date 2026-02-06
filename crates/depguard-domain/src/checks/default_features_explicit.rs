@@ -2,7 +2,7 @@ use crate::checks::utils::{build_allowlist, is_allowed};
 use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
-use depguard_types::{ids, Finding};
+use depguard_types::{Finding, ids};
 use serde_json::json;
 
 pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>) {
