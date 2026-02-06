@@ -62,9 +62,8 @@ fn validate_report_schema(report: &Value, schema_file: &str) {
     );
 }
 
-/// Normalize a JSON value by replacing timestamp fields with a placeholder.
-/// This allows comparison of outputs that contain non-deterministic timestamps.
-fn normalize_timestamps(mut value: Value) -> Value {
+/// Normalize non-deterministic JSON fields (timestamps, tool version) for comparison.
+fn normalize_nondeterministic(mut value: Value) -> Value {
     if let Some(obj) = value.as_object_mut() {
         if obj.contains_key("started_at") {
             obj.insert(
@@ -87,12 +86,19 @@ fn normalize_timestamps(mut value: Value) -> Value {
         if obj.contains_key("duration_ms") {
             obj.insert("duration_ms".to_string(), Value::Number(0.into()));
         }
+        // Normalize tool version (objects with both "name" and "version")
+        if obj.contains_key("name") && obj.contains_key("version") {
+            obj.insert(
+                "version".to_string(),
+                Value::String("__VERSION__".to_string()),
+            );
+        }
         for (_, v) in obj.iter_mut() {
-            *v = normalize_timestamps(v.take());
+            *v = normalize_nondeterministic(v.take());
         }
     } else if let Some(arr) = value.as_array_mut() {
         for v in arr.iter_mut() {
-            *v = normalize_timestamps(v.take());
+            *v = normalize_nondeterministic(v.take());
         }
     }
     value
@@ -138,8 +144,8 @@ fn load_expected_report(fixture_name: &str) -> Value {
 
 /// Compare two JSON values, ignoring timestamp differences.
 fn assert_reports_match(actual: Value, expected: Value, fixture_name: &str) {
-    let actual_normalized = normalize_timestamps(actual);
-    let expected_normalized = normalize_timestamps(expected);
+    let actual_normalized = normalize_nondeterministic(actual);
+    let expected_normalized = normalize_nondeterministic(expected);
 
     assert_eq!(
         actual_normalized,

@@ -1629,6 +1629,13 @@ fn then_three_reports_identical(world: &mut DepguardWorld) {
             if obj.contains_key("duration_ms") {
                 obj.insert("duration_ms".to_string(), Value::Number(0.into()));
             }
+            // Normalize tool version (objects with both "name" and "version")
+            if obj.contains_key("name") && obj.contains_key("version") {
+                obj.insert(
+                    "version".to_string(),
+                    Value::String("__VERSION__".to_string()),
+                );
+            }
             for (_, val) in obj.iter_mut() {
                 *val = normalize(val.take());
             }
@@ -1731,7 +1738,7 @@ fn then_output_matches_golden(world: &mut DepguardWorld, expected_file: String) 
 
         let actual = world.report.as_ref().expect("No report captured");
 
-        // Normalize timestamps for comparison
+        // Normalize non-deterministic fields for comparison
         fn normalize(mut v: Value) -> Value {
             if let Some(obj) = v.as_object_mut() {
                 if obj.contains_key("started_at") {
@@ -1754,6 +1761,13 @@ fn then_output_matches_golden(world: &mut DepguardWorld, expected_file: String) 
                 }
                 if obj.contains_key("duration_ms") {
                     obj.insert("duration_ms".to_string(), Value::Number(0.into()));
+                }
+                // Normalize tool version (objects with both "name" and "version")
+                if obj.contains_key("name") && obj.contains_key("version") {
+                    obj.insert(
+                        "version".to_string(),
+                        Value::String("__VERSION__".to_string()),
+                    );
                 }
                 for (_, val) in obj.iter_mut() {
                     *val = normalize(val.take());

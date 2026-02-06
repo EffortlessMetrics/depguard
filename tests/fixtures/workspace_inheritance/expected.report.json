@@ -2,7 +2,7 @@
   "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
-    "version": "0.1.0"
+    "version": "__VERSION__"
   },
   "run": {
     "started_at": "__TIMESTAMP__",

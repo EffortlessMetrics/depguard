@@ -462,8 +462,8 @@ fn conform_full() -> anyhow::Result<()> {
             let golden_value: serde_json::Value = serde_json::from_str(&golden_content)?;
 
             // Compare with timestamp normalization
-            let normalized_report = normalize_timestamps(&report_value);
-            let normalized_golden = normalize_timestamps(&golden_value);
+            let normalized_report = normalize_nondeterministic(&report_value);
+            let normalized_golden = normalize_nondeterministic(&golden_value);
 
             if normalized_report != normalized_golden {
                 errors.push(format!(
@@ -499,24 +499,27 @@ fn conform_full() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Normalize timestamps in a JSON value for comparison.
-fn normalize_timestamps(value: &serde_json::Value) -> serde_json::Value {
+/// Normalize non-deterministic fields (timestamps, tool version) in a JSON value for comparison.
+fn normalize_nondeterministic(value: &serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
+            let has_name = map.contains_key("name");
             let mut new_map = serde_json::Map::new();
             for (k, v) in map {
                 if k == "started_at" || k == "ended_at" {
                     new_map.insert(k.clone(), serde_json::Value::String("__TIMESTAMP__".into()));
                 } else if k == "duration_ms" {
                     new_map.insert(k.clone(), serde_json::Value::Number(0.into()));
+                } else if k == "version" && has_name {
+                    new_map.insert(k.clone(), serde_json::Value::String("__VERSION__".into()));
                 } else {
-                    new_map.insert(k.clone(), normalize_timestamps(v));
+                    new_map.insert(k.clone(), normalize_nondeterministic(v));
                 }
             }
             serde_json::Value::Object(new_map)
         }
         serde_json::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(normalize_timestamps).collect())
+            serde_json::Value::Array(arr.iter().map(normalize_nondeterministic).collect())
         }
         other => other.clone(),
     }
