@@ -5,6 +5,8 @@
 //! 2. All codes have explanations
 //! 3. All fixture reports validate against expected schemas
 //! 4. Report schema conformance
+//! 5. Contract fixtures validate against sensor.report.v1 schema
+//! 6. Path and token hygiene in fixtures
 
 use depguard_types::{explain, ids};
 use serde_json::Value;
@@ -18,6 +20,32 @@ fn fixtures_dir() -> PathBuf {
         .expect("crates should have parent")
         .join("tests")
         .join("fixtures")
+}
+
+fn contracts_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("depguard-cli should have parent")
+        .parent()
+        .expect("crates should have parent")
+        .join("contracts")
+}
+
+fn is_valid_token(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+fn is_clean_path(path: &str) -> bool {
+    !(path.starts_with('/')
+        || path.starts_with('\\')
+        || path.contains("..")
+        || path.contains('\\')
+        || (path.len() >= 2 && path.as_bytes()[1] == b':'))
 }
 
 // =============================================================================
@@ -448,6 +476,196 @@ fn all_fixture_verdicts_are_valid() {
                     status,
                     valid_statuses
                 );
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Contract Fixture Validation (sensor.report.v1 schema)
+// =============================================================================
+
+#[test]
+fn contract_fixtures_validate_against_sensor_schema() {
+    let contracts = contracts_dir();
+    let schema_path = contracts.join("schemas").join("sensor.report.v1.json");
+    let fixtures_path = contracts.join("fixtures");
+
+    assert!(
+        schema_path.exists(),
+        "sensor.report.v1.json schema not found at {:?}",
+        schema_path
+    );
+    assert!(
+        fixtures_path.exists(),
+        "contracts/fixtures/ not found at {:?}",
+        fixtures_path
+    );
+
+    let schema_content = std::fs::read_to_string(&schema_path).unwrap();
+    let mut schema_value: Value = serde_json::from_str(&schema_content).unwrap();
+    // Remove $id since it's a logical identifier, not a resolvable URL.
+    // The jsonschema crate tries to resolve $id as a URI.
+    if let Some(obj) = schema_value.as_object_mut() {
+        obj.remove("$id");
+    }
+    let compiled = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft7)
+        .compile(&schema_value)
+        .expect("Failed to compile schema");
+
+    let mut checked = 0;
+
+    for entry in std::fs::read_dir(&fixtures_path).expect("Failed to read contracts/fixtures/") {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&content)
+            .unwrap_or_else(|e| panic!("{} is not valid JSON: {}", filename, e));
+
+        let result = compiled.validate(&value);
+        if let Err(errors) = result {
+            let error_msgs: Vec<String> = errors.map(|e| e.to_string()).collect();
+            panic!(
+                "Contract fixture '{}' does not validate against sensor.report.v1 schema:\n{}",
+                filename,
+                error_msgs.join("\n")
+            );
+        }
+
+        checked += 1;
+    }
+
+    assert!(
+        checked > 0,
+        "No contract fixtures found in {:?}",
+        fixtures_path
+    );
+}
+
+#[test]
+fn fixture_findings_have_clean_paths() {
+    let contracts = contracts_dir();
+    let fixtures_path = contracts.join("fixtures");
+    if !fixtures_path.exists() {
+        return;
+    }
+
+    for entry in std::fs::read_dir(&fixtures_path).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&content).unwrap();
+
+        if let Some(findings) = value.get("findings").and_then(|v| v.as_array()) {
+            for (i, finding) in findings.iter().enumerate() {
+                if let Some(loc) = finding.get("location") {
+                    if let Some(p) = loc.get("path").and_then(|v| v.as_str()) {
+                        assert!(
+                            is_clean_path(p),
+                            "{}: finding[{}].location.path '{}' is not clean (no absolute, no ../, forward slashes only)",
+                            filename, i, p
+                        );
+                    }
+                }
+            }
+        }
+
+        if let Some(artifacts) = value.get("artifacts").and_then(|v| v.as_array()) {
+            for (i, artifact) in artifacts.iter().enumerate() {
+                if let Some(p) = artifact.get("path").and_then(|v| v.as_str()) {
+                    assert!(
+                        is_clean_path(p),
+                        "{}: artifacts[{}].path '{}' is not clean",
+                        filename,
+                        i,
+                        p
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fixture_verdict_reasons_are_tokens() {
+    let contracts = contracts_dir();
+    let fixtures_path = contracts.join("fixtures");
+    if !fixtures_path.exists() {
+        return;
+    }
+
+    for entry in std::fs::read_dir(&fixtures_path).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&content).unwrap();
+
+        if let Some(reasons) = value
+            .get("verdict")
+            .and_then(|v| v.get("reasons"))
+            .and_then(|v| v.as_array())
+        {
+            for (i, reason) in reasons.iter().enumerate() {
+                if let Some(s) = reason.as_str() {
+                    assert!(
+                        is_valid_token(s),
+                        "{}: verdict.reasons[{}] '{}' is not a valid token (must match ^[a-z][a-z0-9_]*$)",
+                        filename, i, s
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fixture_capability_reasons_are_tokens() {
+    let contracts = contracts_dir();
+    let fixtures_path = contracts.join("fixtures");
+    if !fixtures_path.exists() {
+        return;
+    }
+
+    for entry in std::fs::read_dir(&fixtures_path).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&content).unwrap();
+
+        if let Some(caps) = value
+            .get("run")
+            .and_then(|v| v.get("capabilities"))
+            .and_then(|v| v.as_object())
+        {
+            for (cap_name, cap_value) in caps {
+                if let Some(reason) = cap_value.get("reason").and_then(|v| v.as_str()) {
+                    assert!(
+                        is_valid_token(reason),
+                        "{}: capabilities.{}.reason '{}' is not a valid token (must match ^[a-z][a-z0-9_]*$)",
+                        filename, cap_name, reason
+                    );
+                }
             }
         }
     }

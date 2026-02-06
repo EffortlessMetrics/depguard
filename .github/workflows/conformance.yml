@@ -36,6 +36,28 @@ jobs:
       - name: Validate sensor.report.v1 conformance
         run: cargo run -p xtask -- conform
 
+  contract-fixture-validation:
+    name: Contract Fixture Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate contract fixtures against sensor.report.v1 schema
+        run: cargo run -p xtask -- conform
+
+  sensor-v1-conformance:
+    name: Sensor V1 Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build depguard
+        run: cargo build -p depguard-cli
+      - name: Run full conformance (contract fixtures + depguard output)
+        run: cargo run -p xtask -- conform-full
+
   explain-coverage:
     name: Explain Coverage
     runs-on: ubuntu-latest

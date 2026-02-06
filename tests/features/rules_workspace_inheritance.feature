@@ -6,7 +6,7 @@ Feature: deps.workspace_inheritance rule
   consistent dependency versions across the workspace.
 
   Background:
-    Given the deps.workspace_inheritance check is enabled by default
+    Given the deps.workspace_inheritance check is enabled
 
   # ===========================================================================
   # Detection of missing workspace inheritance

@@ -2357,9 +2357,8 @@ fn given_path_safety_enabled(_world: &mut DepguardWorld) {
     // The check is enabled by default, no action needed
 }
 
-#[given(expr = "the deps.workspace_inheritance check is enabled by default")]
+#[given(expr = "the deps.workspace_inheritance check is enabled")]
 fn given_workspace_inheritance_enabled(world: &mut DepguardWorld) {
-    // Note: This check is actually DISABLED by default. We need to enable it via config.
     let config = r#"[checks."deps.workspace_inheritance"]
 enabled = true
 "#;
@@ -2369,7 +2368,7 @@ enabled = true
     });
 }
 
-#[given(expr = "the deps.git_requires_version check is enabled by default")]
+#[given(expr = "the deps.git_requires_version check is enabled")]
 fn given_git_requires_version_enabled(world: &mut DepguardWorld) {
     let config = r#"[checks."deps.git_requires_version"]
 enabled = true
@@ -2380,7 +2379,7 @@ enabled = true
     });
 }
 
-#[given(expr = "the deps.dev_only_in_normal check is enabled by default")]
+#[given(expr = "the deps.dev_only_in_normal check is enabled")]
 fn given_dev_only_in_normal_enabled(world: &mut DepguardWorld) {
     let config = r#"[checks."deps.dev_only_in_normal"]
 enabled = true
@@ -2391,7 +2390,7 @@ enabled = true
     });
 }
 
-#[given(expr = "the deps.default_features_explicit check is enabled by default")]
+#[given(expr = "the deps.default_features_explicit check is enabled")]
 fn given_default_features_explicit_enabled(world: &mut DepguardWorld) {
     let config = r#"[checks."deps.default_features_explicit"]
 enabled = true
@@ -2402,7 +2401,7 @@ enabled = true
     });
 }
 
-#[given(expr = "the deps.no_multiple_versions check is enabled by default")]
+#[given(expr = "the deps.no_multiple_versions check is enabled")]
 fn given_no_multiple_versions_enabled(world: &mut DepguardWorld) {
     let config = r#"[checks."deps.no_multiple_versions"]
 enabled = true
@@ -2413,7 +2412,7 @@ enabled = true
     });
 }
 
-#[given(expr = "the deps.optional_unused check is enabled by default")]
+#[given(expr = "the deps.optional_unused check is enabled")]
 fn given_optional_unused_enabled(world: &mut DepguardWorld) {
     let config = r#"[checks."deps.optional_unused"]
 enabled = true

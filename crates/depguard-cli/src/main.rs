@@ -214,10 +214,7 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
         {
             let base = opts.base.as_ref().context("diff scope requires --base")?;
             let head = opts.head.as_ref().context("diff scope requires --head")?;
-            Some(
-                git_changed_files(&repo_root, base, head)
-                    .context("git diff --name-only failed")?,
-            )
+            Some(git_changed_files(&repo_root, base, head).context("git diff --name-only failed")?)
         } else {
             None
         };

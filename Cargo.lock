@@ -2721,8 +2721,10 @@ dependencies = [
  "anyhow",
  "depguard-settings",
  "depguard-types",
+ "jsonschema",
  "schemars",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

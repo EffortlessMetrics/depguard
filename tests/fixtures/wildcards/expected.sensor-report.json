@@ -1,0 +1,59 @@
+{
+  "schema": "sensor.report.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0,
+    "capabilities": {
+      "git": {
+        "status": "missing",
+        "reason": "diff_scope_disabled"
+      },
+      "config": {
+        "status": "missing",
+        "reason": "config_missing_defaulted"
+      }
+    }
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1,
+      "suppressed": 0
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'serde' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 7
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "157bc9aee66a5aaf94de931c73988ed120f75c0178d597d32fd3ba19c72543d8",
+      "data": {
+        "dependency": "serde",
+        "manifest": "Cargo.toml",
+        "version": "*"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}
