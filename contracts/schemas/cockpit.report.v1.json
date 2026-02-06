@@ -136,14 +136,57 @@
     "SensorSummary": {
       "type": "object",
       "required": [
+        "id",
         "tool",
+        "state",
         "verdict",
         "report_path"
       ],
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique sensor identifier."
+        },
         "tool": {
           "type": "string",
           "description": "Sensor tool name."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "present",
+            "missing",
+            "invalid"
+          ],
+          "description": "Receipt presence and validity state."
+        },
+        "sensor_verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "description": "Raw verdict from the sensor receipt."
+        },
+        "missing_policy": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "warn",
+            "fail"
+          ],
+          "description": "What to do when sensor receipt is missing."
+        },
+        "policy_outcome": {
+          "type": "string",
+          "enum": [
+            "blocked",
+            "allowed",
+            "informational"
+          ],
+          "description": "Director assessment of this sensor's result."
         },
         "verdict": {
           "type": "string",
@@ -174,6 +217,24 @@
         }
       }
     },
+    "SensorPolicy": {
+      "type": "object",
+      "properties": {
+        "blocking": {
+          "type": "boolean",
+          "description": "Whether this sensor blocks the pipeline."
+        },
+        "missing_policy": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "warn",
+            "fail"
+          ],
+          "description": "What to do when this sensor's receipt is missing."
+        }
+      }
+    },
     "PolicySnapshot": {
       "type": "object",
       "description": "Captures policy state for audit trail.",
@@ -194,6 +255,42 @@
         "overrides": {
           "type": "object",
           "description": "Runtime overrides applied to the policy."
+        },
+        "warn_as_fail": {
+          "type": "boolean",
+          "description": "Whether warnings are treated as failures."
+        },
+        "budgets": {
+          "type": "object",
+          "properties": {
+            "highlights": {
+              "type": "integer",
+              "description": "Maximum number of highlighted findings."
+            },
+            "per_sensor_cap": {
+              "type": "integer",
+              "description": "Maximum findings per sensor."
+            },
+            "annotations_cap": {
+              "type": "integer",
+              "description": "Maximum number of annotations."
+            }
+          },
+          "description": "Budget limits for report output."
+        },
+        "comment_section_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of PR comment sections."
+        },
+        "sensors": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SensorPolicy"
+          },
+          "description": "Per-sensor policy configuration."
         }
       }
     }

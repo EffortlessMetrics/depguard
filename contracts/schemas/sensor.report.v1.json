@@ -48,6 +48,7 @@
       "description": "Tool-specific extension payload. Structure varies by sensor."
     }
   },
+  "additionalProperties": false,
   "definitions": {
     "ToolMeta": {
       "type": "object",
@@ -68,7 +69,8 @@
           "type": "string",
           "description": "Git commit hash of the tool build."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "RunMeta": {
       "type": "object",
@@ -104,7 +106,8 @@
           "$ref": "#/definitions/Capabilities",
           "description": "Capability status for No Green By Omission reporting."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "HostInfo": {
       "type": "object",
@@ -121,7 +124,8 @@
           "type": "string",
           "description": "Machine hostname."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "CiInfo": {
       "type": "object",
@@ -143,7 +147,8 @@
           "format": "uri",
           "description": "URL to the CI run."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "GitInfo": {
       "type": "object",
@@ -172,7 +177,8 @@
           "type": "string",
           "description": "Merge base commit SHA."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Capabilities": {
       "type": "object",
@@ -208,9 +214,11 @@
         },
         "reason": {
           "type": "string",
-          "description": "Human-readable explanation for non-available status."
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Machine-readable reason token for non-available status."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Verdict": {
       "type": "object",
@@ -235,12 +243,14 @@
         "reasons": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
           },
           "default": [],
           "description": "Machine-readable reason codes for the verdict."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "VerdictCounts": {
       "type": "object",
@@ -271,7 +281,8 @@
           "default": 0,
           "description": "Count of findings suppressed by baseline filtering."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Finding": {
       "type": "object",
@@ -323,7 +334,8 @@
           "type": "object",
           "description": "Check-specific structured payload."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "Location": {
       "type": "object",
@@ -345,7 +357,8 @@
           "minimum": 1,
           "description": "1-indexed column number."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "ArtifactPointer": {
       "type": "object",
@@ -371,7 +384,8 @@
           "type": "string",
           "description": "MIME type or format identifier (e.g., 'text/markdown', 'application/json')."
         }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

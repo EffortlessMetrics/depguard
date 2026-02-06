@@ -125,6 +125,29 @@
         "location": {
           "$ref": "#/definitions/Location",
           "description": "Location of the finding."
+        },
+        "safety": {
+          "type": "string",
+          "enum": [
+            "safe",
+            "review_required",
+            "unsafe"
+          ],
+          "description": "Safety classification of the fix for this finding."
+        },
+        "preconditions": {
+          "type": "object",
+          "properties": {
+            "commit_sha": {
+              "type": "string",
+              "description": "Expected commit SHA for the fix to be valid."
+            },
+            "receipt_hash": {
+              "type": "string",
+              "description": "Expected receipt hash for the fix to be valid."
+            }
+          },
+          "description": "Preconditions that must hold for the fix to be applicable."
         }
       }
     },
