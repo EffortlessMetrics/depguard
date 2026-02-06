@@ -45,21 +45,21 @@ fn contracts_fixtures_dir() -> PathBuf {
 /// Schema definition with its target filename.
 struct SchemaSpec {
     filename: &'static str,
-    generate: fn() -> schemars::schema::RootSchema,
+    generate: fn() -> schemars::Schema,
 }
 
 /// Generate the DepguardReport schema.
-fn generate_report_schema() -> schemars::schema::RootSchema {
+fn generate_report_schema() -> schemars::Schema {
     schema_for!(depguard_types::DepguardReportV1)
 }
 
 /// Generate the DepguardReport v2 schema.
-fn generate_report_schema_v2() -> schemars::schema::RootSchema {
+fn generate_report_schema_v2() -> schemars::Schema {
     schema_for!(depguard_types::DepguardReportV2)
 }
 
 /// Generate the DepguardConfigV1 schema.
-fn generate_config_schema() -> schemars::schema::RootSchema {
+fn generate_config_schema() -> schemars::Schema {
     schema_for!(depguard_settings::DepguardConfigV1)
 }
 
@@ -83,7 +83,7 @@ fn schema_specs() -> Vec<SchemaSpec> {
 }
 
 /// Serialize a schema to pretty-printed JSON with trailing newline.
-fn serialize_schema(schema: &schemars::schema::RootSchema) -> anyhow::Result<String> {
+fn serialize_schema(schema: &schemars::Schema) -> anyhow::Result<String> {
     let mut json = serde_json::to_string_pretty(schema).context("Failed to serialize schema")?;
     json.push('\n');
     Ok(json)
@@ -227,9 +227,7 @@ fn conform() -> anyhow::Result<()> {
         obj.remove("$id");
     }
 
-    let compiled = jsonschema::JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .compile(&schema_value)
+    let compiled = jsonschema::draft7::new(&schema_value)
         .map_err(|e| anyhow::anyhow!("Failed to compile schema: {}", e))?;
 
     println!("✓ sensor.report.v1.json schema compiles");
@@ -266,10 +264,8 @@ fn conform() -> anyhow::Result<()> {
             .with_context(|| format!("Failed to parse {} as JSON", filename))?;
 
         // 1. Schema validation
-        if let Err(schema_errors) = compiled.validate(&value) {
-            for err in schema_errors {
-                errors.push(format!("{}: schema validation: {}", filename, err));
-            }
+        for err in compiled.iter_errors(&value) {
+            errors.push(format!("{}: schema validation: {}", filename, err));
         }
 
         // 2. Path hygiene
@@ -379,9 +375,7 @@ fn conform_full() -> anyhow::Result<()> {
     if let Some(obj) = schema_value.as_object_mut() {
         obj.remove("$id");
     }
-    let compiled = jsonschema::JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .compile(&schema_value)
+    let compiled = jsonschema::draft7::new(&schema_value)
         .map_err(|e| anyhow::anyhow!("Failed to compile schema: {}", e))?;
 
     // Find the depguard binary
@@ -460,13 +454,11 @@ fn conform_full() -> anyhow::Result<()> {
             .with_context(|| format!("Failed to parse report for fixture '{}'", fixture_name))?;
 
         // Validate against schema
-        if let Err(schema_errors) = compiled.validate(&report_value) {
-            for err in schema_errors {
-                errors.push(format!(
-                    "fixture '{}': schema validation: {}",
-                    fixture_name, err
-                ));
-            }
+        for err in compiled.iter_errors(&report_value) {
+            errors.push(format!(
+                "fixture '{}': schema validation: {}",
+                fixture_name, err
+            ));
         }
 
         // Check golden file if it exists

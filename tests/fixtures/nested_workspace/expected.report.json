@@ -26,7 +26,7 @@
       "message": "dependency 'serde' uses a wildcard version: *",
       "location": {
         "path": "crates/root-crate/Cargo.toml",
-        "line": 7
+        "line": 9
       },
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "bd0181fca533ac99fefd6918b216b49810261fed5472097ee1eb72ff6a42f826",

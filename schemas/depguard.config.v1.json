@@ -1,16 +1,16 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "DepguardConfigV1",
   "description": "`depguard.toml` schema v1.\n\nThis is a *user-facing* config model: it is intentionally permissive so forward-compat is easy.",
   "type": "object",
   "properties": {
     "checks": {
       "description": "Map of check_id -> config.",
-      "default": {},
       "type": "object",
       "additionalProperties": {
-        "$ref": "#/definitions/CheckConfig"
-      }
+        "$ref": "#/$defs/CheckConfig"
+      },
+      "default": {}
     },
     "fail_on": {
       "description": "When to fail the check: `error` (default) or `warn`.",
@@ -26,7 +26,7 @@
         "null"
       ],
       "format": "uint32",
-      "minimum": 0.0
+      "minimum": 0
     },
     "profile": {
       "type": [
@@ -48,14 +48,14 @@
       ]
     }
   },
-  "definitions": {
+  "$defs": {
     "CheckConfig": {
       "type": "object",
       "properties": {
         "allow": {
           "description": "Generic allowlist patterns (semantics are check-specific).",
-          "default": [],
           "type": "array",
+          "default": [],
           "items": {
             "type": "string"
           }

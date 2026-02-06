@@ -1,16 +1,8 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ReportEnvelopeV2_for_DepguardData",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportEnvelopeV2",
   "description": "V2 report (cockpit-aligned envelope).",
   "type": "object",
-  "required": [
-    "data",
-    "findings",
-    "run",
-    "schema",
-    "tool",
-    "verdict"
-  ],
   "properties": {
     "artifacts": {
       "description": "Optional list of additional artifacts produced by this run.",
@@ -19,39 +11,43 @@
         "null"
       ],
       "items": {
-        "$ref": "#/definitions/ArtifactPointer"
+        "$ref": "#/$defs/ArtifactPointer"
       }
     },
     "data": {
-      "$ref": "#/definitions/DepguardData"
+      "$ref": "#/$defs/DepguardData"
     },
     "findings": {
       "type": "array",
       "items": {
-        "$ref": "#/definitions/FindingV2"
+        "$ref": "#/$defs/FindingV2"
       }
     },
     "run": {
-      "$ref": "#/definitions/RunMeta"
+      "$ref": "#/$defs/RunMeta"
     },
     "schema": {
       "type": "string"
     },
     "tool": {
-      "$ref": "#/definitions/ToolMetaV2"
+      "$ref": "#/$defs/ToolMetaV2"
     },
     "verdict": {
-      "$ref": "#/definitions/VerdictV2"
+      "$ref": "#/$defs/VerdictV2"
     }
   },
-  "definitions": {
+  "required": [
+    "schema",
+    "tool",
+    "run",
+    "verdict",
+    "findings",
+    "data"
+  ],
+  "$defs": {
     "ArtifactPointer": {
       "description": "Pointer to an additional artifact produced by a sensor run.",
       "type": "object",
-      "required": [
-        "path",
-        "type"
-      ],
       "properties": {
         "format": {
           "description": "MIME type or format identifier (e.g., \"text/markdown\").",
@@ -66,13 +62,13 @@
         },
         "type": {
           "description": "Type classification for this artifact.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/ArtifactType"
-            }
-          ]
+          "$ref": "#/$defs/ArtifactType"
         }
-      }
+      },
+      "required": [
+        "type",
+        "path"
+      ]
     },
     "ArtifactType": {
       "description": "Type classification for artifact pointers.",
@@ -91,7 +87,7 @@
           "description": "Configuration file status.",
           "anyOf": [
             {
-              "$ref": "#/definitions/CapabilityStatus"
+              "$ref": "#/$defs/CapabilityStatus"
             },
             {
               "type": "null"
@@ -102,7 +98,7 @@
           "description": "Git integration status (for diff scope, blame, etc.).",
           "anyOf": [
             {
-              "$ref": "#/definitions/CapabilityStatus"
+              "$ref": "#/$defs/CapabilityStatus"
             },
             {
               "type": "null"
@@ -123,9 +119,6 @@
     "CapabilityStatus": {
       "description": "Status of a single capability with optional reason.",
       "type": "object",
-      "required": [
-        "status"
-      ],
       "properties": {
         "reason": {
           "type": [
@@ -134,41 +127,36 @@
           ]
         },
         "status": {
-          "$ref": "#/definitions/CapabilityAvailability"
+          "$ref": "#/$defs/CapabilityAvailability"
         }
-      }
+      },
+      "required": [
+        "status"
+      ]
     },
     "DepguardData": {
       "description": "Depguard-specific summary payload for the report.",
       "type": "object",
-      "required": [
-        "dependencies_scanned",
-        "findings_emitted",
-        "findings_total",
-        "manifests_scanned",
-        "profile",
-        "scope"
-      ],
       "properties": {
         "dependencies_scanned": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "findings_emitted": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "findings_total": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "manifests_scanned": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "profile": {
           "type": "string"
@@ -182,16 +170,18 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "scope",
+        "profile",
+        "manifests_scanned",
+        "dependencies_scanned",
+        "findings_total",
+        "findings_emitted"
+      ]
     },
     "FindingV2": {
       "type": "object",
-      "required": [
-        "check_id",
-        "code",
-        "message",
-        "severity"
-      ],
       "properties": {
         "check_id": {
           "type": "string"
@@ -215,7 +205,7 @@
         "location": {
           "anyOf": [
             {
-              "$ref": "#/definitions/Location"
+              "$ref": "#/$defs/Location"
             },
             {
               "type": "null"
@@ -226,7 +216,7 @@
           "type": "string"
         },
         "severity": {
-          "$ref": "#/definitions/SeverityV2"
+          "$ref": "#/$defs/SeverityV2"
         },
         "url": {
           "type": [
@@ -234,13 +224,16 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "severity",
+        "check_id",
+        "code",
+        "message"
+      ]
     },
     "Location": {
       "type": "object",
-      "required": [
-        "path"
-      ],
       "properties": {
         "col": {
           "type": [
@@ -248,7 +241,7 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "line": {
           "type": [
@@ -256,12 +249,19 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/RepoPath"
         }
-      }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RepoPath": {
+      "description": "Canonical repo-relative path used in findings and reports.\n\nNormalization rules are intentionally simple and deterministic:\n- always forward slashes (`/`)\n- no leading `./`\n- never absolute (best-effort: absolute inputs are preserved but flagged by checks)",
+      "type": "string"
     },
     "RunCi": {
       "type": "object",
@@ -358,15 +358,12 @@
     },
     "RunMeta": {
       "type": "object",
-      "required": [
-        "started_at"
-      ],
       "properties": {
         "capabilities": {
           "description": "Capability status for No Green By Omission reporting.",
           "anyOf": [
             {
-              "$ref": "#/definitions/Capabilities"
+              "$ref": "#/$defs/Capabilities"
             },
             {
               "type": "null"
@@ -376,7 +373,7 @@
         "ci": {
           "anyOf": [
             {
-              "$ref": "#/definitions/RunCi"
+              "$ref": "#/$defs/RunCi"
             },
             {
               "type": "null"
@@ -389,7 +386,7 @@
             "null"
           ],
           "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0
         },
         "ended_at": {
           "type": [
@@ -400,7 +397,7 @@
         "git": {
           "anyOf": [
             {
-              "$ref": "#/definitions/RunGit"
+              "$ref": "#/$defs/RunGit"
             },
             {
               "type": "null"
@@ -410,7 +407,7 @@
         "host": {
           "anyOf": [
             {
-              "$ref": "#/definitions/RunHost"
+              "$ref": "#/$defs/RunHost"
             },
             {
               "type": "null"
@@ -420,7 +417,10 @@
         "started_at": {
           "type": "string"
         }
-      }
+      },
+      "required": [
+        "started_at"
+      ]
     },
     "SeverityV2": {
       "description": "Severity used in v2 receipts (\"warn\" instead of \"warning\").",
@@ -433,10 +433,6 @@
     },
     "ToolMetaV2": {
       "type": "object",
-      "required": [
-        "name",
-        "version"
-      ],
       "properties": {
         "commit": {
           "type": [
@@ -450,38 +446,42 @@
         "version": {
           "type": "string"
         }
-      }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
     },
     "VerdictCounts": {
       "type": "object",
-      "required": [
-        "error",
-        "info",
-        "warn"
-      ],
       "properties": {
         "error": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "info": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "suppressed": {
           "description": "Count of findings suppressed by baseline filtering.",
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "warn": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         }
-      }
+      },
+      "required": [
+        "info",
+        "warn",
+        "error"
+      ]
     },
     "VerdictStatus": {
       "type": "string",
@@ -494,25 +494,25 @@
     },
     "VerdictV2": {
       "type": "object",
-      "required": [
-        "counts",
-        "status"
-      ],
       "properties": {
         "counts": {
-          "$ref": "#/definitions/VerdictCounts"
+          "$ref": "#/$defs/VerdictCounts"
         },
         "reasons": {
-          "default": [],
           "type": "array",
+          "default": [],
           "items": {
             "type": "string"
           }
         },
         "status": {
-          "$ref": "#/definitions/VerdictStatus"
+          "$ref": "#/$defs/VerdictStatus"
         }
-      }
+      },
+      "required": [
+        "status",
+        "counts"
+      ]
     }
   }
 }

@@ -509,9 +509,7 @@ fn contract_fixtures_validate_against_sensor_schema() {
     if let Some(obj) = schema_value.as_object_mut() {
         obj.remove("$id");
     }
-    let compiled = jsonschema::JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft7)
-        .compile(&schema_value)
+    let compiled = jsonschema::draft7::new(&schema_value)
         .expect("Failed to compile schema");
 
     let mut checked = 0;
@@ -528,9 +526,8 @@ fn contract_fixtures_validate_against_sensor_schema() {
         let value: Value = serde_json::from_str(&content)
             .unwrap_or_else(|e| panic!("{} is not valid JSON: {}", filename, e));
 
-        let result = compiled.validate(&value);
-        if let Err(errors) = result {
-            let error_msgs: Vec<String> = errors.map(|e| e.to_string()).collect();
+        let error_msgs: Vec<String> = compiled.iter_errors(&value).map(|e| e.to_string()).collect();
+        if !error_msgs.is_empty() {
             panic!(
                 "Contract fixture '{}' does not validate against sensor.report.v1 schema:\n{}",
                 filename,

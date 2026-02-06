@@ -428,6 +428,8 @@ fn given_cargo_toml_with_path_dependency(world: &mut DepguardWorld, path: String
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let work_dir = temp_dir.path().to_path_buf();
 
+    // Escape backslashes for TOML quoted strings (e.g. C:\libs → C:\\libs)
+    let toml_path = path.replace('\\', "\\\\");
     let cargo_toml = format!(
         r#"[package]
 name = "test-crate"
@@ -437,7 +439,7 @@ edition = "2021"
 [dependencies]
 my-dep = {{ path = "{}" }}
 "#,
-        path
+        toml_path
     );
 
     std::fs::write(work_dir.join("Cargo.toml"), cargo_toml).expect("Failed to write Cargo.toml");

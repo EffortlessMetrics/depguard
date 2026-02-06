@@ -26,7 +26,7 @@
       "message": "dependency 'my-local' uses a path dependency without an explicit version",
       "location": {
         "path": "Cargo.toml",
-        "line": 9
+        "line": 11
       },
       "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
       "fingerprint": "da251da316933dd7c0d84c7dab800b1ca4b7a24f908c5aee28c9e251e28e2521",

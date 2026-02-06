@@ -4,7 +4,7 @@ use depguard_domain::model::{
 };
 use depguard_types::{Location, RepoPath};
 use std::collections::BTreeMap;
-use toml_edit::{ImDocument, Item, Value};
+use toml_edit::{Document, Item, Value};
 
 /// Calculate the 1-based line number from a byte offset in the source text.
 fn byte_offset_to_line(source: &str, offset: usize) -> u32 {
@@ -21,7 +21,7 @@ pub fn parse_root_manifest(
     manifest_path: &RepoPath,
     text: &str,
 ) -> anyhow::Result<(BTreeMap<String, WorkspaceDependency>, ManifestModel)> {
-    let doc: ImDocument<&str> = ImDocument::parse(text).context("parse Cargo.toml")?;
+    let doc: Document<&str> = Document::parse(text).context("parse Cargo.toml")?;
     let ws_deps = parse_workspace_dependencies(&doc, manifest_path, text);
 
     let model = parse_manifest_doc(&doc, manifest_path, text);
@@ -33,12 +33,12 @@ pub fn parse_member_manifest(
     manifest_path: &RepoPath,
     text: &str,
 ) -> anyhow::Result<ManifestModel> {
-    let doc: ImDocument<&str> = ImDocument::parse(text).context("parse Cargo.toml")?;
+    let doc: Document<&str> = Document::parse(text).context("parse Cargo.toml")?;
     Ok(parse_manifest_doc(&doc, manifest_path, text))
 }
 
 fn parse_manifest_doc(
-    doc: &ImDocument<&str>,
+    doc: &Document<&str>,
     manifest_path: &RepoPath,
     source: &str,
 ) -> ManifestModel {
@@ -78,7 +78,7 @@ fn parse_manifest_doc(
     }
 }
 
-fn parse_package(doc: &ImDocument<&str>) -> Option<PackageMeta> {
+fn parse_package(doc: &Document<&str>) -> Option<PackageMeta> {
     let pkg = doc.get("package")?.as_table()?;
     let name = pkg.get("name")?.as_str()?.to_string();
 
@@ -93,7 +93,7 @@ fn parse_package(doc: &ImDocument<&str>) -> Option<PackageMeta> {
 }
 
 fn parse_workspace_dependencies(
-    doc: &ImDocument<&str>,
+    doc: &Document<&str>,
     manifest_path: &RepoPath,
     source: &str,
 ) -> BTreeMap<String, WorkspaceDependency> {
@@ -162,7 +162,7 @@ fn parse_dep_table(
 /// - `[target.'cfg(windows)'.dev-dependencies]`
 /// - `[target.x86_64-unknown-linux-gnu.build-dependencies]`
 fn parse_target_dependencies(
-    doc: &ImDocument<&str>,
+    doc: &Document<&str>,
     manifest_path: &RepoPath,
     source: &str,
 ) -> Vec<DependencyDecl> {
@@ -203,7 +203,7 @@ fn parse_target_dependencies(
 }
 
 /// Parse the [features] table.
-fn parse_features(doc: &ImDocument<&str>) -> BTreeMap<String, Vec<String>> {
+fn parse_features(doc: &Document<&str>) -> BTreeMap<String, Vec<String>> {
     let mut out = BTreeMap::new();
 
     let Some(features) = doc.get("features").and_then(|i| i.as_table()) else {

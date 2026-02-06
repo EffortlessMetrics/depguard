@@ -24,8 +24,7 @@
     "counts": {
       "info": 0,
       "warn": 0,
-      "error": 1,
-      "suppressed": 0
+      "error": 1
     },
     "reasons": []
   },
@@ -37,7 +36,7 @@
       "message": "dependency 'serde' uses a wildcard version: *",
       "location": {
         "path": "Cargo.toml",
-        "line": 7
+        "line": 9
       },
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "157bc9aee66a5aaf94de931c73988ed120f75c0178d597d32fd3ba19c72543d8",

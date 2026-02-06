@@ -5,5 +5,5 @@
 
 ## Findings
 
-- [ERROR] `deps.no_wildcards` / `wildcard_version` — dependency 'serde' uses a wildcard version: * (`Cargo.toml`:7 )
+- [ERROR] `deps.no_wildcards` / `wildcard_version` — dependency 'serde' uses a wildcard version: * (`Cargo.toml`:9 )
   - help: Replace wildcard versions with an explicit semver requirement.

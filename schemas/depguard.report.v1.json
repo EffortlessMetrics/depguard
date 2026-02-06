@@ -1,25 +1,16 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ReportEnvelope_for_DepguardData",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportEnvelope",
   "description": "A generic receipt/envelope.\n\nKeeping this generic allows Depguard to embed tool-specific data while still enforcing a stable outer shape.",
   "type": "object",
-  "required": [
-    "data",
-    "findings",
-    "finished_at",
-    "schema",
-    "started_at",
-    "tool",
-    "verdict"
-  ],
   "properties": {
     "data": {
-      "$ref": "#/definitions/DepguardData"
+      "$ref": "#/$defs/DepguardData"
     },
     "findings": {
       "type": "array",
       "items": {
-        "$ref": "#/definitions/Finding"
+        "$ref": "#/$defs/Finding"
       }
     },
     "finished_at": {
@@ -33,44 +24,45 @@
       "type": "string"
     },
     "tool": {
-      "$ref": "#/definitions/ToolMeta"
+      "$ref": "#/$defs/ToolMeta"
     },
     "verdict": {
-      "$ref": "#/definitions/Verdict"
+      "$ref": "#/$defs/Verdict"
     }
   },
-  "definitions": {
+  "required": [
+    "schema",
+    "tool",
+    "started_at",
+    "finished_at",
+    "verdict",
+    "findings",
+    "data"
+  ],
+  "$defs": {
     "DepguardData": {
       "description": "Depguard-specific summary payload for the report.",
       "type": "object",
-      "required": [
-        "dependencies_scanned",
-        "findings_emitted",
-        "findings_total",
-        "manifests_scanned",
-        "profile",
-        "scope"
-      ],
       "properties": {
         "dependencies_scanned": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "findings_emitted": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "findings_total": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "manifests_scanned": {
           "type": "integer",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "profile": {
           "type": "string"
@@ -84,16 +76,18 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "scope",
+        "profile",
+        "manifests_scanned",
+        "dependencies_scanned",
+        "findings_total",
+        "findings_emitted"
+      ]
     },
     "Finding": {
       "type": "object",
-      "required": [
-        "check_id",
-        "code",
-        "message",
-        "severity"
-      ],
       "properties": {
         "check_id": {
           "type": "string"
@@ -105,7 +99,7 @@
           "description": "Check-specific structured payload (kept open-ended for forward compatibility)."
         },
         "fingerprint": {
-          "description": "Stable identifier intended for dedup and trending. Typically a hash of: `check_id + code + canonical_path + (line?) + salient fields`.",
+          "description": "Stable identifier intended for dedup and trending. Typically a hash of:\n`check_id + code + canonical_path + (line?) + salient fields`.",
           "type": [
             "string",
             "null"
@@ -120,7 +114,7 @@
         "location": {
           "anyOf": [
             {
-              "$ref": "#/definitions/Location"
+              "$ref": "#/$defs/Location"
             },
             {
               "type": "null"
@@ -131,7 +125,7 @@
           "type": "string"
         },
         "severity": {
-          "$ref": "#/definitions/Severity"
+          "$ref": "#/$defs/Severity"
         },
         "url": {
           "type": [
@@ -139,13 +133,16 @@
             "null"
           ]
         }
-      }
+      },
+      "required": [
+        "severity",
+        "check_id",
+        "code",
+        "message"
+      ]
     },
     "Location": {
       "type": "object",
-      "required": [
-        "path"
-      ],
       "properties": {
         "col": {
           "type": [
@@ -153,7 +150,7 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "line": {
           "type": [
@@ -161,12 +158,19 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0
         },
         "path": {
-          "type": "string"
+          "$ref": "#/$defs/RepoPath"
         }
-      }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RepoPath": {
+      "description": "Canonical repo-relative path used in findings and reports.\n\nNormalization rules are intentionally simple and deterministic:\n- always forward slashes (`/`)\n- no leading `./`\n- never absolute (best-effort: absolute inputs are preserved but flagged by checks)",
+      "type": "string"
     },
     "Severity": {
       "description": "Severity is intentionally small: it maps cleanly to CI signals.",
@@ -179,10 +183,6 @@
     },
     "ToolMeta": {
       "type": "object",
-      "required": [
-        "name",
-        "version"
-      ],
       "properties": {
         "name": {
           "type": "string"
@@ -190,7 +190,11 @@
         "version": {
           "type": "string"
         }
-      }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
     },
     "Verdict": {
       "type": "string",

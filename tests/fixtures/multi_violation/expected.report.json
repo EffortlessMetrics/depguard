@@ -26,7 +26,7 @@
       "message": "dependency 'alpha-wildcard' uses a wildcard version: *",
       "location": {
         "path": "Cargo.toml",
-        "line": 11
+        "line": 13
       },
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "d832501213e5ee4e3cb052e9658eb05ba1ffb6d9bfa40e915f536a4106114aac",
@@ -43,7 +43,7 @@
       "message": "dependency 'zeta-wildcard' uses a wildcard version: *",
       "location": {
         "path": "Cargo.toml",
-        "line": 12
+        "line": 14
       },
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "3456be19299d90945e9ea62cfba9cecce25688a95437d94b5c736737b33ec1d3",
@@ -60,7 +60,7 @@
       "message": "dependency 'path-no-version' uses a path dependency without an explicit version",
       "location": {
         "path": "Cargo.toml",
-        "line": 15
+        "line": 17
       },
       "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
       "fingerprint": "b844364de0fe43c8093e970019d94a577651afb4d4e764a7d64e3edb06257313",
@@ -77,7 +77,7 @@
       "message": "dependency 'path-no-version' uses a path that escapes the repo root: ../sibling",
       "location": {
         "path": "Cargo.toml",
-        "line": 15
+        "line": 17
       },
       "help": "Avoid `..` segments that escape the repository root.",
       "fingerprint": "76fb872ef63dc6313c72e6613e511432ffff2fcea697e069a60248eb579afb7a",
@@ -94,7 +94,7 @@
       "message": "dependency 'absolute-dep' uses an absolute path: /absolute/path",
       "location": {
         "path": "Cargo.toml",
-        "line": 18
+        "line": 20
       },
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
       "fingerprint": "3af00e51dbbb76d87d434a5a534559194646db11066b57885832898f3f9d83bd",
@@ -111,7 +111,7 @@
       "message": "dependency 'dev-wildcard' uses a wildcard version: *",
       "location": {
         "path": "Cargo.toml",
-        "line": 22
+        "line": 24
       },
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "65c71e0f953fa0260b7916d0b97513df3ad69331406c2464996d4a551ae09ae3",

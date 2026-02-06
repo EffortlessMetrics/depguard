@@ -42,26 +42,17 @@ fn repo_root() -> PathBuf {
 }
 
 fn validate_report_schema(report: &Value, schema_file: &str) {
-    use jsonschema::{Draft, JSONSchema};
-
     let schema_path = repo_root().join("schemas").join(schema_file);
     let schema_text = std::fs::read_to_string(&schema_path).expect("Failed to read schema file");
     let schema_json: Value = serde_json::from_str(&schema_text).expect("Invalid schema JSON");
 
-    let draft = match schema_json.get("$schema").and_then(|v| v.as_str()) {
-        Some(s) if s.contains("2020-12") => Draft::Draft202012,
-        _ => Draft::Draft7,
-    };
+    let compiled =
+        jsonschema::validator_for(&schema_json).expect("Failed to compile schema");
 
-    let compiled = JSONSchema::options()
-        .with_draft(draft)
-        .compile(&schema_json)
-        .expect("Failed to compile schema");
-
-    let errors = match compiled.validate(report) {
-        Ok(()) => return,
-        Err(errors) => errors.map(|e| e.to_string()).collect::<Vec<_>>(),
-    };
+    let errors: Vec<String> = compiled.iter_errors(report).map(|e| e.to_string()).collect();
+    if errors.is_empty() {
+        return;
+    }
     panic!(
         "Report failed schema validation against {}:\n{}",
         schema_file,

@@ -1,5 +1,5 @@
 {
-  "schema": "sensor.report.v1",
+  "schema": "depguard.report.v2",
   "tool": {
     "name": "depguard",
     "version": "0.1.0"
@@ -7,17 +7,7 @@
   "run": {
     "started_at": "__TIMESTAMP__",
     "ended_at": "__TIMESTAMP__",
-    "duration_ms": 0,
-    "capabilities": {
-      "git": {
-        "status": "missing",
-        "reason": "diff_scope_disabled"
-      },
-      "config": {
-        "status": "missing",
-        "reason": "config_missing_defaulted"
-      }
-    }
+    "duration_ms": 0
   },
   "verdict": {
     "status": "pass",
@@ -32,7 +22,7 @@
   "data": {
     "scope": "repo",
     "profile": "strict",
-    "manifests_scanned": 1,
+    "manifests_scanned": 6,
     "dependencies_scanned": 5,
     "findings_total": 0,
     "findings_emitted": 0

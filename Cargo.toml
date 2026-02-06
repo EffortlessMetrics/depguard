@@ -41,4 +41,4 @@ walkdir = "2.5.0"
 cucumber = "0.22.1"
 async-trait = "0.1.89"
 futures = "0.3.31"
-jsonschema = { version = "0.41.0", features = ["draft202012"] }
+jsonschema = "0.41.0"
