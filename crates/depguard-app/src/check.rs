@@ -6,7 +6,7 @@ use depguard_domain::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
 use depguard_types::{
-    Capabilities, CapabilityAvailability, CapabilityStatus, ReportEnvelope, ReportEnvelopeV2,
+    ids, Capabilities, CapabilityAvailability, CapabilityStatus, ReportEnvelope, ReportEnvelopeV2,
     RunMeta, ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus, VerdictV2,
     SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
 };
@@ -106,7 +106,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                             CapabilityAvailability::Missing
                         },
                         reason: if input.changed_files.is_none() {
-                            Some("Diff scope not enabled".to_string())
+                            Some(ids::REASON_DIFF_SCOPE_DISABLED.to_string())
                         } else {
                             None
                         },
@@ -118,7 +118,7 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
                             CapabilityAvailability::Missing
                         },
                         reason: if input.config_text.is_empty() {
-                            Some("No config file found, using defaults".to_string())
+                            Some(ids::REASON_CONFIG_MISSING_DEFAULTED.to_string())
                         } else {
                             None
                         },

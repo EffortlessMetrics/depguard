@@ -44,3 +44,9 @@ pub const CODE_OPTIONAL_NOT_IN_FEATURES: &str = "optional_not_in_features";
 // Tool-level
 pub const CHECK_TOOL_RUNTIME: &str = "tool.runtime";
 pub const CODE_RUNTIME_ERROR: &str = "runtime_error";
+
+// Capability reason tokens (snake_case, for No Green By Omission reporting)
+pub const REASON_DIFF_SCOPE_DISABLED: &str = "diff_scope_disabled";
+pub const REASON_CONFIG_MISSING_DEFAULTED: &str = "config_missing_defaulted";
+pub const REASON_RUNTIME_ERROR: &str = "runtime_error";
+pub const REASON_NO_MANIFEST_FOUND: &str = "no_manifest_found";

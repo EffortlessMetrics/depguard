@@ -172,7 +172,7 @@ pub fn empty_report(version: ReportVersion, scope: &str, profile: &str) -> Repor
                 Some(Capabilities {
                     git: Some(CapabilityStatus {
                         status: CapabilityAvailability::Missing,
-                        reason: Some("No manifest found".to_string()),
+                        reason: Some(depguard_types::ids::REASON_NO_MANIFEST_FOUND.to_string()),
                     }),
                     config: Some(CapabilityStatus {
                         status: CapabilityAvailability::Available,
@@ -260,11 +260,11 @@ pub fn runtime_error_report(version: ReportVersion, message: &str) -> ReportVari
                 Some(Capabilities {
                     git: Some(CapabilityStatus {
                         status: CapabilityAvailability::Missing,
-                        reason: Some("Runtime error".to_string()),
+                        reason: Some(depguard_types::ids::REASON_RUNTIME_ERROR.to_string()),
                     }),
                     config: Some(CapabilityStatus {
                         status: CapabilityAvailability::Missing,
-                        reason: Some("Runtime error".to_string()),
+                        reason: Some(depguard_types::ids::REASON_RUNTIME_ERROR.to_string()),
                     }),
                 })
             } else {

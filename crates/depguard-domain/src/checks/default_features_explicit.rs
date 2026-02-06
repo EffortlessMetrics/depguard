@@ -20,9 +20,8 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
 
             // Check if this dep has inline options but no explicit default-features
             // Inline options include: features, optional, path, git
-            let has_inline_options = dep.spec.path.is_some()
-                || dep.spec.git.is_some()
-                || dep.spec.optional;
+            let has_inline_options =
+                dep.spec.path.is_some() || dep.spec.git.is_some() || dep.spec.optional;
 
             // If it's just a simple version string (no inline options), skip
             if !has_inline_options {
