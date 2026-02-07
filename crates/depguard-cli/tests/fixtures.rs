@@ -9,6 +9,7 @@
 //! 2. JSON output matches expected (ignoring timestamps)
 
 use assert_cmd::Command;
+use depguard_test_util::normalize_nondeterministic;
 use predicates::prelude::*;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -60,48 +61,6 @@ fn validate_report_schema(report: &Value, schema_file: &str) {
         schema_file,
         errors.join("\n")
     );
-}
-
-/// Normalize non-deterministic JSON fields (timestamps, tool version) for comparison.
-fn normalize_nondeterministic(mut value: Value) -> Value {
-    if let Some(obj) = value.as_object_mut() {
-        if obj.contains_key("started_at") {
-            obj.insert(
-                "started_at".to_string(),
-                Value::String("__TIMESTAMP__".to_string()),
-            );
-        }
-        if obj.contains_key("finished_at") {
-            obj.insert(
-                "finished_at".to_string(),
-                Value::String("__TIMESTAMP__".to_string()),
-            );
-        }
-        if obj.contains_key("ended_at") {
-            obj.insert(
-                "ended_at".to_string(),
-                Value::String("__TIMESTAMP__".to_string()),
-            );
-        }
-        if obj.contains_key("duration_ms") {
-            obj.insert("duration_ms".to_string(), Value::Number(0.into()));
-        }
-        // Normalize tool version (objects with both "name" and "version")
-        if obj.contains_key("name") && obj.contains_key("version") {
-            obj.insert(
-                "version".to_string(),
-                Value::String("__VERSION__".to_string()),
-            );
-        }
-        for (_, v) in obj.iter_mut() {
-            *v = normalize_nondeterministic(v.take());
-        }
-    } else if let Some(arr) = value.as_array_mut() {
-        for v in arr.iter_mut() {
-            *v = normalize_nondeterministic(v.take());
-        }
-    }
-    value
 }
 
 /// Run the CLI check command against a fixture and return the JSON report.

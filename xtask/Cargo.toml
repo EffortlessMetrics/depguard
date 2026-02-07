@@ -19,3 +19,4 @@ tempfile.workspace = true
 
 depguard-types = { path = "../crates/depguard-types" }
 depguard-settings = { path = "../crates/depguard-settings" }
+depguard-test-util = { path = "../crates/depguard-test-util" }

@@ -468,6 +468,7 @@ dependencies = [
  "depguard-domain",
  "depguard-render",
  "depguard-settings",
+ "depguard-test-util",
  "depguard-types",
  "futures",
  "jsonschema",
@@ -527,6 +528,13 @@ dependencies = [
  "schemars",
  "serde",
  "toml",
+]
+
+[[package]]
+name = "depguard-test-util"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
@@ -3039,6 +3047,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "depguard-settings",
+ "depguard-test-util",
  "depguard-types",
  "jsonschema",
  "schemars",

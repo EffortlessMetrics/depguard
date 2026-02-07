@@ -31,8 +31,13 @@
       "help": "Prefer `workspace = true` to inherit the workspace dependency version and features.",
       "fingerprint": "f649405d13514f6abd47f0bf46a305b5a4f1add687946010a71c44ab13806a75",
       "data": {
+        "current_spec": {
+          "version": "1.0"
+        },
         "dependency": "serde",
-        "manifest": "member-crate/Cargo.toml"
+        "fix_hint": "Use workspace = true",
+        "manifest": "member-crate/Cargo.toml",
+        "section": "dependencies"
       }
     }
   ],

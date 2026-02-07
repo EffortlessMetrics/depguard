@@ -31,9 +31,15 @@
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
       "fingerprint": "50731d8c1aa18b6d8d83023e748c7eb412abaf99a3ccb4021f7afc7790829fc4",
       "data": {
+        "current_spec": {
+          "path": "/opt/libs/abs-unix",
+          "version": "0.1.0"
+        },
         "dependency": "abs-unix",
+        "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "/opt/libs/abs-unix"
+        "path": "/opt/libs/abs-unix",
+        "section": "dependencies"
       }
     },
     {
@@ -48,9 +54,15 @@
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
       "fingerprint": "cedcbc068f0f74a67725275c37bf27787589d0c6e272849d2a1de7276b63db89",
       "data": {
+        "current_spec": {
+          "path": "C:\\libs\\abs-windows",
+          "version": "0.1.0"
+        },
         "dependency": "abs-windows-backslash",
+        "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "C:\\libs\\abs-windows"
+        "path": "C:\\libs\\abs-windows",
+        "section": "dependencies"
       }
     },
     {
@@ -65,9 +77,15 @@
       "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
       "fingerprint": "a3691dbc9eefc4bb1990509038dac8cd0f574f7110538bf8b14eaee7c746af4e",
       "data": {
+        "current_spec": {
+          "path": "D:/projects/shared-lib",
+          "version": "0.1.0"
+        },
         "dependency": "abs-windows-forward",
+        "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "D:/projects/shared-lib"
+        "path": "D:/projects/shared-lib",
+        "section": "dependencies"
       }
     },
     {
@@ -82,9 +100,15 @@
       "help": "Avoid `..` segments that escape the repository root.",
       "fingerprint": "a4f5f18ae44a254c50b4fcbcf4cb857995b1d7b06bc82d7b24bdb0a2f4e49c48",
       "data": {
+        "current_spec": {
+          "path": "../../../../../../../../outside-repo",
+          "version": "0.1.0"
+        },
         "dependency": "escaping-deep",
+        "fix_hint": "Remove parent-escape segments",
         "manifest": "Cargo.toml",
-        "path": "../../../../../../../../outside-repo"
+        "path": "../../../../../../../../outside-repo",
+        "section": "dependencies"
       }
     },
     {
@@ -99,9 +123,15 @@
       "help": "Avoid `..` segments that escape the repository root.",
       "fingerprint": "08ab1f78c4316cc117c1344f564d1a98f3a83e7553307f76d15e651e7819b1f3",
       "data": {
+        "current_spec": {
+          "path": "../outside",
+          "version": "0.1.0"
+        },
         "dependency": "escaping-minimal",
+        "fix_hint": "Remove parent-escape segments",
         "manifest": "Cargo.toml",
-        "path": "../outside"
+        "path": "../outside",
+        "section": "dependencies"
       }
     }
   ],

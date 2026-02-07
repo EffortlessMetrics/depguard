@@ -31,8 +31,13 @@
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "38be3123a38a82ede27eb20d4d4d917866221d7c967119a9017858545da8e25b",
       "data": {
+        "current_spec": {
+          "version": "*"
+        },
         "dependency": "nix",
+        "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
+        "section": "dependencies",
         "version": "*"
       }
     },
@@ -48,8 +53,13 @@
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "00918e957963ecf4e1e2f3d9420f615be1c1f139935a09d5010872463a93f2de",
       "data": {
+        "current_spec": {
+          "version": "*"
+        },
         "dependency": "winapi",
+        "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
+        "section": "dependencies",
         "version": "*"
       }
     },
@@ -65,8 +75,13 @@
       "help": "Replace wildcard versions with an explicit semver requirement.",
       "fingerprint": "34a645a376dafd3557b5decf28b3a375c32a9ad74bab860fe51a597fe9e6dd2e",
       "data": {
+        "current_spec": {
+          "version": "*"
+        },
         "dependency": "cc",
+        "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
+        "section": "build-dependencies",
         "version": "*"
       }
     }

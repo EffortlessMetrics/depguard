@@ -6,6 +6,7 @@
 
 use assert_cmd::Command;
 use cucumber::{World, given, then, when};
+use depguard_test_util::normalize_nondeterministic;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -1606,48 +1607,10 @@ fn then_three_reports_identical(world: &mut DepguardWorld) {
         reports.len()
     );
 
-    fn normalize(mut v: Value) -> Value {
-        if let Some(obj) = v.as_object_mut() {
-            if obj.contains_key("started_at") {
-                obj.insert(
-                    "started_at".to_string(),
-                    Value::String("__TIMESTAMP__".to_string()),
-                );
-            }
-            if obj.contains_key("finished_at") {
-                obj.insert(
-                    "finished_at".to_string(),
-                    Value::String("__TIMESTAMP__".to_string()),
-                );
-            }
-            if obj.contains_key("ended_at") {
-                obj.insert(
-                    "ended_at".to_string(),
-                    Value::String("__TIMESTAMP__".to_string()),
-                );
-            }
-            if obj.contains_key("duration_ms") {
-                obj.insert("duration_ms".to_string(), Value::Number(0.into()));
-            }
-            // Normalize tool version (objects with both "name" and "version")
-            if obj.contains_key("name") && obj.contains_key("version") {
-                obj.insert(
-                    "version".to_string(),
-                    Value::String("__VERSION__".to_string()),
-                );
-            }
-            for (_, val) in obj.iter_mut() {
-                *val = normalize(val.take());
-            }
-        } else if let Some(arr) = v.as_array_mut() {
-            for val in arr.iter_mut() {
-                *val = normalize(val.take());
-            }
-        }
-        v
-    }
-
-    let normalized: Vec<Value> = reports.into_iter().map(normalize).collect();
+    let normalized: Vec<Value> = reports
+        .into_iter()
+        .map(normalize_nondeterministic)
+        .collect();
     assert_eq!(normalized[0], normalized[1], "Report 1 != Report 2");
     assert_eq!(normalized[0], normalized[2], "Report 1 != Report 3");
 }
@@ -1738,50 +1701,8 @@ fn then_output_matches_golden(world: &mut DepguardWorld, expected_file: String) 
 
         let actual = world.report.as_ref().expect("No report captured");
 
-        // Normalize non-deterministic fields for comparison
-        fn normalize(mut v: Value) -> Value {
-            if let Some(obj) = v.as_object_mut() {
-                if obj.contains_key("started_at") {
-                    obj.insert(
-                        "started_at".to_string(),
-                        Value::String("__TIMESTAMP__".to_string()),
-                    );
-                }
-                if obj.contains_key("finished_at") {
-                    obj.insert(
-                        "finished_at".to_string(),
-                        Value::String("__TIMESTAMP__".to_string()),
-                    );
-                }
-                if obj.contains_key("ended_at") {
-                    obj.insert(
-                        "ended_at".to_string(),
-                        Value::String("__TIMESTAMP__".to_string()),
-                    );
-                }
-                if obj.contains_key("duration_ms") {
-                    obj.insert("duration_ms".to_string(), Value::Number(0.into()));
-                }
-                // Normalize tool version (objects with both "name" and "version")
-                if obj.contains_key("name") && obj.contains_key("version") {
-                    obj.insert(
-                        "version".to_string(),
-                        Value::String("__VERSION__".to_string()),
-                    );
-                }
-                for (_, val) in obj.iter_mut() {
-                    *val = normalize(val.take());
-                }
-            } else if let Some(arr) = v.as_array_mut() {
-                for val in arr.iter_mut() {
-                    *val = normalize(val.take());
-                }
-            }
-            v
-        }
-
-        let actual_normalized = normalize(actual.clone());
-        let expected_normalized = normalize(expected);
+        let actual_normalized = normalize_nondeterministic(actual.clone());
+        let expected_normalized = normalize_nondeterministic(expected);
 
         assert_eq!(
             actual_normalized, expected_normalized,

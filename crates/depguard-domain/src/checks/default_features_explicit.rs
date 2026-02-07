@@ -1,4 +1,4 @@
-use crate::checks::utils::{build_allowlist, is_allowed};
+use crate::checks::utils::{build_allowlist, is_allowed, section_name, spec_to_json};
 use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
@@ -62,8 +62,11 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                 url: None,
                 fingerprint: Some(fingerprint),
                 data: json!({
+                    "current_spec": spec_to_json(&dep.spec),
                     "dependency": dep.name,
+                    "fix_hint": "Add default-features = true or default-features = false",
                     "manifest": manifest.path.as_str(),
+                    "section": section_name(dep.kind),
                 }),
             });
         }

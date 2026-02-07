@@ -8,6 +8,7 @@ members = [
   "crates/depguard-render",
   "crates/depguard-app",
   "crates/depguard-cli",
+  "crates/depguard-test-util",
   "xtask",
 ]
 
@@ -15,7 +16,7 @@ members = [
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
-repository = "https://example.invalid/depguard"
+repository = "https://github.com/EffortlessMetrics/depguard/"
 authors = ["Depguard contributors"]
 
 [workspace.dependencies]

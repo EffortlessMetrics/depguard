@@ -1,4 +1,4 @@
-use crate::checks::utils::{build_allowlist, is_allowed};
+use crate::checks::utils::{build_allowlist, is_allowed, section_name};
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
 use depguard_types::{Finding, ids};
@@ -11,8 +11,8 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     };
     let allow = build_allowlist(&policy.allow);
 
-    // Build a map of crate_name -> set of (version, manifest_path)
-    let mut version_map: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
+    // Build a map of crate_name -> set of (version, manifest_path, section)
+    let mut version_map: BTreeMap<String, BTreeSet<(String, String, String)>> = BTreeMap::new();
 
     for manifest in &model.manifests {
         for dep in &manifest.dependencies {
@@ -26,17 +26,18 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                 continue;
             };
 
-            version_map
-                .entry(dep.name.clone())
-                .or_default()
-                .insert((version.clone(), manifest.path.as_str().to_string()));
+            version_map.entry(dep.name.clone()).or_default().insert((
+                version.clone(),
+                manifest.path.as_str().to_string(),
+                section_name(dep.kind).to_string(),
+            ));
         }
     }
 
     // Find crates with multiple distinct versions
     for (crate_name, versions) in &version_map {
         // Extract unique versions (ignoring which manifest they came from)
-        let unique_versions: BTreeSet<&str> = versions.iter().map(|(v, _)| v.as_str()).collect();
+        let unique_versions: BTreeSet<&str> = versions.iter().map(|(v, _, _)| v.as_str()).collect();
 
         if unique_versions.len() <= 1 {
             continue;
@@ -48,7 +49,10 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
         }
 
         // Create a finding for this duplicate
-        let version_list: Vec<String> = unique_versions.iter().map(|v| v.to_string()).collect();
+        let version_list: Vec<String> = unique_versions
+            .iter()
+            .map(|v: &&str| v.to_string())
+            .collect();
 
         // Use a stable fingerprint based on crate name and sorted versions
         let fingerprint = format!(
@@ -83,8 +87,9 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
             fingerprint: Some(fingerprint_hash),
             data: json!({
                 "crate": crate_name,
-                "versions": version_list,
+                "fix_hint": "Align versions via [workspace.dependencies]",
                 "occurrences": versions.iter().collect::<Vec<_>>(),
+                "versions": version_list,
             }),
         });
     }
