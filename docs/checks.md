@@ -10,6 +10,8 @@ Depguard checks are identified by a stable `check_id` and a stable `code`.
 
 The code registry lives in `crates/depguard-types/src/ids.rs`.
 
+For machine-readable finding payload shapes and fix action tokens, see [`contracts/docs/finding-payload.md`](../contracts/docs/finding-payload.md).
+
 Allowlists are **glob patterns** (case-sensitive) across checks unless otherwise noted.
 
 ---
