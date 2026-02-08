@@ -4,9 +4,9 @@ use depguard_render::{
     RenderableVerdictStatus,
 };
 use depguard_types::{
-    Capabilities, CapabilityAvailability, CapabilityStatus, DepguardData, DepguardReportV1,
-    DepguardReportV2, FindingV2, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1,
-    Severity, SeverityV2, Verdict, VerdictStatus,
+    ArtifactPointer, Capabilities, CapabilityAvailability, CapabilityStatus, DepguardData,
+    DepguardReportV1, DepguardReportV2, FindingV2, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2,
+    SCHEMA_SENSOR_REPORT_V1, Severity, SeverityV2, Verdict, VerdictStatus,
 };
 use time::OffsetDateTime;
 
@@ -311,5 +311,11 @@ pub fn runtime_error_report(version: ReportVersion, message: &str) -> ReportVari
                 data,
             })
         }
+    }
+}
+
+pub fn add_artifact(report: &mut ReportVariant, artifact: ArtifactPointer) {
+    if let ReportVariant::V2(r) = report {
+        r.artifacts.get_or_insert_with(Vec::new).push(artifact);
     }
 }

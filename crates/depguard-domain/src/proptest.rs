@@ -179,6 +179,7 @@ fn arb_dependency_decl() -> impl Strategy<Value = DependencyDecl> {
                 line,
                 col: None,
             }),
+            target: None,
         })
 }
 
@@ -676,6 +677,7 @@ proptest! {
                             line: Some(10),
                             col: None,
                         }),
+                        target: None,
                     },
                     // Path without version violation
                     DependencyDecl {
@@ -691,6 +693,7 @@ proptest! {
                             line: Some(20),
                             col: None,
                         }),
+                        target: None,
                     },
                     // Workspace inheritance violation (not using workspace = true)
                     DependencyDecl {
@@ -705,6 +708,7 @@ proptest! {
                             line: Some(30),
                             col: None,
                         }),
+                        target: None,
                     },
                 ],
             }],
@@ -757,6 +761,7 @@ proptest! {
                         line: Some(10),
                         col: None,
                     }),
+                    target: None,
                 }],
             }],
         };
@@ -806,6 +811,7 @@ proptest! {
                         line: Some(10),
                         col: None,
                     }),
+                    target: None,
                 }],
             }],
         };
@@ -855,6 +861,7 @@ proptest! {
                         line: Some(10),
                         col: None,
                     }),
+                    target: None,
                 }],
             }],
         };
@@ -904,6 +911,7 @@ proptest! {
                         line: Some(10),
                         col: None,
                     }),
+                    target: None,
                 }],
             }],
         };
@@ -950,6 +958,7 @@ proptest! {
                     line: Some(i as u32 + 1),
                     col: None,
                 }),
+                target: None,
             })
             .collect();
 
@@ -1012,6 +1021,7 @@ proptest! {
                     line: Some((num_deps - i) as u32),
                     col: None,
                 }),
+                target: None,
             })
             .collect();
 

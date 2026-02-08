@@ -87,6 +87,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
             fingerprint: Some(fingerprint_hash),
             data: json!({
                 "crate": crate_name,
+                "fix_action": ids::FIX_ACTION_ALIGN_WORKSPACE_VERSIONS,
                 "fix_hint": "Align versions via [workspace.dependencies]",
                 "occurrences": versions.iter().collect::<Vec<_>>(),
                 "versions": version_list,

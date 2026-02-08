@@ -45,10 +45,10 @@
           "version": "*"
         },
         "dependency": "serde",
+        "fix_action": "pin_version",
         "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
-        "section": "dependencies",
-        "version": "*"
+        "section": "dependencies"
       }
     }
   ],

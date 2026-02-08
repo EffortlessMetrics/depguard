@@ -16,6 +16,6 @@ pub use check::{CheckInput, CheckOutput, run_check, verdict_exit_code};
 pub use explain::{ExplainOutput, format_explanation, format_not_found, run_explain};
 pub use render::{render_annotations, render_markdown};
 pub use report::{
-    ReportVariant, ReportVersion, empty_report, parse_report_json, runtime_error_report,
-    serialize_report, to_renderable,
+    ReportVariant, ReportVersion, add_artifact, empty_report, parse_report_json,
+    runtime_error_report, serialize_report, to_renderable,
 };

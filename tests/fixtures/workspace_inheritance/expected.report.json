@@ -35,6 +35,7 @@
           "version": "1.0"
         },
         "dependency": "serde",
+        "fix_action": "use_workspace_true",
         "fix_hint": "Use workspace = true",
         "manifest": "member-crate/Cargo.toml",
         "section": "dependencies"

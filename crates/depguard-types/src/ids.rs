@@ -50,3 +50,15 @@ pub const REASON_DIFF_SCOPE_DISABLED: &str = "diff_scope_disabled";
 pub const REASON_CONFIG_MISSING_DEFAULTED: &str = "config_missing_defaulted";
 pub const REASON_RUNTIME_ERROR: &str = "runtime_error";
 pub const REASON_NO_MANIFEST_FOUND: &str = "no_manifest_found";
+
+// Fix action tokens (stable machine-readable routing for actuators)
+pub const FIX_ACTION_PIN_VERSION: &str = "pin_version";
+pub const FIX_ACTION_ADD_VERSION: &str = "add_version";
+pub const FIX_ACTION_USE_REPO_RELATIVE_PATH: &str = "use_repo_relative_path";
+pub const FIX_ACTION_REMOVE_PARENT_ESCAPE: &str = "remove_parent_escape";
+pub const FIX_ACTION_USE_WORKSPACE_TRUE: &str = "use_workspace_true";
+pub const FIX_ACTION_ADD_VERSION_WITH_GIT: &str = "add_version_with_git";
+pub const FIX_ACTION_MOVE_TO_DEV_DEPS: &str = "move_to_dev_deps";
+pub const FIX_ACTION_ADD_DEFAULT_FEATURES: &str = "add_default_features";
+pub const FIX_ACTION_ALIGN_WORKSPACE_VERSIONS: &str = "align_workspace_versions";
+pub const FIX_ACTION_RESOLVE_OPTIONAL_FEATURE: &str = "resolve_optional_feature";

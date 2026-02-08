@@ -35,10 +35,10 @@
           "version": "*"
         },
         "dependency": "alpha-wildcard",
+        "fix_action": "pin_version",
         "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
-        "section": "dependencies",
-        "version": "*"
+        "section": "dependencies"
       }
     },
     {
@@ -57,10 +57,10 @@
           "version": "*"
         },
         "dependency": "zeta-wildcard",
+        "fix_action": "pin_version",
         "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
-        "section": "dependencies",
-        "version": "*"
+        "section": "dependencies"
       }
     },
     {
@@ -79,9 +79,9 @@
           "path": "../sibling"
         },
         "dependency": "path-no-version",
+        "fix_action": "add_version",
         "fix_hint": "Add version alongside the path dependency",
         "manifest": "Cargo.toml",
-        "path": "../sibling",
         "section": "dependencies"
       }
     },
@@ -101,9 +101,9 @@
           "path": "../sibling"
         },
         "dependency": "path-no-version",
+        "fix_action": "remove_parent_escape",
         "fix_hint": "Remove parent-escape segments",
         "manifest": "Cargo.toml",
-        "path": "../sibling",
         "section": "dependencies"
       }
     },
@@ -124,9 +124,9 @@
           "version": "0.1.0"
         },
         "dependency": "absolute-dep",
+        "fix_action": "use_repo_relative_path",
         "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "/absolute/path",
         "section": "dependencies"
       }
     },
@@ -146,10 +146,10 @@
           "version": "*"
         },
         "dependency": "dev-wildcard",
+        "fix_action": "pin_version",
         "fix_hint": "Pin to a specific semver requirement",
         "manifest": "Cargo.toml",
-        "section": "dev-dependencies",
-        "version": "*"
+        "section": "dev-dependencies"
       }
     }
   ],

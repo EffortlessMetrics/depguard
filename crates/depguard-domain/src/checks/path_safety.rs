@@ -40,14 +40,20 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                     help: Some("Use repo-relative paths. Absolute paths are not portable and may leak host layout.".to_string()),
                     url: None,
                     fingerprint: Some(fingerprint),
-                    data: json!({
-                        "current_spec": spec_to_json(&dep.spec),
-                        "dependency": dep.name,
-                        "fix_hint": "Use a repo-relative path",
-                        "manifest": manifest.path.as_str(),
-                        "path": path,
-                        "section": section_name(dep.kind),
-                    }),
+                    data: {
+                        let mut d = json!({
+                            "current_spec": spec_to_json(&dep.spec),
+                            "dependency": dep.name,
+                            "fix_action": ids::FIX_ACTION_USE_REPO_RELATIVE_PATH,
+                            "fix_hint": "Use a repo-relative path",
+                            "manifest": manifest.path.as_str(),
+                            "section": section_name(dep.kind),
+                        });
+                        if let Some(ref t) = dep.target {
+                            d["target"] = json!(t);
+                        }
+                        d
+                    },
                 });
                 continue;
             }
@@ -72,14 +78,20 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                     help: Some("Avoid `..` segments that escape the repository root.".to_string()),
                     url: None,
                     fingerprint: Some(fingerprint),
-                    data: json!({
-                        "current_spec": spec_to_json(&dep.spec),
-                        "dependency": dep.name,
-                        "fix_hint": "Remove parent-escape segments",
-                        "manifest": manifest.path.as_str(),
-                        "path": path,
-                        "section": section_name(dep.kind),
-                    }),
+                    data: {
+                        let mut d = json!({
+                            "current_spec": spec_to_json(&dep.spec),
+                            "dependency": dep.name,
+                            "fix_action": ids::FIX_ACTION_REMOVE_PARENT_ESCAPE,
+                            "fix_hint": "Remove parent-escape segments",
+                            "manifest": manifest.path.as_str(),
+                            "section": section_name(dep.kind),
+                        });
+                        if let Some(ref t) = dep.target {
+                            d["target"] = json!(t);
+                        }
+                        d
+                    },
                 });
             }
         }

@@ -36,9 +36,9 @@
           "version": "0.1.0"
         },
         "dependency": "abs-unix",
+        "fix_action": "use_repo_relative_path",
         "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "/opt/libs/abs-unix",
         "section": "dependencies"
       }
     },
@@ -59,9 +59,9 @@
           "version": "0.1.0"
         },
         "dependency": "abs-windows-backslash",
+        "fix_action": "use_repo_relative_path",
         "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "C:\\libs\\abs-windows",
         "section": "dependencies"
       }
     },
@@ -82,9 +82,9 @@
           "version": "0.1.0"
         },
         "dependency": "abs-windows-forward",
+        "fix_action": "use_repo_relative_path",
         "fix_hint": "Use a repo-relative path",
         "manifest": "Cargo.toml",
-        "path": "D:/projects/shared-lib",
         "section": "dependencies"
       }
     },
@@ -105,9 +105,9 @@
           "version": "0.1.0"
         },
         "dependency": "escaping-deep",
+        "fix_action": "remove_parent_escape",
         "fix_hint": "Remove parent-escape segments",
         "manifest": "Cargo.toml",
-        "path": "../../../../../../../../outside-repo",
         "section": "dependencies"
       }
     },
@@ -128,9 +128,9 @@
           "version": "0.1.0"
         },
         "dependency": "escaping-minimal",
+        "fix_action": "remove_parent_escape",
         "fix_hint": "Remove parent-escape segments",
         "manifest": "Cargo.toml",
-        "path": "../outside",
         "section": "dependencies"
       }
     }

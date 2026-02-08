@@ -61,13 +61,20 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                 ),
                 url: None,
                 fingerprint: Some(fingerprint),
-                data: json!({
-                    "current_spec": spec_to_json(&dep.spec),
-                    "dependency": dep.name,
-                    "fix_hint": "Add default-features = true or default-features = false",
-                    "manifest": manifest.path.as_str(),
-                    "section": section_name(dep.kind),
-                }),
+                data: {
+                    let mut d = json!({
+                        "current_spec": spec_to_json(&dep.spec),
+                        "dependency": dep.name,
+                        "fix_action": ids::FIX_ACTION_ADD_DEFAULT_FEATURES,
+                        "fix_hint": "Add default-features = true or default-features = false",
+                        "manifest": manifest.path.as_str(),
+                        "section": section_name(dep.kind),
+                    });
+                    if let Some(ref t) = dep.target {
+                        d["target"] = json!(t);
+                    }
+                    d
+                },
             });
         }
     }

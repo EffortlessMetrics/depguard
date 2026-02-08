@@ -700,6 +700,7 @@ mod tests {
                             line: Some(20),
                             col: None,
                         }),
+                        target: None,
                     },
                     DependencyDecl {
                         kind: DepKind::Normal,
@@ -713,6 +714,7 @@ mod tests {
                             line: Some(10),
                             col: None,
                         }),
+                        target: None,
                     },
                     DependencyDecl {
                         kind: DepKind::Normal,
@@ -726,6 +728,7 @@ mod tests {
                             line: Some(15),
                             col: None,
                         }),
+                        target: None,
                     },
                 ],
             }],
@@ -789,6 +792,7 @@ mod tests {
                         line: Some(1),
                         col: None,
                     }),
+                    target: None,
                 }],
             }],
         };

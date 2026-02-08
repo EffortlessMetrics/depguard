@@ -7,10 +7,11 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use depguard_app::{
-    CheckInput, ExplainOutput, ReportVariant, ReportVersion, empty_report, parse_report_json,
-    render_annotations, render_markdown, run_check, run_explain, runtime_error_report,
-    serialize_report, to_renderable, verdict_exit_code,
+    CheckInput, ExplainOutput, ReportVariant, ReportVersion, add_artifact, empty_report,
+    parse_report_json, render_annotations, render_markdown, run_check, run_explain,
+    runtime_error_report, serialize_report, to_renderable, verdict_exit_code,
 };
+use depguard_types::{ArtifactPointer, ArtifactType};
 use depguard_settings::Overrides;
 use depguard_types::RepoPath;
 use std::process::Command;
@@ -194,13 +195,21 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
                 depguard_domain::policy::Scope::Repo => "repo",
                 depguard_domain::policy::Scope::Diff => "diff",
             };
-            let report = empty_report(report_version, scope, &resolved.effective.profile);
-            write_report_file(&opts.report_out, &report).context("write report json")?;
+            let mut report = empty_report(report_version, scope, &resolved.effective.profile);
             if opts.write_markdown {
                 let renderable = to_renderable(&report);
                 let md = render_markdown(&renderable);
                 write_text_file(&opts.markdown_out, &md).context("write markdown")?;
+                add_artifact(
+                    &mut report,
+                    ArtifactPointer {
+                        artifact_type: ArtifactType::Comment,
+                        path: opts.markdown_out.to_string(),
+                        format: Some("text/markdown".to_string()),
+                    },
+                );
             }
+            write_report_file(&opts.report_out, &report).context("write report json")?;
             eprintln!(
                 "depguard: no Cargo.toml found at {}; emitting empty report",
                 root_manifest
@@ -227,15 +236,23 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             report_version,
         };
 
-        let output = run_check(input)?;
-
-        write_report_file(&opts.report_out, &output.report).context("write report json")?;
+        let mut output = run_check(input)?;
 
         if opts.write_markdown {
             let renderable = to_renderable(&output.report);
             let md = render_markdown(&renderable);
             write_text_file(&opts.markdown_out, &md).context("write markdown")?;
+            add_artifact(
+                &mut output.report,
+                ArtifactPointer {
+                    artifact_type: ArtifactType::Comment,
+                    path: opts.markdown_out.to_string(),
+                    format: Some("text/markdown".to_string()),
+                },
+            );
         }
+
+        write_report_file(&opts.report_out, &output.report).context("write report json")?;
 
         Ok(report_exit_code(&output.report))
     })();

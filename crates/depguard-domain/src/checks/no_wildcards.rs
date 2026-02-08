@@ -42,14 +42,20 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                     ),
                     url: None,
                     fingerprint: Some(fingerprint),
-                    data: json!({
-                        "current_spec": spec_to_json(&dep.spec),
-                        "dependency": dep.name,
-                        "fix_hint": "Pin to a specific semver requirement",
-                        "manifest": manifest.path.as_str(),
-                        "section": section_name(dep.kind),
-                        "version": version,
-                    }),
+                    data: {
+                        let mut d = json!({
+                            "current_spec": spec_to_json(&dep.spec),
+                            "dependency": dep.name,
+                            "fix_action": ids::FIX_ACTION_PIN_VERSION,
+                            "fix_hint": "Pin to a specific semver requirement",
+                            "manifest": manifest.path.as_str(),
+                            "section": section_name(dep.kind),
+                        });
+                        if let Some(ref t) = dep.target {
+                            d["target"] = json!(t);
+                        }
+                        d
+                    },
                 });
             }
         }

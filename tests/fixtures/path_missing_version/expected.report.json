@@ -35,9 +35,9 @@
           "path": "./libs/my-local"
         },
         "dependency": "my-local",
+        "fix_action": "add_version",
         "fix_hint": "Add version alongside the path dependency",
         "manifest": "Cargo.toml",
-        "path": "./libs/my-local",
         "section": "dependencies"
       }
     }

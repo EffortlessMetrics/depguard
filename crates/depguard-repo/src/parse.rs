@@ -50,18 +50,21 @@ fn parse_manifest_doc(
         DepKind::Normal,
         manifest_path,
         source,
+        None,
     ));
     deps.extend(parse_dep_table(
         doc.get("dev-dependencies"),
         DepKind::Dev,
         manifest_path,
         source,
+        None,
     ));
     deps.extend(parse_dep_table(
         doc.get("build-dependencies"),
         DepKind::Build,
         manifest_path,
         source,
+        None,
     ));
 
     // Parse target-specific dependencies under `[target.'cfg(...)'.dependencies]` etc.
@@ -129,6 +132,7 @@ fn parse_dep_table(
     kind: DepKind,
     manifest_path: &RepoPath,
     source: &str,
+    target: Option<&str>,
 ) -> Vec<DependencyDecl> {
     let Some(tbl) = section.and_then(|i| i.as_table()) else {
         return Vec::new();
@@ -150,6 +154,7 @@ fn parse_dep_table(
                 line,
                 col: None,
             }),
+            target: target.map(|t| t.to_string()),
         });
     }
     out
@@ -173,7 +178,7 @@ fn parse_target_dependencies(
     let mut out = Vec::new();
 
     // Iterate over each target spec (e.g., 'cfg(unix)', 'x86_64-unknown-linux-gnu')
-    for (_target_spec, target_item) in target_table.iter() {
+    for (target_spec, target_item) in target_table.iter() {
         let Some(target_subtable) = target_item.as_table() else {
             continue;
         };
@@ -184,18 +189,21 @@ fn parse_target_dependencies(
             DepKind::Normal,
             manifest_path,
             source,
+            Some(target_spec),
         ));
         out.extend(parse_dep_table(
             target_subtable.get("dev-dependencies"),
             DepKind::Dev,
             manifest_path,
             source,
+            Some(target_spec),
         ));
         out.extend(parse_dep_table(
             target_subtable.get("build-dependencies"),
             DepKind::Build,
             manifest_path,
             source,
+            Some(target_spec),
         ));
     }
 
@@ -707,6 +715,26 @@ cc = "1.0"
         assert_eq!(find_dep("mockall").kind, DepKind::Dev);
         assert_eq!(find_dep("pprof").kind, DepKind::Dev);
         assert_eq!(find_dep("cc").kind, DepKind::Build);
+
+        // Verify target specs are preserved
+        assert_eq!(find_dep("serde").target, None);
+        assert_eq!(find_dep("mockall").target, None);
+        assert_eq!(
+            find_dep("nix").target.as_deref(),
+            Some("cfg(unix)")
+        );
+        assert_eq!(
+            find_dep("windows").target.as_deref(),
+            Some("cfg(windows)")
+        );
+        assert_eq!(
+            find_dep("pprof").target.as_deref(),
+            Some("cfg(unix)")
+        );
+        assert_eq!(
+            find_dep("cc").target.as_deref(),
+            Some("x86_64-unknown-linux-gnu")
+        );
     }
 
     #[test]

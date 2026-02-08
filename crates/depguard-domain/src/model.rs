@@ -48,6 +48,9 @@ pub struct DependencyDecl {
     pub name: String,
     pub spec: DepSpec,
     pub location: Option<Location>,
+    /// Target platform filter (e.g. `cfg(unix)`, `x86_64-unknown-linux-gnu`).
+    /// Present only for deps under `[target.<spec>.*]` tables.
+    pub target: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
