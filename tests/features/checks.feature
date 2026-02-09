@@ -146,3 +146,35 @@ Feature: Individual check behaviors
       """
     When I run the check
     Then no finding is emitted for "deps.workspace_inheritance"
+
+  # ===========================================================================
+  # deps.default_features_explicit
+  # ===========================================================================
+
+  Scenario: Inline dependency without explicit default-features is flagged
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { version = "1.0", optional = true }
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.default_features_explicit"]
+      enabled = true
+      """
+    When I run the check
+    Then a finding is emitted with check_id "deps.default_features_explicit" and code "default_features_implicit"
+
+  Scenario: Inline dependency with explicit default-features passes
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { version = "1.0", optional = true, default-features = false }
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.default_features_explicit"]
+      enabled = true
+      """
+    When I run the check
+    Then no finding is emitted for "deps.default_features_explicit"

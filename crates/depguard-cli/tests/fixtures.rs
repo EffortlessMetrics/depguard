@@ -175,6 +175,18 @@ fn fixture_workspace_inheritance_fails() {
 }
 
 #[test]
+fn fixture_default_features_explicit_fails() {
+    let (exit_code, report) = run_check_on_fixture("default_features_explicit");
+    let expected = load_expected_report("default_features_explicit");
+
+    assert_eq!(
+        exit_code, 2,
+        "default_features_explicit fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "default_features_explicit");
+}
+
+#[test]
 fn fixture_multi_violation_fails() {
     let (exit_code, report) = run_check_on_fixture("multi_violation");
     let expected = load_expected_report("multi_violation");

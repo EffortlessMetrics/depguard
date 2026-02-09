@@ -24,3 +24,6 @@ pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Find
     no_multiple_versions::run(model, cfg, out);
     optional_unused::run(model, cfg, out);
 }
+
+#[cfg(test)]
+mod tests;

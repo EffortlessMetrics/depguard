@@ -1,0 +1,9 @@
+[package]
+name = "default_features_explicit"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0", path = "vendor/serde", optional = true }

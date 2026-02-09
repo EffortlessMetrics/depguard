@@ -129,3 +129,128 @@ pub fn build_workspace_model(
 
     Ok(model)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use camino::Utf8PathBuf;
+    use proptest::prelude::*;
+    use tempfile::TempDir;
+
+    fn utf8_root(tmp: &TempDir) -> Utf8PathBuf {
+        Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path")
+    }
+
+    fn write_file(path: &Utf8Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("create parent");
+        }
+        std::fs::write(path, contents).expect("write file");
+    }
+
+    #[test]
+    fn build_workspace_model_repo_scope_includes_all_manifests() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/a", "crates/b"]
+
+[workspace.dependencies]
+serde = "1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/b/Cargo.toml"),
+            r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+        );
+
+        let model = build_workspace_model(&root, ScopeInput::Repo).expect("build model");
+        let mut paths: Vec<String> = model
+            .manifests
+            .iter()
+            .map(|m| m.path.as_str().to_string())
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                "Cargo.toml".to_string(),
+                "crates/a/Cargo.toml".to_string(),
+                "crates/b/Cargo.toml".to_string()
+            ]
+        );
+
+        let serde_dep = model
+            .workspace_dependencies
+            .get("serde")
+            .expect("workspace dep");
+        assert_eq!(serde_dep.version.as_deref(), Some("1.0"));
+    }
+
+    #[test]
+    fn build_workspace_model_diff_scope_filters_members() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/a", "crates/b"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/b/Cargo.toml"),
+            r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+        );
+
+        let model = build_workspace_model(
+            &root,
+            ScopeInput::Diff {
+                changed_files: vec![RepoPath::new("crates/a/Cargo.toml")],
+            },
+        )
+        .expect("build model");
+
+        let mut paths: Vec<String> = model
+            .manifests
+            .iter()
+            .map(|m| m.path.as_str().to_string())
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec!["Cargo.toml".to_string(), "crates/a/Cargo.toml".to_string()]
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn fuzz_parsers_never_panic(input in ".*") {
+            let _ = fuzz::parse_root_manifest(&input);
+            let _ = fuzz::parse_member_manifest(&input);
+        }
+    }
+}

@@ -319,3 +319,51 @@ pub type DepguardReportV2 = ReportEnvelopeV2<DepguardData>;
 
 // Back-compat alias (v1).
 pub type DepguardReport = DepguardReportV1;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use time::OffsetDateTime;
+
+    #[test]
+    fn verdict_counts_skip_zero_suppressed() {
+        let counts = VerdictCounts {
+            info: 0,
+            warn: 0,
+            error: 0,
+            suppressed: 0,
+        };
+        let value = serde_json::to_value(&counts).unwrap();
+        assert!(value.get("suppressed").is_none());
+
+        let counts = VerdictCounts {
+            info: 0,
+            warn: 1,
+            error: 0,
+            suppressed: 2,
+        };
+        let value = serde_json::to_value(&counts).unwrap();
+        assert_eq!(value["suppressed"], 2);
+    }
+
+    #[test]
+    fn run_meta_omits_optional_fields() {
+        let run = RunMeta {
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            ended_at: None,
+            duration_ms: None,
+            host: None,
+            ci: None,
+            git: None,
+            capabilities: None,
+        };
+        let value = serde_json::to_value(&run).unwrap();
+        assert!(value.get("ended_at").is_none());
+        assert!(value.get("duration_ms").is_none());
+        assert!(value.get("host").is_none());
+        assert!(value.get("ci").is_none());
+        assert!(value.get("git").is_none());
+        assert!(value.get("capabilities").is_none());
+        assert!(value.get("started_at").is_some());
+    }
+}

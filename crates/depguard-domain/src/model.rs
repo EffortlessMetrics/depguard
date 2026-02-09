@@ -81,3 +81,29 @@ impl ManifestModel {
         self.package.as_ref().map(|p| p.name.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn publishable_and_package_name_behavior() {
+        let mut manifest = ManifestModel::default();
+        assert!(!manifest.is_publishable());
+        assert_eq!(manifest.package_name(), None);
+
+        manifest.package = Some(PackageMeta {
+            name: "depguard".to_string(),
+            publish: true,
+        });
+        assert!(manifest.is_publishable());
+        assert_eq!(manifest.package_name(), Some("depguard"));
+
+        manifest.package = Some(PackageMeta {
+            name: "private".to_string(),
+            publish: false,
+        });
+        assert!(!manifest.is_publishable());
+        assert_eq!(manifest.package_name(), Some("private"));
+    }
+}

@@ -19,3 +19,4 @@ depguard-domain = { path = "../depguard-domain" }
 [dev-dependencies]
 proptest.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true

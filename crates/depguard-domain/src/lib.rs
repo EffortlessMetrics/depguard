@@ -15,6 +15,8 @@ mod fingerprint;
 
 #[cfg(test)]
 mod proptest;
+#[cfg(test)]
+mod test_support;
 
 pub use engine::evaluate;
 pub use policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};

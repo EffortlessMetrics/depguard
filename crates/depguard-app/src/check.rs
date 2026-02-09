@@ -207,6 +207,9 @@ pub fn verdict_exit_code(verdict: Verdict) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use depguard_types::{
+        CapabilityAvailability, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1, SeverityV2, ids,
+    };
 
     #[test]
     fn empty_config_uses_defaults() {
@@ -244,5 +247,104 @@ license.workspace = true
         assert_eq!(verdict_exit_code(Verdict::Pass), 0);
         assert_eq!(verdict_exit_code(Verdict::Warn), 0);
         assert_eq!(verdict_exit_code(Verdict::Fail), 2);
+    }
+
+    fn write_manifest(root: &Utf8Path, deps: &str) {
+        let deps_block = if deps.trim().is_empty() {
+            String::new()
+        } else {
+            format!("\n[dependencies]\n{deps}\n")
+        };
+        let content = format!(
+            r#"[package]
+name = "test"
+version = "0.1.0"
+edition = "2021"
+{deps_block}"#
+        );
+        std::fs::write(root.join("Cargo.toml"), content).expect("write Cargo.toml");
+    }
+
+    #[test]
+    fn diff_scope_requires_changed_files() {
+        let tmp = tempfile::tempdir().expect("create temp dir");
+        let root = camino::Utf8Path::from_path(tmp.path()).expect("utf8 path");
+        write_manifest(root, "");
+
+        let input = CheckInput {
+            repo_root: root,
+            config_text: r#"scope = "diff""#,
+            overrides: Overrides::default(),
+            changed_files: None,
+            report_version: ReportVersion::V1,
+        };
+
+        let err = run_check(input).expect_err("expected diff scope error");
+        assert!(
+            err.to_string()
+                .contains("diff scope requires changed_files")
+        );
+    }
+
+    #[test]
+    fn sensor_v1_capabilities_mark_missing() {
+        let tmp = tempfile::tempdir().expect("create temp dir");
+        let root = camino::Utf8Path::from_path(tmp.path()).expect("utf8 path");
+        write_manifest(root, "");
+
+        let input = CheckInput {
+            repo_root: root,
+            config_text: "",
+            overrides: Overrides::default(),
+            changed_files: None,
+            report_version: ReportVersion::SensorV1,
+        };
+
+        let output = run_check(input).expect("run_check");
+        match output.report {
+            ReportVariant::V2(report) => {
+                assert_eq!(report.schema, SCHEMA_SENSOR_REPORT_V1);
+                let caps = report.run.capabilities.as_ref().expect("capabilities");
+                let git = caps.git.as_ref().expect("git capability");
+                assert_eq!(git.status, CapabilityAvailability::Missing);
+                assert_eq!(git.reason.as_deref(), Some(ids::REASON_DIFF_SCOPE_DISABLED));
+                let config = caps.config.as_ref().expect("config capability");
+                assert_eq!(config.status, CapabilityAvailability::Missing);
+                assert_eq!(
+                    config.reason.as_deref(),
+                    Some(ids::REASON_CONFIG_MISSING_DEFAULTED)
+                );
+            }
+            _ => panic!("expected v2 report variant"),
+        }
+    }
+
+    #[test]
+    fn v2_report_converts_findings_and_severity() {
+        let tmp = tempfile::tempdir().expect("create temp dir");
+        let root = camino::Utf8Path::from_path(tmp.path()).expect("utf8 path");
+        write_manifest(root, r#"serde = "*""#);
+
+        let input = CheckInput {
+            repo_root: root,
+            config_text: "",
+            overrides: Overrides::default(),
+            changed_files: None,
+            report_version: ReportVersion::V2,
+        };
+
+        let output = run_check(input).expect("run_check");
+        match output.report {
+            ReportVariant::V2(report) => {
+                assert_eq!(report.schema, SCHEMA_REPORT_V2);
+                let finding = report
+                    .findings
+                    .iter()
+                    .find(|f| f.check_id == ids::CHECK_DEPS_NO_WILDCARDS)
+                    .expect("wildcard finding");
+                assert_eq!(finding.severity, SeverityV2::Error);
+            }
+            _ => panic!("expected v2 report variant"),
+        }
     }
 }

@@ -58,3 +58,40 @@ impl From<Utf8PathBuf> for RepoPath {
         RepoPath::new(value.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repo_path_normalizes_separators_and_prefix() {
+        let path = RepoPath::new(r".\crates\depguard\Cargo.toml");
+        assert_eq!(path.as_str(), "crates/depguard/Cargo.toml");
+
+        let path = RepoPath::new("././Cargo.toml");
+        assert_eq!(path.as_str(), "Cargo.toml");
+    }
+
+    #[test]
+    fn repo_path_empty_defaults_to_dot() {
+        let path = RepoPath::new("");
+        assert_eq!(path.as_str(), ".");
+
+        let path = RepoPath::default();
+        assert_eq!(path.as_str(), ".");
+    }
+
+    #[test]
+    fn repo_path_join_uses_forward_slashes() {
+        let base = RepoPath::new("crates/depguard");
+        let joined = base.join("src/lib.rs");
+        assert_eq!(joined.as_str(), "crates/depguard/src/lib.rs");
+    }
+
+    #[test]
+    fn repo_path_from_utf8_pathbuf() {
+        let buf = Utf8PathBuf::from("crates/depguard");
+        let path = RepoPath::from(buf);
+        assert_eq!(path.as_str(), "crates/depguard");
+    }
+}

@@ -592,3 +592,68 @@ fn main() -> anyhow::Result<()> {
     }
     .context("xtask failed")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_validation_rules() {
+        assert!(is_valid_token("abc"));
+        assert!(is_valid_token("abc_123"));
+        assert!(!is_valid_token("Abc"));
+        assert!(!is_valid_token("abc-def"));
+        assert!(!is_valid_token(""));
+    }
+
+    #[test]
+    fn clean_path_rules() {
+        assert!(is_clean_path("crates/depguard/Cargo.toml"));
+        assert!(!is_clean_path("/abs/path"));
+        assert!(!is_clean_path("..\\escape"));
+        assert!(!is_clean_path("../escape"));
+        assert!(!is_clean_path("C:\\\\Code\\\\proj"));
+    }
+
+    #[test]
+    fn schema_specs_include_expected_and_generate() {
+        let names: Vec<&str> = schema_specs().iter().map(|s| s.filename).collect();
+        assert!(names.contains(&"depguard.report.v1.json"));
+        assert!(names.contains(&"depguard.report.v2.json"));
+        assert!(names.contains(&"depguard.config.v1.json"));
+
+        for spec in schema_specs() {
+            let _schema = (spec.generate)();
+        }
+    }
+
+    #[test]
+    fn project_root_and_dirs_are_consistent() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = project_root();
+        if manifest_dir.ends_with("xtask") {
+            assert_eq!(
+                root,
+                manifest_dir.parent().expect("xtask parent").to_path_buf()
+            );
+        } else {
+            assert_eq!(root, manifest_dir);
+        }
+        assert_eq!(schemas_dir(), root.join("schemas"));
+        assert_eq!(
+            contracts_schemas_dir(),
+            root.join("contracts").join("schemas")
+        );
+        assert_eq!(
+            contracts_fixtures_dir(),
+            root.join("contracts").join("fixtures")
+        );
+    }
+
+    #[test]
+    fn serialize_schema_appends_newline() {
+        let schema = generate_config_schema();
+        let json = serialize_schema(&schema).expect("serialize schema");
+        assert!(json.ends_with('\n'));
+    }
+}

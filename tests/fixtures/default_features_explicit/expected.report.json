@@ -1,0 +1,55 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.default_features_explicit",
+      "code": "default_features_implicit",
+      "message": "dependency 'serde' has inline options but no explicit default-features declaration",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 9
+      },
+      "help": "Add `default-features = true` or `default-features = false` to make the intent explicit.",
+      "fingerprint": "f5da6123218d4f5e6480976ca9560cd622d89805dc4beddf330c92b6e60d73f5",
+      "data": {
+        "current_spec": {
+          "optional": true,
+          "path": "vendor/serde",
+          "version": "1.0"
+        },
+        "dependency": "serde",
+        "fix_action": "add_default_features",
+        "fix_hint": "Add default-features = true or default-features = false",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

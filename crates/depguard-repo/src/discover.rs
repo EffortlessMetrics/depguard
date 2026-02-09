@@ -101,3 +101,143 @@ fn build_globset(patterns: &[String]) -> anyhow::Result<globset::GlobSet> {
     }
     Ok(b.build()?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn utf8_root(tmp: &TempDir) -> Utf8PathBuf {
+        Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path")
+    }
+
+    fn write_file(path: &Utf8Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("create parent");
+        }
+        std::fs::write(path, contents).expect("write file");
+    }
+
+    #[test]
+    fn discover_no_workspace_returns_root_only() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[package]
+name = "solo"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        assert_eq!(paths, vec!["Cargo.toml"]);
+    }
+
+    #[test]
+    fn discover_workspace_members_and_excludes() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*", "tools/**"]
+exclude = ["crates/excluded", "tools/skip*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/excluded/Cargo.toml"),
+            r#"[package]
+name = "excluded"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("tools/util/Cargo.toml"),
+            r#"[package]
+name = "util"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("tools/skip-this/Cargo.toml"),
+            r#"[package]
+name = "skip"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        assert_eq!(
+            paths,
+            vec!["Cargo.toml", "crates/a/Cargo.toml", "tools/util/Cargo.toml"]
+        );
+    }
+
+    #[test]
+    fn discover_workspace_with_empty_members_includes_all() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(&root.join("Cargo.toml"), "[workspace]\n");
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/b/Cargo.toml"),
+            r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                "Cargo.toml",
+                "crates/a/Cargo.toml",
+                "crates/b/Cargo.toml"
+            ]
+        );
+    }
+
+    #[test]
+    fn discover_invalid_glob_returns_error() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["["]
+"#,
+        );
+
+        let err = discover_manifests(&root).unwrap_err();
+        assert!(err.to_string().contains("compile members globset"));
+    }
+}

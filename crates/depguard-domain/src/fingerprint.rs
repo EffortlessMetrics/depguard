@@ -26,3 +26,24 @@ pub fn fingerprint_for_dep(
     let digest = hasher.finalize();
     hex::encode(digest)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fingerprint_is_stable_and_dep_path_sensitive() {
+        let a = fingerprint_for_dep("check", "code", "Cargo.toml", "serde", None);
+        let b = fingerprint_for_dep("check", "code", "Cargo.toml", "serde", None);
+        let c = fingerprint_for_dep(
+            "check",
+            "code",
+            "Cargo.toml",
+            "serde",
+            Some("path/to/serde"),
+        );
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+}

@@ -719,18 +719,9 @@ cc = "1.0"
         // Verify target specs are preserved
         assert_eq!(find_dep("serde").target, None);
         assert_eq!(find_dep("mockall").target, None);
-        assert_eq!(
-            find_dep("nix").target.as_deref(),
-            Some("cfg(unix)")
-        );
-        assert_eq!(
-            find_dep("windows").target.as_deref(),
-            Some("cfg(windows)")
-        );
-        assert_eq!(
-            find_dep("pprof").target.as_deref(),
-            Some("cfg(unix)")
-        );
+        assert_eq!(find_dep("nix").target.as_deref(), Some("cfg(unix)"));
+        assert_eq!(find_dep("windows").target.as_deref(), Some("cfg(windows)"));
+        assert_eq!(find_dep("pprof").target.as_deref(), Some("cfg(unix)"));
         assert_eq!(
             find_dep("cc").target.as_deref(),
             Some("x86_64-unknown-linux-gnu")
@@ -887,5 +878,205 @@ serde = "1.0"
             .line;
         // For table-style deps, the span points to the table section
         assert!(tokio_line.is_some(), "tokio should have a line number");
+    }
+
+    #[test]
+    fn parse_root_manifest_includes_workspace_dependencies() {
+        let manifest = r#"
+[workspace]
+members = ["crates/a"]
+
+[workspace.dependencies]
+serde = "1.0"
+local = { path = "crates/local", version = "0.2.0" }
+inherited.workspace = true
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let (ws_deps, _model) =
+            parse_root_manifest(&manifest_path, manifest).expect("parse root manifest");
+
+        let serde = ws_deps.get("serde").expect("serde dep");
+        assert_eq!(serde.version.as_deref(), Some("1.0"));
+        assert_eq!(serde.path.as_deref(), None);
+        assert!(!serde.workspace);
+
+        let local = ws_deps.get("local").expect("local dep");
+        assert_eq!(local.path.as_deref(), Some("crates/local"));
+        assert_eq!(local.version.as_deref(), Some("0.2.0"));
+
+        let inherited = ws_deps.get("inherited").expect("inherited dep");
+        assert!(inherited.workspace);
+    }
+
+    #[test]
+    fn parse_package_publish_array_controls_publishable() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+publish = []
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let pkg = model.package.expect("package meta");
+        assert!(
+            !pkg.publish,
+            "empty publish array should mean not publishable"
+        );
+
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+publish = ["crates-io"]
+"#;
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let pkg = model.package.expect("package meta");
+        assert!(pkg.publish, "non-empty publish array should be publishable");
+    }
+
+    #[test]
+    fn parse_features_ignores_non_string_entries() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+
+[features]
+feat = ["dep:serde", 1, true]
+empty = "serde"
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+
+        assert_eq!(
+            model.features.get("feat").unwrap(),
+            &vec!["dep:serde".to_string()]
+        );
+        assert_eq!(model.features.get("empty").unwrap(), &Vec::<String>::new());
+    }
+
+    #[test]
+    fn parse_spec_defaults_on_unexpected_value_types() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+
+[dependencies]
+bad = 123
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let dep = model
+            .dependencies
+            .iter()
+            .find(|d| d.name == "bad")
+            .expect("bad dep");
+        assert!(dep.spec.version.is_none());
+        assert!(dep.spec.path.is_none());
+        assert!(!dep.spec.workspace);
+    }
+
+    #[test]
+    fn parse_inline_table_git_fields_and_flags() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+
+[dependencies]
+git_dep = { git = "https://example.com/repo.git", branch = "main", tag = "v1.2.3", rev = "deadbeef", default-features = false, optional = true }
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let dep = model
+            .dependencies
+            .iter()
+            .find(|d| d.name == "git_dep")
+            .expect("git_dep");
+
+        assert_eq!(dep.spec.git.as_deref(), Some("https://example.com/repo.git"));
+        assert_eq!(dep.spec.branch.as_deref(), Some("main"));
+        assert_eq!(dep.spec.tag.as_deref(), Some("v1.2.3"));
+        assert_eq!(dep.spec.rev.as_deref(), Some("deadbeef"));
+        assert_eq!(dep.spec.default_features, Some(false));
+        assert!(dep.spec.optional);
+    }
+
+    #[test]
+    fn parse_table_git_fields_and_flags() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+
+[dependencies.git_dep]
+git = "https://example.com/repo.git"
+branch = "main"
+tag = "v1.2.3"
+rev = "deadbeef"
+default-features = true
+optional = true
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let dep = model
+            .dependencies
+            .iter()
+            .find(|d| d.name == "git_dep")
+            .expect("git_dep");
+
+        assert_eq!(dep.spec.git.as_deref(), Some("https://example.com/repo.git"));
+        assert_eq!(dep.spec.branch.as_deref(), Some("main"));
+        assert_eq!(dep.spec.tag.as_deref(), Some("v1.2.3"));
+        assert_eq!(dep.spec.rev.as_deref(), Some("deadbeef"));
+        assert_eq!(dep.spec.default_features, Some(true));
+        assert!(dep.spec.optional);
+    }
+
+    #[test]
+    fn parse_package_publish_boolean_false() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+publish = false
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let pkg = model.package.expect("package meta");
+        assert!(!pkg.publish, "publish = false should mark as not publishable");
+    }
+
+    #[test]
+    fn parse_target_dependencies_skips_non_table_entries() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+
+[target]
+x86_64-unknown-linux-gnu = "ignore"
+
+[target.'cfg(unix)'.dependencies]
+serde = "1.0"
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest)
+            .expect("parse target manifest");
+
+        assert_eq!(model.dependencies.len(), 1);
+        let dep = &model.dependencies[0];
+        assert_eq!(dep.name, "serde");
+        assert_eq!(dep.target.as_deref(), Some("cfg(unix)"));
     }
 }

@@ -28,3 +28,53 @@ pub struct DomainReport {
     pub data: DepguardData,
     pub counts: SeverityCounts,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use depguard_types::Severity;
+
+    #[test]
+    fn counts_from_findings() {
+        let findings = vec![
+            Finding {
+                severity: Severity::Info,
+                check_id: "a".to_string(),
+                code: "a".to_string(),
+                message: "a".to_string(),
+                location: None,
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+            Finding {
+                severity: Severity::Warning,
+                check_id: "b".to_string(),
+                code: "b".to_string(),
+                message: "b".to_string(),
+                location: None,
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+            Finding {
+                severity: Severity::Error,
+                check_id: "c".to_string(),
+                code: "c".to_string(),
+                message: "c".to_string(),
+                location: None,
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+        ];
+
+        let counts = SeverityCounts::from_findings(&findings);
+        assert_eq!(counts.info, 1);
+        assert_eq!(counts.warning, 1);
+        assert_eq!(counts.error, 1);
+    }
+}

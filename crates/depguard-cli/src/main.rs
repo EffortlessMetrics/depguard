@@ -11,9 +11,9 @@ use depguard_app::{
     parse_report_json, render_annotations, render_markdown, run_check, run_explain,
     runtime_error_report, serialize_report, to_renderable, verdict_exit_code,
 };
-use depguard_types::{ArtifactPointer, ArtifactType};
 use depguard_settings::Overrides;
 use depguard_types::RepoPath;
+use depguard_types::{ArtifactPointer, ArtifactType};
 use std::process::Command;
 
 /// Run mode for depguard check command.
@@ -348,6 +348,39 @@ impl std::fmt::Display for GitDiffError {
 
 impl std::error::Error for GitDiffError {}
 
+fn classify_git_diff_error(base: &str, head: &str, stderr: String) -> GitDiffError {
+    let stderr_lower = stderr.to_lowercase();
+
+    // Detect shallow clone / missing base commit errors.
+    // Git produces various error messages depending on the situation:
+    // - "fatal: ambiguous argument 'origin/main': unknown revision or path"
+    // - "fatal: bad revision 'origin/main..HEAD'"
+    // - "fatal: Invalid revision range"
+    let is_base_unreachable = stderr_lower.contains("unknown revision")
+        || stderr_lower.contains("bad revision")
+        || stderr_lower.contains("invalid revision range")
+        || (stderr_lower.contains("fatal:") && stderr_lower.contains(base.to_lowercase().as_str()));
+
+    // Check if the error specifically mentions the head ref.
+    let is_head_unreachable = !is_base_unreachable
+        && stderr_lower.contains("fatal:")
+        && stderr_lower.contains(head.to_lowercase().as_str());
+
+    if is_base_unreachable {
+        GitDiffError::BaseCommitNotReachable {
+            base: base.to_string(),
+            stderr,
+        }
+    } else if is_head_unreachable {
+        GitDiffError::HeadCommitNotReachable {
+            head: head.to_string(),
+            stderr,
+        }
+    } else {
+        GitDiffError::Other { stderr }
+    }
+}
+
 fn git_changed_files(
     repo_root: &camino::Utf8Path,
     base: &str,
@@ -361,39 +394,7 @@ fn git_changed_files(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let stderr_lower = stderr.to_lowercase();
-
-        // Detect shallow clone / missing base commit errors.
-        // Git produces various error messages depending on the situation:
-        // - "fatal: ambiguous argument 'origin/main': unknown revision or path"
-        // - "fatal: bad revision 'origin/main..HEAD'"
-        // - "fatal: Invalid revision range"
-        let is_base_unreachable = stderr_lower.contains("unknown revision")
-            || stderr_lower.contains("bad revision")
-            || stderr_lower.contains("invalid revision range")
-            || (stderr_lower.contains("fatal:")
-                && stderr_lower.contains(base.to_lowercase().as_str()));
-
-        // Check if the error specifically mentions the head ref.
-        let is_head_unreachable = !is_base_unreachable
-            && stderr_lower.contains("fatal:")
-            && stderr_lower.contains(head.to_lowercase().as_str());
-
-        let err = if is_base_unreachable {
-            GitDiffError::BaseCommitNotReachable {
-                base: base.to_string(),
-                stderr,
-            }
-        } else if is_head_unreachable {
-            GitDiffError::HeadCommitNotReachable {
-                head: head.to_string(),
-                stderr,
-            }
-        } else {
-            GitDiffError::Other { stderr }
-        };
-
-        return Err(err.into());
+        return Err(classify_git_diff_error(base, head, stderr).into());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -545,5 +546,117 @@ mod tests {
 
         assert!(msg.contains("failed to run git"));
         assert!(msg.contains("git not found"));
+    }
+
+    #[test]
+    fn scope_from_config_detects_diff_and_repo() {
+        let cfg = r#"
+            # comment
+            scope = "diff"
+        "#;
+        assert_eq!(scope_from_config(cfg), Some("diff"));
+
+        let cfg = "scope = 'repo'";
+        assert_eq!(scope_from_config(cfg), Some("repo"));
+    }
+
+    #[test]
+    fn scope_from_config_returns_none_for_unknown() {
+        let cfg = r#"
+            scope = "other"
+        "#;
+        assert_eq!(scope_from_config(cfg), None);
+    }
+
+    #[test]
+    fn parse_report_version_accepts_aliases() {
+        assert!(matches!(parse_report_version("v1").unwrap(), ReportVersion::V1));
+        assert!(matches!(parse_report_version("1").unwrap(), ReportVersion::V1));
+        assert!(matches!(
+            parse_report_version("depguard.report.v1").unwrap(),
+            ReportVersion::V1
+        ));
+
+        assert!(matches!(parse_report_version("v2").unwrap(), ReportVersion::V2));
+        assert!(matches!(parse_report_version("2").unwrap(), ReportVersion::V2));
+        assert!(matches!(
+            parse_report_version("depguard.report.v2").unwrap(),
+            ReportVersion::V2
+        ));
+
+        assert!(matches!(
+            parse_report_version("sensor-v1").unwrap(),
+            ReportVersion::SensorV1
+        ));
+        assert!(matches!(
+            parse_report_version("sensor.report.v1").unwrap(),
+            ReportVersion::SensorV1
+        ));
+    }
+
+    #[test]
+    fn parse_report_version_rejects_unknown() {
+        let err = parse_report_version("nope").unwrap_err();
+        assert!(err.to_string().contains("unknown report version"));
+    }
+
+    #[test]
+    fn report_exit_code_maps_v1_and_v2_verdicts() {
+        let mut v1 = empty_report(ReportVersion::V1, "repo", "strict");
+        if let ReportVariant::V1(ref mut r) = v1 {
+            r.verdict = depguard_types::Verdict::Fail;
+        }
+        assert_eq!(report_exit_code(&v1), 2);
+
+        let mut v2 = empty_report(ReportVersion::V2, "repo", "strict");
+        if let ReportVariant::V2(ref mut r) = v2 {
+            r.verdict.status = depguard_types::VerdictStatus::Pass;
+        }
+        assert_eq!(report_exit_code(&v2), 0);
+
+        if let ReportVariant::V2(ref mut r) = v2 {
+            r.verdict.status = depguard_types::VerdictStatus::Warn;
+        }
+        assert_eq!(report_exit_code(&v2), 0);
+
+        if let ReportVariant::V2(ref mut r) = v2 {
+            r.verdict.status = depguard_types::VerdictStatus::Skip;
+        }
+        assert_eq!(report_exit_code(&v2), 0);
+
+        if let ReportVariant::V2(ref mut r) = v2 {
+            r.verdict.status = depguard_types::VerdictStatus::Fail;
+        }
+        assert_eq!(report_exit_code(&v2), 2);
+    }
+
+    #[test]
+    fn classify_git_diff_error_variants() {
+        let err = classify_git_diff_error(
+            "origin/main",
+            "HEAD",
+            "fatal: ambiguous argument 'origin/main': unknown revision or path".to_string(),
+        );
+        assert!(matches!(
+            err,
+            GitDiffError::BaseCommitNotReachable { .. }
+        ));
+
+        let err = classify_git_diff_error(
+            "origin/main",
+            "feature-branch",
+            "fatal: bad object feature-branch".to_string(),
+        );
+        assert!(matches!(
+            err,
+            GitDiffError::HeadCommitNotReachable { .. }
+        ));
+
+        let err = classify_git_diff_error(
+            "origin/main",
+            "HEAD",
+            "fatal: not a git repository".to_string(),
+        );
+        assert!(matches!(err, GitDiffError::Other { .. }));
     }
 }

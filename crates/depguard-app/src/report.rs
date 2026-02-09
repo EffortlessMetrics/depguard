@@ -319,3 +319,278 @@ pub fn add_artifact(report: &mut ReportVariant, artifact: ArtifactPointer) {
         r.artifacts.get_or_insert_with(Vec::new).push(artifact);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use depguard_types::{
+        DepguardReportV1, DepguardReportV2, Finding, FindingV2, Location, RepoPath, RunMeta,
+        Severity, SeverityV2, ToolMeta, ToolMetaV2, Verdict, VerdictCounts, VerdictStatus,
+        VerdictV2, ids,
+    };
+    use time::OffsetDateTime;
+
+    fn sample_data() -> DepguardData {
+        DepguardData {
+            scope: "repo".to_string(),
+            profile: "strict".to_string(),
+            manifests_scanned: 1,
+            dependencies_scanned: 1,
+            findings_total: 1,
+            findings_emitted: 1,
+            truncated_reason: None,
+        }
+    }
+
+    fn sample_v1(schema: &str) -> DepguardReportV1 {
+        DepguardReportV1 {
+            schema: schema.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: "0.0.0".to_string(),
+            },
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: OffsetDateTime::UNIX_EPOCH,
+            verdict: Verdict::Warn,
+            findings: vec![Finding {
+                severity: Severity::Warning,
+                check_id: "deps.no_wildcards".to_string(),
+                code: "wildcard_version".to_string(),
+                message: "bad".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(1),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            }],
+            data: sample_data(),
+        }
+    }
+
+    fn sample_v2(schema: &str, status: VerdictStatus, severity: SeverityV2) -> DepguardReportV2 {
+        DepguardReportV2 {
+            schema: schema.to_string(),
+            tool: ToolMetaV2 {
+                name: "depguard".to_string(),
+                version: "0.0.0".to_string(),
+                commit: None,
+            },
+            run: RunMeta {
+                started_at: OffsetDateTime::UNIX_EPOCH,
+                ended_at: Some(OffsetDateTime::UNIX_EPOCH),
+                duration_ms: Some(0),
+                host: None,
+                ci: None,
+                git: None,
+                capabilities: None,
+            },
+            verdict: VerdictV2 {
+                status,
+                counts: VerdictCounts {
+                    info: 0,
+                    warn: 0,
+                    error: if matches!(severity, SeverityV2::Error) {
+                        1
+                    } else {
+                        0
+                    },
+                    suppressed: 0,
+                },
+                reasons: Vec::new(),
+            },
+            findings: vec![FindingV2 {
+                severity,
+                check_id: "deps.no_wildcards".to_string(),
+                code: "wildcard_version".to_string(),
+                message: "bad".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(1),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            }],
+            artifacts: None,
+            data: sample_data(),
+        }
+    }
+
+    #[test]
+    fn parse_report_json_recognizes_versions() {
+        let v1 = sample_v1("receipt.envelope.v1");
+        let parsed = parse_report_json(&serde_json::to_string(&v1).unwrap()).unwrap();
+        assert!(matches!(parsed, ReportVariant::V1(_)));
+
+        let v2 = sample_v2(SCHEMA_REPORT_V2, VerdictStatus::Warn, SeverityV2::Warn);
+        let parsed = parse_report_json(&serde_json::to_string(&v2).unwrap()).unwrap();
+        assert!(matches!(parsed, ReportVariant::V2(_)));
+
+        let sensor = sample_v2(
+            SCHEMA_SENSOR_REPORT_V1,
+            VerdictStatus::Pass,
+            SeverityV2::Info,
+        );
+        let parsed = parse_report_json(&serde_json::to_string(&sensor).unwrap()).unwrap();
+        assert!(matches!(parsed, ReportVariant::V2(_)));
+    }
+
+    #[test]
+    fn parse_report_json_fallbacks_work() {
+        let mut v2 = sample_v2("custom.schema", VerdictStatus::Pass, SeverityV2::Info);
+        v2.schema = "custom.schema".to_string();
+        let parsed = parse_report_json(&serde_json::to_string(&v2).unwrap()).unwrap();
+        assert!(matches!(parsed, ReportVariant::V2(_)));
+
+        let mut v1 = sample_v1("custom.v1");
+        v1.schema = "custom.v1".to_string();
+        let parsed = parse_report_json(&serde_json::to_string(&v1).unwrap()).unwrap();
+        assert!(matches!(parsed, ReportVariant::V1(_)));
+    }
+
+    #[test]
+    fn parse_report_json_unknown_schema_errors() {
+        let text = r#"{"schema":"unknown"}"#;
+        let err = parse_report_json(text).unwrap_err();
+        assert!(err.to_string().contains("unknown report schema"));
+    }
+
+    #[test]
+    fn serialize_report_smoke() {
+        let v1 = ReportVariant::V1(sample_v1(SCHEMA_REPORT_V1));
+        let bytes = serialize_report(&v1).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains(SCHEMA_REPORT_V1));
+
+        let v2 = ReportVariant::V2(sample_v2(
+            SCHEMA_REPORT_V2,
+            VerdictStatus::Pass,
+            SeverityV2::Info,
+        ));
+        let bytes = serialize_report(&v2).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains(SCHEMA_REPORT_V2));
+    }
+
+    #[test]
+    fn to_renderable_maps_severity_and_verdict() {
+        let v1 = ReportVariant::V1(sample_v1(SCHEMA_REPORT_V1));
+        let renderable = to_renderable(&v1);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Warn);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Warning);
+
+        let v2 = ReportVariant::V2(sample_v2(
+            SCHEMA_REPORT_V2,
+            VerdictStatus::Skip,
+            SeverityV2::Warn,
+        ));
+        let renderable = to_renderable(&v2);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Skip);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Warning);
+    }
+
+    #[test]
+    fn empty_report_versions() {
+        match empty_report(ReportVersion::V1, "repo", "strict") {
+            ReportVariant::V1(r) => {
+                assert_eq!(r.schema, SCHEMA_REPORT_V1);
+                assert_eq!(r.verdict, Verdict::Pass);
+                assert_eq!(r.started_at, r.finished_at);
+            }
+            _ => panic!("expected v1 report"),
+        }
+
+        match empty_report(ReportVersion::V2, "repo", "strict") {
+            ReportVariant::V2(r) => {
+                assert_eq!(r.schema, SCHEMA_REPORT_V2);
+                assert!(r.run.capabilities.is_none());
+            }
+            _ => panic!("expected v2 report"),
+        }
+
+        match empty_report(ReportVersion::SensorV1, "repo", "strict") {
+            ReportVariant::V2(r) => {
+                assert_eq!(r.schema, SCHEMA_SENSOR_REPORT_V1);
+                let caps = r.run.capabilities.as_ref().expect("caps");
+                assert!(caps.git.is_some());
+                assert!(caps.config.is_some());
+            }
+            _ => panic!("expected sensor report"),
+        }
+    }
+
+    #[test]
+    fn runtime_error_report_versions() {
+        match runtime_error_report(ReportVersion::V1, "boom") {
+            ReportVariant::V1(r) => {
+                assert_eq!(r.verdict, Verdict::Fail);
+                assert_eq!(r.findings.len(), 1);
+            }
+            _ => panic!("expected v1 report"),
+        }
+
+        match runtime_error_report(ReportVersion::V2, "boom") {
+            ReportVariant::V2(r) => {
+                assert_eq!(r.verdict.status, VerdictStatus::Fail);
+                assert_eq!(r.findings.len(), 1);
+                assert_eq!(r.verdict.counts.error, 1);
+            }
+            _ => panic!("expected v2 report"),
+        }
+
+        match runtime_error_report(ReportVersion::SensorV1, "boom") {
+            ReportVariant::V2(r) => {
+                let caps = r.run.capabilities.as_ref().expect("caps");
+                assert_eq!(
+                    caps.git.as_ref().unwrap().status,
+                    CapabilityAvailability::Missing
+                );
+                assert_eq!(
+                    caps.git.as_ref().unwrap().reason.as_deref(),
+                    Some(ids::REASON_RUNTIME_ERROR)
+                );
+            }
+            _ => panic!("expected sensor report"),
+        }
+    }
+
+    #[test]
+    fn add_artifact_only_updates_v2() {
+        let mut v1 = ReportVariant::V1(sample_v1(SCHEMA_REPORT_V1));
+        add_artifact(
+            &mut v1,
+            ArtifactPointer {
+                artifact_type: depguard_types::ArtifactType::Comment,
+                path: "comment.md".to_string(),
+                format: Some("text/markdown".to_string()),
+            },
+        );
+        assert!(matches!(v1, ReportVariant::V1(_)));
+
+        let mut v2 = ReportVariant::V2(sample_v2(
+            SCHEMA_REPORT_V2,
+            VerdictStatus::Pass,
+            SeverityV2::Info,
+        ));
+        add_artifact(
+            &mut v2,
+            ArtifactPointer {
+                artifact_type: depguard_types::ArtifactType::Annotation,
+                path: "annotations.txt".to_string(),
+                format: None,
+            },
+        );
+        match v2 {
+            ReportVariant::V2(ref r) => {
+                assert_eq!(r.artifacts.as_ref().unwrap().len(), 1);
+            }
+            _ => panic!("expected v2 report"),
+        }
+    }
+}
