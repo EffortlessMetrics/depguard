@@ -563,16 +563,16 @@ fn fixture_findings_have_clean_paths() {
 
         if let Some(findings) = value.get("findings").and_then(|v| v.as_array()) {
             for (i, finding) in findings.iter().enumerate() {
-                if let Some(loc) = finding.get("location") {
-                    if let Some(p) = loc.get("path").and_then(|v| v.as_str()) {
-                        assert!(
-                            is_clean_path(p),
-                            "{}: finding[{}].location.path '{}' is not clean (no absolute, no ../, forward slashes only)",
-                            filename,
-                            i,
-                            p
-                        );
-                    }
+                if let Some(loc) = finding.get("location")
+                    && let Some(p) = loc.get("path").and_then(|v| v.as_str())
+                {
+                    assert!(
+                        is_clean_path(p),
+                        "{}: finding[{}].location.path '{}' is not clean (no absolute, no ../, forward slashes only)",
+                        filename,
+                        i,
+                        p
+                    );
                 }
             }
         }

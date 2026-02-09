@@ -591,8 +591,8 @@ proptest! {
         for f in &sorted {
             let curr_path = f.location.as_ref().map(|l| l.path.as_str().to_string()).unwrap_or_else(|| "~".to_string());
 
-            if prev_severity == Some(f.severity) {
-                if let Some(ref pp) = prev_path {
+            if prev_severity == Some(f.severity)
+                && let Some(ref pp) = prev_path {
                     prop_assert!(
                         pp <= &curr_path,
                         "Path order violation within severity {:?}: {} > {}",
@@ -601,7 +601,6 @@ proptest! {
                         curr_path
                     );
                 }
-            }
 
             prev_severity = Some(f.severity);
             prev_path = Some(curr_path);

@@ -570,15 +570,27 @@ mod tests {
 
     #[test]
     fn parse_report_version_accepts_aliases() {
-        assert!(matches!(parse_report_version("v1").unwrap(), ReportVersion::V1));
-        assert!(matches!(parse_report_version("1").unwrap(), ReportVersion::V1));
+        assert!(matches!(
+            parse_report_version("v1").unwrap(),
+            ReportVersion::V1
+        ));
+        assert!(matches!(
+            parse_report_version("1").unwrap(),
+            ReportVersion::V1
+        ));
         assert!(matches!(
             parse_report_version("depguard.report.v1").unwrap(),
             ReportVersion::V1
         ));
 
-        assert!(matches!(parse_report_version("v2").unwrap(), ReportVersion::V2));
-        assert!(matches!(parse_report_version("2").unwrap(), ReportVersion::V2));
+        assert!(matches!(
+            parse_report_version("v2").unwrap(),
+            ReportVersion::V2
+        ));
+        assert!(matches!(
+            parse_report_version("2").unwrap(),
+            ReportVersion::V2
+        ));
         assert!(matches!(
             parse_report_version("depguard.report.v2").unwrap(),
             ReportVersion::V2
@@ -637,20 +649,14 @@ mod tests {
             "HEAD",
             "fatal: ambiguous argument 'origin/main': unknown revision or path".to_string(),
         );
-        assert!(matches!(
-            err,
-            GitDiffError::BaseCommitNotReachable { .. }
-        ));
+        assert!(matches!(err, GitDiffError::BaseCommitNotReachable { .. }));
 
         let err = classify_git_diff_error(
             "origin/main",
             "feature-branch",
             "fatal: bad object feature-branch".to_string(),
         );
-        assert!(matches!(
-            err,
-            GitDiffError::HeadCommitNotReachable { .. }
-        ));
+        assert!(matches!(err, GitDiffError::HeadCommitNotReachable { .. }));
 
         let err = classify_git_diff_error(
             "origin/main",

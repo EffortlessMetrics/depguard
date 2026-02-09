@@ -217,11 +217,7 @@ version = "0.1.0"
         let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
         assert_eq!(
             paths,
-            vec![
-                "Cargo.toml",
-                "crates/a/Cargo.toml",
-                "crates/b/Cargo.toml"
-            ]
+            vec!["Cargo.toml", "crates/a/Cargo.toml", "crates/b/Cargo.toml"]
         );
     }
 

@@ -1001,7 +1001,10 @@ git_dep = { git = "https://example.com/repo.git", branch = "main", tag = "v1.2.3
             .find(|d| d.name == "git_dep")
             .expect("git_dep");
 
-        assert_eq!(dep.spec.git.as_deref(), Some("https://example.com/repo.git"));
+        assert_eq!(
+            dep.spec.git.as_deref(),
+            Some("https://example.com/repo.git")
+        );
         assert_eq!(dep.spec.branch.as_deref(), Some("main"));
         assert_eq!(dep.spec.tag.as_deref(), Some("v1.2.3"));
         assert_eq!(dep.spec.rev.as_deref(), Some("deadbeef"));
@@ -1033,7 +1036,10 @@ optional = true
             .find(|d| d.name == "git_dep")
             .expect("git_dep");
 
-        assert_eq!(dep.spec.git.as_deref(), Some("https://example.com/repo.git"));
+        assert_eq!(
+            dep.spec.git.as_deref(),
+            Some("https://example.com/repo.git")
+        );
         assert_eq!(dep.spec.branch.as_deref(), Some("main"));
         assert_eq!(dep.spec.tag.as_deref(), Some("v1.2.3"));
         assert_eq!(dep.spec.rev.as_deref(), Some("deadbeef"));
@@ -1053,7 +1059,10 @@ publish = false
         let manifest_path = RepoPath::new("Cargo.toml");
         let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
         let pkg = model.package.expect("package meta");
-        assert!(!pkg.publish, "publish = false should mark as not publishable");
+        assert!(
+            !pkg.publish,
+            "publish = false should mark as not publishable"
+        );
     }
 
     #[test]
@@ -1071,8 +1080,7 @@ serde = "1.0"
 "#;
 
         let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest)
-            .expect("parse target manifest");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse target manifest");
 
         assert_eq!(model.dependencies.len(), 1);
         let dep = &model.dependencies[0];

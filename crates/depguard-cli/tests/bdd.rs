@@ -789,13 +789,13 @@ edition = "2021"
             }
         } else {
             // Handle subcommand options
-            if arg == "--report" {
-                if let Some(report_path) = &world.report_path {
-                    subcommand_args.push("--report".to_string());
-                    subcommand_args.push(report_path.to_string_lossy().to_string());
-                    i += 2; // Skip both --report and its placeholder value
-                    continue;
-                }
+            if arg == "--report"
+                && let Some(report_path) = &world.report_path
+            {
+                subcommand_args.push("--report".to_string());
+                subcommand_args.push(report_path.to_string_lossy().to_string());
+                i += 2; // Skip both --report and its placeholder value
+                continue;
             }
 
             if arg == "--report-out" {
@@ -870,27 +870,23 @@ edition = "2021"
     world.stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
     // Parse report if it exists
-    if let Some(report_path) = &world.report_path {
-        if report_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(report_path) {
-                if let Ok(json) = serde_json::from_str(&content) {
-                    world.report = Some(json);
-                }
-            }
-        }
+    if let Some(report_path) = &world.report_path
+        && report_path.exists()
+        && let Ok(content) = std::fs::read_to_string(report_path)
+        && let Ok(json) = serde_json::from_str(&content)
+    {
+        world.report = Some(json);
     }
 
-    if is_check {
-        if let Some(report) = world.report.as_ref() {
-            let verdict = extract_verdict(report);
-            if verdict == "pass" {
-                let manifests = report["data"]["manifests_scanned"].as_i64().unwrap_or(0);
-                assert!(
-                    manifests > 0,
-                    "Pass verdict requires manifests_scanned > 0 (got {})",
-                    manifests
-                );
-            }
+    if is_check && let Some(report) = world.report.as_ref() {
+        let verdict = extract_verdict(report);
+        if verdict == "pass" {
+            let manifests = report["data"]["manifests_scanned"].as_i64().unwrap_or(0);
+            assert!(
+                manifests > 0,
+                "Pass verdict requires manifests_scanned > 0 (got {})",
+                manifests
+            );
         }
     }
 }
@@ -1571,10 +1567,10 @@ fn then_report_validates_schema(world: &mut DepguardWorld, _schema_path: String)
     assert!(report.get("verdict").is_some());
     assert!(report.get("findings").is_some());
     // v2 receipts have a run object
-    if let Some(schema) = report.get("schema").and_then(|v| v.as_str()) {
-        if schema == "depguard.report.v2" {
-            assert!(report.get("run").is_some());
-        }
+    if let Some(schema) = report.get("schema").and_then(|v| v.as_str())
+        && schema == "depguard.report.v2"
+    {
+        assert!(report.get("run").is_some());
     }
 }
 
@@ -2025,15 +2021,15 @@ fn then_only_path_analyzed(world: &mut DepguardWorld, path: String) {
     let findings = report["findings"].as_array().expect("findings array");
     assert!(!findings.is_empty(), "Expected findings to be reported");
     for f in findings {
-        if let Some(loc) = f.get("location") {
-            if let Some(p) = loc.get("path").and_then(|v| v.as_str()) {
-                assert!(
-                    p.contains(&path),
-                    "Expected only '{}' to be analyzed, got finding path '{}'",
-                    path,
-                    p
-                );
-            }
+        if let Some(loc) = f.get("location")
+            && let Some(p) = loc.get("path").and_then(|v| v.as_str())
+        {
+            assert!(
+                p.contains(&path),
+                "Expected only '{}' to be analyzed, got finding path '{}'",
+                path,
+                p
+            );
         }
     }
 }
@@ -2158,13 +2154,13 @@ fn given_new_cargo_has_wildcard(world: &mut DepguardWorld) {
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        if entry.file_type().is_file() && entry.file_name() == "Cargo.toml" {
-            if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains('*') {
-                    found = true;
-                    break;
-                }
-            }
+        if entry.file_type().is_file()
+            && entry.file_name() == "Cargo.toml"
+            && let Ok(content) = std::fs::read_to_string(entry.path())
+            && content.contains('*')
+        {
+            found = true;
+            break;
         }
     }
     assert!(found, "Expected a Cargo.toml with wildcard dependency");
@@ -2188,13 +2184,13 @@ fn given_modification_adds_path_dep(world: &mut DepguardWorld) {
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        if entry.file_type().is_file() && entry.file_name() == "Cargo.toml" {
-            if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains("path =") {
-                    found = true;
-                    break;
-                }
-            }
+        if entry.file_type().is_file()
+            && entry.file_name() == "Cargo.toml"
+            && let Ok(content) = std::fs::read_to_string(entry.path())
+            && content.contains("path =")
+        {
+            found = true;
+            break;
         }
     }
     assert!(found, "Expected a Cargo.toml with a path dependency");

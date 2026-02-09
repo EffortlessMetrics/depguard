@@ -266,28 +266,27 @@ fn conform() -> anyhow::Result<()> {
         // 2. Path hygiene
         if let Some(findings) = value.get("findings").and_then(|v| v.as_array()) {
             for (i, finding) in findings.iter().enumerate() {
-                if let Some(loc) = finding.get("location") {
-                    if let Some(path_str) = loc.get("path").and_then(|v| v.as_str()) {
-                        if !is_clean_path(path_str) {
-                            errors.push(format!(
+                if let Some(loc) = finding.get("location")
+                    && let Some(path_str) = loc.get("path").and_then(|v| v.as_str())
+                    && !is_clean_path(path_str)
+                {
+                    errors.push(format!(
                                 "{}: finding[{}].location.path '{}' is not clean (no absolute, no ../, forward slashes only)",
                                 filename, i, path_str
                             ));
-                        }
-                    }
                 }
             }
         }
 
         if let Some(artifacts) = value.get("artifacts").and_then(|v| v.as_array()) {
             for (i, artifact) in artifacts.iter().enumerate() {
-                if let Some(path_str) = artifact.get("path").and_then(|v| v.as_str()) {
-                    if !is_clean_path(path_str) {
-                        errors.push(format!(
-                            "{}: artifacts[{}].path '{}' is not clean",
-                            filename, i, path_str
-                        ));
-                    }
+                if let Some(path_str) = artifact.get("path").and_then(|v| v.as_str())
+                    && !is_clean_path(path_str)
+                {
+                    errors.push(format!(
+                        "{}: artifacts[{}].path '{}' is not clean",
+                        filename, i, path_str
+                    ));
                 }
             }
         }
@@ -299,13 +298,13 @@ fn conform() -> anyhow::Result<()> {
             .and_then(|v| v.as_array())
         {
             for (i, reason) in reasons.iter().enumerate() {
-                if let Some(s) = reason.as_str() {
-                    if !is_valid_token(s) {
-                        errors.push(format!(
-                            "{}: verdict.reasons[{}] '{}' is not a valid token",
-                            filename, i, s
-                        ));
-                    }
+                if let Some(s) = reason.as_str()
+                    && !is_valid_token(s)
+                {
+                    errors.push(format!(
+                        "{}: verdict.reasons[{}] '{}' is not a valid token",
+                        filename, i, s
+                    ));
                 }
             }
         }
@@ -317,13 +316,13 @@ fn conform() -> anyhow::Result<()> {
             .and_then(|v| v.as_object())
         {
             for (cap_name, cap_value) in caps {
-                if let Some(reason) = cap_value.get("reason").and_then(|v| v.as_str()) {
-                    if !is_valid_token(reason) {
-                        errors.push(format!(
-                            "{}: capabilities.{}.reason '{}' is not a valid token",
-                            filename, cap_name, reason
-                        ));
-                    }
+                if let Some(reason) = cap_value.get("reason").and_then(|v| v.as_str())
+                    && !is_valid_token(reason)
+                {
+                    errors.push(format!(
+                        "{}: capabilities.{}.reason '{}' is not a valid token",
+                        filename, cap_name, reason
+                    ));
                 }
             }
         }
