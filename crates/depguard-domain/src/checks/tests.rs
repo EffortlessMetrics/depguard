@@ -160,6 +160,62 @@ fn git_requires_version_respects_publish_policy_and_allowlist() {
 }
 
 #[test]
+fn git_requires_version_includes_dep_without_target() {
+    let deps = vec![dep_decl(
+        "bad",
+        DepKind::Normal,
+        DepSpec {
+            git: Some("https://example.com/bad.git".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("crates/a/Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check_allow(
+        ids::CHECK_DEPS_GIT_REQUIRES_VERSION,
+        Severity::Warning,
+        Vec::new(),
+        false,
+    );
+
+    let mut out = Vec::new();
+    git_requires_version::run(&model, &cfg, &mut out);
+    assert_eq!(out.len(), 1);
+    assert!(out[0].data.get("target").is_none());
+}
+
+#[test]
+fn git_requires_version_skips_versioned_git_deps() {
+    let deps = vec![dep_decl(
+        "versioned",
+        DepKind::Normal,
+        DepSpec {
+            git: Some("https://example.com/versioned.git".to_string()),
+            version: Some("1.2.3".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("crates/a/Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check_allow(
+        ids::CHECK_DEPS_GIT_REQUIRES_VERSION,
+        Severity::Warning,
+        Vec::new(),
+        false,
+    );
+
+    let mut out = Vec::new();
+    git_requires_version::run(&model, &cfg, &mut out);
+    assert!(out.is_empty());
+}
+
+#[test]
 fn path_safety_reports_absolute_and_escape_with_allowlist() {
     let deps = vec![
         dep_decl(
@@ -208,6 +264,35 @@ fn path_safety_reports_absolute_and_escape_with_allowlist() {
     assert_eq!(out[0].code, ids::CODE_ABSOLUTE_PATH);
     assert_eq!(out[1].code, ids::CODE_PARENT_ESCAPE);
     assert_eq!(out[1].data["target"], "cfg(windows)");
+}
+
+#[test]
+fn path_safety_absolute_path_with_target_includes_target() {
+    let deps = vec![dep_decl(
+        "abs",
+        DepKind::Normal,
+        DepSpec {
+            path: Some("/abs/path".to_string()),
+            ..DepSpec::default()
+        },
+        Some("cfg(unix)"),
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check_allow(
+        ids::CHECK_DEPS_PATH_SAFETY,
+        Severity::Warning,
+        Vec::new(),
+        false,
+    );
+
+    let mut out = Vec::new();
+    path_safety::run(&model, &cfg, &mut out);
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].code, ids::CODE_ABSOLUTE_PATH);
+    assert_eq!(out[0].data["target"], "cfg(unix)");
 }
 
 #[test]

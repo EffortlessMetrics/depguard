@@ -748,20 +748,36 @@ proptest! {
                     publish: true,
                 }),
                 features: BTreeMap::new(),
-                dependencies: vec![DependencyDecl {
-                    kind: DepKind::Normal,
-                    name: dep_name,
-                    spec: DepSpec {
-                        workspace: true,
-                        ..DepSpec::default()
+                dependencies: vec![
+                    DependencyDecl {
+                        kind: DepKind::Normal,
+                        name: dep_name.clone(),
+                        spec: DepSpec {
+                            workspace: true,
+                            ..DepSpec::default()
+                        },
+                        location: Some(Location {
+                            path: RepoPath::new("Cargo.toml"),
+                            line: Some(10),
+                            col: None,
+                        }),
+                        target: None,
                     },
-                    location: Some(Location {
-                        path: RepoPath::new("Cargo.toml"),
-                        line: Some(10),
-                        col: None,
-                    }),
-                    target: None,
-                }],
+                    DependencyDecl {
+                        kind: DepKind::Normal,
+                        name: format!("{dep_name}_wild"),
+                        spec: DepSpec {
+                            version: Some("*".to_string()),
+                            ..DepSpec::default()
+                        },
+                        location: Some(Location {
+                            path: RepoPath::new("Cargo.toml"),
+                            line: Some(12),
+                            col: None,
+                        }),
+                        target: None,
+                    },
+                ],
             }],
         };
 
@@ -898,20 +914,36 @@ proptest! {
                     publish: false, // Not publishable
                 }),
                 features: BTreeMap::new(),
-                dependencies: vec![DependencyDecl {
-                    kind: DepKind::Normal,
-                    name: dep_name,
-                    spec: DepSpec {
-                        path: Some(path),
-                        ..DepSpec::default()
+                dependencies: vec![
+                    DependencyDecl {
+                        kind: DepKind::Normal,
+                        name: dep_name.clone(),
+                        spec: DepSpec {
+                            path: Some(path),
+                            ..DepSpec::default()
+                        },
+                        location: Some(Location {
+                            path: RepoPath::new("Cargo.toml"),
+                            line: Some(10),
+                            col: None,
+                        }),
+                        target: None,
                     },
-                    location: Some(Location {
-                        path: RepoPath::new("Cargo.toml"),
-                        line: Some(10),
-                        col: None,
-                    }),
-                    target: None,
-                }],
+                    DependencyDecl {
+                        kind: DepKind::Normal,
+                        name: format!("{dep_name}_wild"),
+                        spec: DepSpec {
+                            version: Some("*".to_string()),
+                            ..DepSpec::default()
+                        },
+                        location: Some(Location {
+                            path: RepoPath::new("Cargo.toml"),
+                            line: Some(12),
+                            col: None,
+                        }),
+                        target: None,
+                    },
+                ],
             }],
         };
 
@@ -1004,23 +1036,36 @@ proptest! {
     fn report_findings_are_sorted(num_deps in 1usize..20) {
         // Create a model with violations that will produce findings in random order
         let deps: Vec<DependencyDecl> = (0..num_deps)
-            .map(|i| DependencyDecl {
-                kind: DepKind::Normal,
-                name: format!("dep{}", num_deps - i), // Reverse order names
-                spec: DepSpec {
-                    version: Some("*".to_string()),
-                    ..DepSpec::default()
-                },
-                location: Some(Location {
-                    path: RepoPath::new(if i % 2 == 0 {
-                        "crates/a/Cargo.toml"
-                    } else {
-                        "Cargo.toml"
+            .map(|i| {
+                let spec = match i % 3 {
+                    0 => DepSpec {
+                        version: Some("*".to_string()),
+                        ..DepSpec::default()
+                    },
+                    1 => DepSpec {
+                        path: Some("local/dep".to_string()),
+                        ..DepSpec::default()
+                    },
+                    _ => DepSpec {
+                        path: Some("/abs/path".to_string()),
+                        ..DepSpec::default()
+                    },
+                };
+                DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: format!("dep{}", num_deps - i), // Reverse order names
+                    spec,
+                    location: Some(Location {
+                        path: RepoPath::new(if i % 2 == 0 {
+                            "crates/a/Cargo.toml"
+                        } else {
+                            "Cargo.toml"
+                        }),
+                        line: Some((num_deps - i) as u32),
+                        col: None,
                     }),
-                    line: Some((num_deps - i) as u32),
-                    col: None,
-                }),
-                target: None,
+                    target: None,
+                }
             })
             .collect();
 
@@ -1038,7 +1083,13 @@ proptest! {
             }],
         };
 
-        let cfg = config_all_enabled(Severity::Warning);
+        let mut cfg = config_all_enabled(Severity::Warning);
+        if let Some(check) = cfg.checks.get_mut(ids::CHECK_DEPS_NO_WILDCARDS) {
+            check.severity = Severity::Error;
+        }
+        if let Some(check) = cfg.checks.get_mut(ids::CHECK_DEPS_PATH_SAFETY) {
+            check.severity = Severity::Info;
+        }
         let report = evaluate(&model, &cfg);
 
         // Verify findings are sorted by severity, path, line, check_id, code, message
@@ -1081,6 +1132,8 @@ proptest! {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
+    use proptest::test_runner::TestRunner;
+    use proptest::strategy::ValueTree;
 
     #[test]
     fn test_dep_spec_string_version_shape() {
@@ -1181,6 +1234,17 @@ mod unit_tests {
                 data: serde_json::Value::Null,
             },
             Finding {
+                severity: Severity::Error,
+                check_id: "c.check".to_string(),
+                code: "code1".to_string(),
+                message: "msg".to_string(),
+                location: None,
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+            Finding {
                 severity: Severity::Info,
                 check_id: "a.check".to_string(),
                 code: "code1".to_string(),
@@ -1197,8 +1261,7 @@ mod unit_tests {
             },
         ];
 
-        let mut sorted = findings.clone();
-        sorted.sort_by(|a, b| {
+        let cmp = |a: &Finding, b: &Finding| {
             let rank = |s: Severity| match s {
                 Severity::Error => 0u8,
                 Severity::Warning => 1u8,
@@ -1219,17 +1282,74 @@ mod unit_tests {
                 .then(a.check_id.cmp(&b.check_id))
                 .then(a.code.cmp(&b.code))
                 .then(a.message.cmp(&b.message))
-        });
+        };
 
-        // Expected order: Error Cargo.toml:5, Error Cargo.toml:10 (b.check), Warning Cargo.toml:10 (a.check), Info crates/foo/Cargo.toml:1
+        let _ = cmp(&findings[0], &findings[3]);
+
+        let mut sorted = findings.clone();
+        sorted.sort_by(|a, b| cmp(a, b));
+
+        // Expected order: Error Cargo.toml:5, Error Cargo.toml:10 (b.check), Error with no location, Warning Cargo.toml:10 (a.check), Info crates/foo/Cargo.toml:1
         assert_eq!(sorted[0].location.as_ref().unwrap().line, Some(5));
         assert_eq!(sorted[1].check_id, "b.check");
         assert_eq!(sorted[1].location.as_ref().unwrap().line, Some(10));
-        assert_eq!(sorted[2].check_id, "a.check");
-        assert_eq!(sorted[2].location.as_ref().unwrap().line, Some(10));
+        assert!(sorted[2].location.is_none());
+        assert_eq!(sorted[2].check_id, "c.check");
+        assert_eq!(sorted[3].check_id, "a.check");
+        assert_eq!(sorted[3].location.as_ref().unwrap().line, Some(10));
         assert_eq!(
-            sorted[3].location.as_ref().unwrap().path.as_str(),
+            sorted[4].location.as_ref().unwrap().path.as_str(),
             "crates/foo/Cargo.toml"
         );
+    }
+
+    #[test]
+    fn strategy_helpers_produce_values() {
+        let mut runner = TestRunner::default();
+
+        let _ = arb_relative_path().new_tree(&mut runner).unwrap().current();
+        let _ = arb_dep_kind().new_tree(&mut runner).unwrap().current();
+        let _ = arb_dependency_decl()
+            .new_tree(&mut runner)
+            .unwrap()
+            .current();
+    }
+
+    #[test]
+    fn assert_sorted_detects_out_of_order() {
+        let findings = vec![
+            Finding {
+                severity: Severity::Warning,
+                check_id: "b.check".to_string(),
+                code: "code1".to_string(),
+                message: "msg".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(10),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+            Finding {
+                severity: Severity::Error,
+                check_id: "a.check".to_string(),
+                code: "code1".to_string(),
+                message: "msg".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(5),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: None,
+                data: serde_json::Value::Null,
+            },
+        ];
+
+        assert!(assert_sorted(&findings).is_err());
     }
 }

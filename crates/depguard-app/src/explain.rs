@@ -97,30 +97,64 @@ mod tests {
     #[test]
     fn explain_unknown() {
         let output = run_explain("not_a_real_thing");
-        match output {
-            ExplainOutput::NotFound {
-                identifier,
-                available_check_ids,
-                available_codes,
-            } => {
-                assert_eq!(identifier, "not_a_real_thing");
-                assert!(!available_check_ids.is_empty());
-                assert!(!available_codes.is_empty());
-            }
-            _ => panic!("expected NotFound"),
-        }
+        let (identifier, available_check_ids, available_codes) = unwrap_not_found(output);
+        assert_eq!(identifier, "not_a_real_thing");
+        assert!(!available_check_ids.is_empty());
+        assert!(!available_codes.is_empty());
     }
 
     #[test]
     fn format_explanation_output() {
         let output = run_explain("deps.no_wildcards");
-        if let ExplainOutput::Found(exp) = output {
-            let formatted = format_explanation(&exp);
-            assert!(formatted.contains("Remediation"));
-            assert!(formatted.contains("Examples"));
-            assert!(formatted.contains("```toml"));
-        } else {
-            panic!("expected Found");
+        let exp = unwrap_found(output);
+        let formatted = format_explanation(&exp);
+        assert!(formatted.contains("Remediation"));
+        assert!(formatted.contains("Examples"));
+        assert!(formatted.contains("```toml"));
+    }
+
+    #[test]
+    fn format_not_found_output() {
+        let formatted = format_not_found("missing", &["check.one", "check.two"], &["code.one"]);
+        assert!(formatted.contains("Unknown check_id or code: missing"));
+        assert!(formatted.contains("Available check_ids:"));
+        assert!(formatted.contains("check.one"));
+        assert!(formatted.contains("check.two"));
+        assert!(formatted.contains("Available codes:"));
+        assert!(formatted.contains("code.one"));
+    }
+
+    fn unwrap_found(output: ExplainOutput) -> Explanation {
+        match output {
+            ExplainOutput::Found(exp) => exp,
+            _ => panic!("expected Found"),
         }
+    }
+
+    fn unwrap_not_found(
+        output: ExplainOutput,
+    ) -> (String, &'static [&'static str], &'static [&'static str]) {
+        match output {
+            ExplainOutput::NotFound {
+                identifier,
+                available_check_ids,
+                available_codes,
+            } => (identifier, available_check_ids, available_codes),
+            _ => panic!("expected NotFound"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "expected Found")]
+    fn unwrap_found_panics_for_not_found() {
+        let output = run_explain("not_a_real_thing");
+        let _ = unwrap_found(output);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected NotFound")]
+    fn unwrap_not_found_panics_for_found() {
+        let output = run_explain("deps.no_wildcards");
+        let _ = unwrap_not_found(output);
     }
 }

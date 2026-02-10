@@ -3,6 +3,8 @@
 //! This module is intentionally thin: it handles argument parsing, I/O, and exit codes.
 //! All business logic lives in the `depguard-app` crate.
 
+#![allow(unexpected_cfgs)]
+
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -15,6 +17,27 @@ use depguard_settings::Overrides;
 use depguard_types::RepoPath;
 use depguard_types::{ArtifactPointer, ArtifactType};
 use std::process::Command;
+
+#[cfg(test)]
+fn terminate(code: i32) -> ! {
+    panic!("process exit: {code}");
+}
+
+#[cfg(not(test))]
+fn terminate(code: i32) -> ! {
+    #[allow(unexpected_cfgs)]
+    #[cfg(coverage)]
+    {
+        // Best effort: flush coverage data before ExitProcess on Windows.
+        unsafe {
+            unsafe extern "C" {
+                fn __llvm_profile_write_file() -> i32;
+            }
+            let _ = __llvm_profile_write_file();
+        }
+    }
+    std::process::exit(code)
+}
 
 /// Run mode for depguard check command.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
@@ -265,7 +288,7 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
                 RunMode::Standard => code,
             };
             if final_code != 0 {
-                std::process::exit(final_code);
+                terminate(final_code);
             }
             Ok(())
         }
@@ -277,7 +300,7 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             // In cockpit mode, exit 0 if we successfully wrote an error receipt.
             match (opts.mode, receipt_written) {
                 (RunMode::Cockpit, true) => Ok(()),
-                _ => std::process::exit(1),
+                _ => terminate(1),
             }
         }
     }
@@ -428,7 +451,7 @@ fn report_exit_code(report: &ReportVariant) -> i32 {
 }
 
 fn write_report_file(path: &camino::Utf8Path, report: &ReportVariant) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent().filter(|p| !p.as_str().is_empty()) {
         std::fs::create_dir_all(parent).with_context(|| format!("create directory: {}", parent))?;
     }
     let data = serialize_report(report).context("serialize report")?;
@@ -437,7 +460,7 @@ fn write_report_file(path: &camino::Utf8Path, report: &ReportVariant) -> anyhow:
 }
 
 fn write_text_file(path: &camino::Utf8Path, text: &str) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent().filter(|p| !p.as_str().is_empty()) {
         std::fs::create_dir_all(parent).with_context(|| format!("create directory: {}", parent))?;
     }
     std::fs::write(path, text).with_context(|| format!("write text: {}", path))?;
@@ -489,7 +512,7 @@ fn cmd_explain(identifier: &str) -> anyhow::Result<()> {
                 "{}",
                 depguard_app::format_not_found(&identifier, available_check_ids, available_codes)
             );
-            std::process::exit(1);
+            terminate(1);
         }
     }
 }
@@ -497,6 +520,9 @@ fn cmd_explain(identifier: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::Any;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use tempfile::TempDir;
 
     #[test]
     fn git_diff_error_display_base_unreachable() {
@@ -664,5 +690,291 @@ mod tests {
             "fatal: not a git repository".to_string(),
         );
         assert!(matches!(err, GitDiffError::Other { .. }));
+    }
+
+    fn write_manifest(root: &Utf8PathBuf, deps: &str) {
+        let deps_block = if deps.trim().is_empty() {
+            String::new()
+        } else {
+            format!("\n[dependencies]\n{deps}\n")
+        };
+        let content = format!(
+            r#"[package]
+name = "test"
+version = "0.1.0"
+edition = "2021"
+{deps_block}"#
+        );
+        std::fs::write(root.join("Cargo.toml"), content).expect("write Cargo.toml");
+    }
+
+    fn cli_for_root(root: &Utf8PathBuf) -> Cli {
+        Cli {
+            repo_root: root.clone(),
+            config: Utf8PathBuf::from("depguard.toml"),
+            profile: None,
+            scope: None,
+            max_findings: None,
+            cmd: Commands::Check {
+                base: None,
+                head: None,
+                report_out: Utf8PathBuf::from("report.json"),
+                report_version: "v2".to_string(),
+                write_markdown: false,
+                markdown_out: Utf8PathBuf::from("comment.md"),
+                mode: RunMode::Standard,
+            },
+        }
+    }
+
+    fn panic_payload_to_string(err: &(dyn Any + Send)) -> String {
+        if let Some(s) = err.downcast_ref::<String>() {
+            s.clone()
+        } else if let Some(s) = err.downcast_ref::<&str>() {
+            s.to_string()
+        } else {
+            String::new()
+        }
+    }
+
+    fn assert_exit_code(expected: i32, f: impl FnOnce()) {
+        let err = catch_unwind(AssertUnwindSafe(f)).expect_err("expected exit");
+        let msg = panic_payload_to_string(err.as_ref());
+        assert!(msg.contains(&format!("process exit: {expected}")));
+    }
+
+    #[test]
+    fn cmd_check_empty_repo_writes_empty_report_and_markdown() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+
+        std::fs::write(root.join("depguard.toml"), "scope = \"diff\"")
+            .expect("write config");
+
+        let cli = cli_for_root(&root);
+        let report_out = root.join("out").join("report.json");
+        let markdown_out = root.join("out").join("comment.md");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: true,
+            markdown_out: markdown_out.clone(),
+            mode: RunMode::Standard,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+        assert!(report_out.exists());
+        assert!(markdown_out.exists());
+    }
+
+    #[test]
+    fn cmd_check_with_markdown_on_valid_repo() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, "");
+
+        let cli = cli_for_root(&root);
+        let report_out = root.join("artifacts").join("report.json");
+        let markdown_out = root.join("artifacts").join("comment.md");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: true,
+            markdown_out: markdown_out.clone(),
+            mode: RunMode::Standard,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+        assert!(report_out.exists());
+        assert!(markdown_out.exists());
+    }
+
+    #[test]
+    fn cmd_check_cockpit_mode_suppresses_exit_on_fail() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, r#"serde = "*""#);
+
+        let cli = cli_for_root(&root);
+        let report_out = root.join("report.json");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out,
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: root.join("comment.md"),
+            mode: RunMode::Cockpit,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+    }
+
+    #[test]
+    fn cmd_check_standard_mode_exits_on_fail() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, r#"serde = "*""#);
+
+        let cli = cli_for_root(&root);
+        let report_out = root.join("report.json");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: root.join("comment.md"),
+            mode: RunMode::Standard,
+        };
+
+        assert_exit_code(2, || {
+            let _ = cmd_check(&cli, opts);
+        });
+        assert!(report_out.exists());
+    }
+
+    #[test]
+    fn cmd_check_error_path_writes_runtime_report_in_cockpit() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        let missing_root = root.join("missing");
+
+        let cli = cli_for_root(&missing_root);
+        let report_out = root.join("report.json");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: root.join("comment.md"),
+            mode: RunMode::Cockpit,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+        assert!(report_out.exists());
+    }
+
+    #[test]
+    fn cmd_md_writes_output_file() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+
+        let report = empty_report(ReportVersion::V2, "repo", "strict");
+        let data = serialize_report(&report).expect("serialize report");
+        let report_path = root.join("report.json");
+        std::fs::write(&report_path, data).expect("write report");
+
+        let output_path = root.join("report.md");
+        cmd_md(report_path, Some(output_path.clone())).expect("cmd_md");
+        assert!(output_path.exists());
+    }
+
+    #[test]
+    fn cmd_explain_not_found_exits() {
+        assert_exit_code(1, || {
+            let _ = cmd_explain("not-a-real-id");
+        });
+    }
+
+    #[test]
+    fn cmd_check_error_exits_in_standard_mode() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().join("missing")).expect("utf8 path");
+
+        let cli = Cli {
+            repo_root: root.clone(),
+            config: Utf8PathBuf::from("depguard.toml"),
+            profile: None,
+            scope: None,
+            max_findings: None,
+            cmd: Commands::Check {
+                base: None,
+                head: None,
+                report_out: Utf8PathBuf::from("report.json"),
+                report_version: "v2".to_string(),
+                write_markdown: false,
+                markdown_out: Utf8PathBuf::from("comment.md"),
+                mode: RunMode::Standard,
+            },
+        };
+
+        let report_out = Utf8PathBuf::from_path_buf(tmp.path().join("out").join("report.json"))
+            .expect("utf8 report path");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: Utf8PathBuf::from("comment.md"),
+            mode: RunMode::Standard,
+        };
+
+        assert_exit_code(1, || {
+            let _ = cmd_check(&cli, opts);
+        });
+        assert!(report_out.exists());
+    }
+
+    #[test]
+    fn write_report_and_text_files_no_parent() {
+        let tmp = TempDir::new().expect("temp dir");
+        let cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(tmp.path()).expect("set cwd");
+
+        let report = empty_report(ReportVersion::V2, "repo", "strict");
+        let report_path = Utf8PathBuf::from("report.json");
+        write_report_file(&report_path, &report).expect("write report");
+        assert!(report_path.exists());
+
+        let text_path = Utf8PathBuf::from("note.txt");
+        write_text_file(&text_path, "hello").expect("write text");
+        assert!(text_path.exists());
+
+        std::env::set_current_dir(cwd).expect("restore cwd");
+    }
+
+    #[test]
+    fn assert_exit_code_accepts_str_payload() {
+        assert_exit_code(2, || {
+            panic!("process exit: 2");
+        });
+    }
+
+    #[test]
+    fn panic_payload_to_string_handles_unknown() {
+        let payload: Box<dyn Any + Send> = Box::new(42_i32);
+        let msg = panic_payload_to_string(payload.as_ref());
+        assert!(msg.is_empty());
+    }
+
+    #[test]
+    fn git_changed_files_errors_on_non_repo() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        let err = git_changed_files(&root, "HEAD", "HEAD~1").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("git diff") || msg.contains("failed to run git"));
+    }
+
+    #[test]
+    fn write_report_and_text_files_create_parent() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+
+        let report = empty_report(ReportVersion::V2, "repo", "strict");
+        let report_path = root.join("nested").join("report.json");
+        write_report_file(&report_path, &report).expect("write report");
+        assert!(report_path.exists());
+
+        let text_path = root.join("nested").join("note.txt");
+        write_text_file(&text_path, "hello").expect("write text");
+        assert!(text_path.exists());
     }
 }

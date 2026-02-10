@@ -1066,6 +1066,21 @@ publish = false
     }
 
     #[test]
+    fn parse_package_publish_unexpected_type_defaults_true() {
+        let manifest = r#"
+[package]
+name = "pkg"
+version = "0.1.0"
+publish = "unexpected"
+"#;
+
+        let manifest_path = RepoPath::new("Cargo.toml");
+        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
+        let pkg = model.package.expect("package meta");
+        assert!(pkg.publish, "unexpected publish type should default to publishable");
+    }
+
+    #[test]
     fn parse_target_dependencies_skips_non_table_entries() {
         let manifest = r#"
 [package]

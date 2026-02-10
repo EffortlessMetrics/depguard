@@ -4,6 +4,7 @@ use depguard_types::RepoPath;
 use globset::{Glob, GlobSetBuilder};
 use toml_edit::DocumentMut;
 use walkdir::WalkDir;
+use std::path::PathBuf;
 
 /// Discover Cargo manifests for the workspace rooted at `repo_root`.
 ///
@@ -50,18 +51,12 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
     let mut out: Vec<RepoPath> = Vec::new();
     out.push(RepoPath::new("Cargo.toml"));
 
-    for entry in WalkDir::new(repo_root).into_iter().filter_map(|e| e.ok()) {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        if entry.file_name() != "Cargo.toml" {
-            continue;
-        }
-
-        let abs: Utf8PathBuf = match Utf8PathBuf::from_path_buf(entry.path().to_path_buf()) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
+    for abs in WalkDir::new(repo_root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file() && e.file_name() == "Cargo.toml")
+        .filter_map(|e| pathbuf_to_utf8(e.path().to_path_buf()))
+    {
         let rel = abs
             .strip_prefix(repo_root)
             .unwrap_or(&abs)
@@ -100,6 +95,10 @@ fn build_globset(patterns: &[String]) -> anyhow::Result<globset::GlobSet> {
         b.add(Glob::new(p)?);
     }
     Ok(b.build()?)
+}
+
+fn pathbuf_to_utf8(path: PathBuf) -> Option<Utf8PathBuf> {
+    Utf8PathBuf::from_path_buf(path).ok()
 }
 
 #[cfg(test)]
@@ -190,6 +189,27 @@ version = "0.1.0"
             paths,
             vec!["Cargo.toml", "crates/a/Cargo.toml", "tools/util/Cargo.toml"]
         );
+    }
+
+    #[test]
+    fn pathbuf_to_utf8_rejects_invalid() {
+        #[cfg(windows)]
+        {
+            use std::ffi::OsString;
+            use std::os::windows::ffi::OsStringExt;
+            let invalid = OsString::from_wide(&[0xD800]);
+            let path = PathBuf::from(invalid);
+            assert!(pathbuf_to_utf8(path).is_none());
+        }
+
+        #[cfg(unix)]
+        {
+            use std::ffi::OsString;
+            use std::os::unix::ffi::OsStringExt;
+            let invalid = OsString::from_vec(vec![0xFF, 0xFE, 0xFD]);
+            let path = PathBuf::from(invalid);
+            assert!(pathbuf_to_utf8(path).is_none());
+        }
     }
 
     #[test]

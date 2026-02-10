@@ -94,4 +94,11 @@ mod tests {
         let path = RepoPath::from(buf);
         assert_eq!(path.as_str(), "crates/depguard");
     }
+
+    #[test]
+    fn repo_path_to_utf8_pathbuf() {
+        let path = RepoPath::new("crates/depguard");
+        let buf = path.to_utf8_pathbuf();
+        assert_eq!(buf.as_str(), "crates/depguard");
+    }
 }

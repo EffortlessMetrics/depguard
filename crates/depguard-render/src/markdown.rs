@@ -147,4 +147,20 @@ mod tests {
         assert!(md.contains("[INFO]"));
         assert!(md.contains("skipped"));
     }
+
+    #[test]
+    fn renders_warn_verdict() {
+        let report = RenderableReport {
+            verdict: RenderableVerdictStatus::Warn,
+            findings: Vec::new(),
+            data: RenderableData {
+                findings_emitted: 0,
+                findings_total: 0,
+                truncated_reason: None,
+            },
+        };
+
+        let md = render_markdown(&report);
+        assert!(md.contains("Verdict: **WARN**"));
+    }
 }

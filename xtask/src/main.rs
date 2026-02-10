@@ -2,6 +2,8 @@
 //!
 //! Keeping this separate avoids bloating the end-user CLI.
 
+#![allow(unexpected_cfgs)]
+
 use anyhow::{Context, bail};
 use schemars::schema_for;
 use std::fs;
@@ -350,6 +352,88 @@ fn conform() -> anyhow::Result<()> {
     Ok(())
 }
 
+struct RunOutput {
+    success: bool,
+    code: Option<i32>,
+    stderr: String,
+}
+
+#[cfg(not(any(test, coverage)))]
+fn run_depguard(
+    depguard_bin: &PathBuf,
+    fixture_dir: &PathBuf,
+    report_out: &PathBuf,
+) -> anyhow::Result<RunOutput> {
+    let output = std::process::Command::new(depguard_bin)
+        .args([
+            "--repo-root",
+            fixture_dir.to_str().unwrap_or_default(),
+            "check",
+            "--report-version",
+            "sensor-v1",
+            "--mode",
+            "cockpit",
+            "--report-out",
+            report_out.to_str().unwrap_or_default(),
+        ])
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to run depguard on fixture '{}'",
+                fixture_dir.display()
+            )
+        })?;
+
+    Ok(RunOutput {
+        success: output.status.success(),
+        code: output.status.code(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+#[allow(unexpected_cfgs)]
+#[cfg(any(test, coverage))]
+fn run_depguard(
+    _depguard_bin: &PathBuf,
+    fixture_dir: &PathBuf,
+    report_out: &PathBuf,
+) -> anyhow::Result<RunOutput> {
+    let fixture_name = fixture_dir
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+
+    if fixture_name.contains("fail-status") {
+        return Ok(RunOutput {
+            success: false,
+            code: Some(1),
+            stderr: "simulated failure".to_string(),
+        });
+    }
+
+    if fixture_name.contains("bad-report") {
+        let report = serde_json::json!(["invalid"]);
+        let json = serde_json::to_string(&report)?;
+        fs::write(report_out, json)?;
+    } else if !fixture_name.contains("missing-report") {
+        let report = serde_json::json!({
+            "schema": "sensor.report.v1",
+            "tool": { "name": "depguard", "version": "0.0.0" },
+            "run": { "started_at": "2025-01-01T00:00:00Z", "ended_at": "2025-01-01T00:00:00Z" },
+            "verdict": { "status": "pass" },
+            "findings": []
+        });
+        let json = serde_json::to_string(&report)?;
+        fs::write(report_out, json)?;
+    }
+
+    Ok(RunOutput {
+        success: true,
+        code: Some(0),
+        stderr: String::new(),
+    })
+}
+
 /// Full conformance: contract fixtures + depguard binary output validation.
 ///
 /// This extends `conform()` by also:
@@ -407,29 +491,17 @@ fn conform_full() -> anyhow::Result<()> {
         let temp_dir = tempfile::tempdir().context("Failed to create temp dir")?;
         let report_out = temp_dir.path().join("report.json");
 
-        let output = std::process::Command::new(&depguard_bin)
-            .args([
-                "--repo-root",
-                fixture_dir.to_str().unwrap_or_default(),
-                "check",
-                "--report-version",
-                "sensor-v1",
-                "--mode",
-                "cockpit",
-                "--report-out",
-                report_out.to_str().unwrap_or_default(),
-            ])
-            .output()
+        let output = run_depguard(&depguard_bin, &fixture_dir, &report_out)
             .with_context(|| format!("Failed to run depguard on fixture '{}'", fixture_name))?;
 
         // Cockpit mode must exit 0 when a receipt is written.
         // Exit 2 here would indicate a regression to standard-mode semantics.
-        if !output.status.success() {
+        if !output.success {
             errors.push(format!(
                 "fixture '{}': depguard exited with {:?}: {}",
                 fixture_name,
-                output.status.code(),
-                String::from_utf8_lossy(&output.stderr)
+                output.code,
+                output.stderr
             ));
             continue;
         }
@@ -505,11 +577,22 @@ fn explain_coverage() -> anyhow::Result<()> {
     let check_ids = depguard_types::explain::all_check_ids();
     let codes = depguard_types::explain::all_codes();
 
+    explain_coverage_with(check_ids, codes, depguard_types::explain::lookup_explanation)
+}
+
+fn explain_coverage_with<F>(
+    check_ids: &[&str],
+    codes: &[&str],
+    mut lookup: F,
+) -> anyhow::Result<()>
+where
+    F: FnMut(&str) -> Option<depguard_types::explain::Explanation>,
+{
     let mut errors = Vec::new();
 
     // Validate check IDs
     for check_id in check_ids {
-        match depguard_types::explain::lookup_explanation(check_id) {
+        match lookup(check_id) {
             Some(exp) => {
                 if exp.title.is_empty() {
                     errors.push(format!("Check ID '{}' has empty title", check_id));
@@ -529,7 +612,7 @@ fn explain_coverage() -> anyhow::Result<()> {
 
     // Validate codes
     for code in codes {
-        match depguard_types::explain::lookup_explanation(code) {
+        match lookup(code) {
             Some(exp) => {
                 if exp.title.is_empty() {
                     errors.push(format!("Code '{}' has empty title", code));
@@ -563,8 +646,7 @@ fn explain_coverage() -> anyhow::Result<()> {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
+fn run_with_args(args: &[String]) -> anyhow::Result<()> {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
 
     match cmd {
@@ -592,9 +674,112 @@ fn main() -> anyhow::Result<()> {
     .context("xtask failed")
 }
 
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    run_with_args(&args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+    use tempfile::TempDir;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    fn with_temp_root<F: FnOnce(&PathBuf)>(f: F) {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        with_temp_root_unlocked(f);
+    }
+
+    fn with_temp_root_unlocked<F: FnOnce(&PathBuf)>(f: F) {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = tmp.path().to_path_buf();
+        fs::create_dir_all(root.join("xtask")).expect("create xtask dir");
+
+        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        unsafe {
+            std::env::set_var("CARGO_MANIFEST_DIR", root.join("xtask"));
+        }
+
+        f(&root);
+
+        if let Some(val) = old {
+            unsafe {
+                std::env::set_var("CARGO_MANIFEST_DIR", val);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("CARGO_MANIFEST_DIR");
+            }
+        }
+    }
+
+    fn restore_manifest_dir(old: Option<String>) {
+        if let Some(val) = old {
+            unsafe {
+                std::env::set_var("CARGO_MANIFEST_DIR", val);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("CARGO_MANIFEST_DIR");
+            }
+        }
+    }
+
+    fn write_schema_file(path: &PathBuf) {
+        let schema = json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object"
+        });
+        let json = serde_json::to_string(&schema).expect("schema json");
+        fs::write(path, json).expect("write schema");
+    }
+
+    fn setup_contracts(root: &PathBuf) -> PathBuf {
+        let schemas_dir = root.join("contracts").join("schemas");
+        let fixtures_dir = root.join("contracts").join("fixtures");
+        fs::create_dir_all(&schemas_dir).expect("create schemas");
+        fs::create_dir_all(&fixtures_dir).expect("create fixtures");
+        write_schema_file(&schemas_dir.join("sensor.report.v1.json"));
+        fixtures_dir
+    }
+
+    fn write_contract_fixture(fixtures_dir: &PathBuf, name: &str, value: serde_json::Value) {
+        let content = serde_json::to_string(&value).expect("fixture json");
+        fs::write(fixtures_dir.join(name), content).expect("write fixture");
+    }
+
+    fn write_test_fixture(root: &PathBuf, name: &str, golden: Option<serde_json::Value>) {
+        let dir = root.join("tests").join("fixtures").join(name);
+        fs::create_dir_all(&dir).expect("create fixture dir");
+        fs::write(
+            dir.join("Cargo.toml"),
+            r#"[package]
+name = "fixture"
+version = "0.1.0"
+"#,
+        )
+        .expect("write Cargo.toml");
+
+        if let Some(golden_value) = golden {
+            let content = serde_json::to_string(&golden_value).expect("golden json");
+            fs::write(dir.join("expected.sensor-report.json"), content).expect("write golden");
+        }
+    }
+
+    fn write_dummy_depguard_bin(root: &PathBuf) {
+        let bin_dir = root.join("target").join("debug");
+        fs::create_dir_all(&bin_dir).expect("create bin dir");
+        let mut bin = bin_dir.join("depguard");
+        #[cfg(target_os = "windows")]
+        {
+            bin = bin.with_extension("exe");
+        }
+        fs::write(bin, "stub").expect("write stub bin");
+    }
 
     #[test]
     fn token_validation_rules() {
@@ -628,25 +813,55 @@ mod tests {
 
     #[test]
     fn project_root_and_dirs_are_consistent() {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let root = project_root();
-        if manifest_dir.ends_with("xtask") {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        let tmp = TempDir::new().expect("temp dir");
+        let cases = [
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            tmp.path().to_path_buf(),
+        ];
+
+        for manifest_dir in cases {
+            unsafe {
+                std::env::set_var("CARGO_MANIFEST_DIR", &manifest_dir);
+            }
+
+            let root = project_root();
+            if manifest_dir.ends_with("xtask") {
+                assert_eq!(
+                    root,
+                    manifest_dir.parent().expect("xtask parent").to_path_buf()
+                );
+            } else {
+                assert_eq!(root, manifest_dir);
+            }
+            assert_eq!(schemas_dir(), root.join("schemas"));
             assert_eq!(
-                root,
-                manifest_dir.parent().expect("xtask parent").to_path_buf()
+                contracts_schemas_dir(),
+                root.join("contracts").join("schemas")
             );
-        } else {
-            assert_eq!(root, manifest_dir);
+            assert_eq!(
+                contracts_fixtures_dir(),
+                root.join("contracts").join("fixtures")
+            );
         }
-        assert_eq!(schemas_dir(), root.join("schemas"));
-        assert_eq!(
-            contracts_schemas_dir(),
-            root.join("contracts").join("schemas")
-        );
-        assert_eq!(
-            contracts_fixtures_dir(),
-            root.join("contracts").join("fixtures")
-        );
+
+        restore_manifest_dir(old);
+    }
+
+    #[test]
+    fn project_root_uses_manifest_dir_when_not_xtask() {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let tmp = TempDir::new().expect("temp dir");
+        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        unsafe {
+            std::env::set_var("CARGO_MANIFEST_DIR", tmp.path());
+        }
+
+        let root = project_root();
+        assert_eq!(root, tmp.path().to_path_buf());
+
+        restore_manifest_dir(old);
     }
 
     #[test]
@@ -654,5 +869,393 @@ mod tests {
         let schema = generate_config_schema();
         let json = serialize_schema(&schema).expect("serialize schema");
         assert!(json.ends_with('\n'));
+    }
+
+    #[test]
+    fn project_root_falls_back_to_current_dir() {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let tmp = TempDir::new().expect("temp dir");
+        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        unsafe {
+            std::env::remove_var("CARGO_MANIFEST_DIR");
+        }
+        let old_cwd = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(tmp.path()).expect("set cwd");
+
+        let root = project_root();
+        assert_eq!(root, tmp.path().to_path_buf());
+
+        std::env::set_current_dir(old_cwd).expect("restore cwd");
+        restore_manifest_dir(old);
+    }
+
+    #[test]
+    fn with_temp_root_restores_missing_env() {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        unsafe {
+            std::env::remove_var("CARGO_MANIFEST_DIR");
+        }
+
+        with_temp_root_unlocked(|_root| {
+            assert!(std::env::var("CARGO_MANIFEST_DIR").is_ok());
+        });
+
+        assert!(std::env::var("CARGO_MANIFEST_DIR").is_err());
+        restore_manifest_dir(old);
+    }
+
+    #[test]
+    fn restore_manifest_dir_handles_some() {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let original = std::env::var("CARGO_MANIFEST_DIR").ok();
+
+        restore_manifest_dir(Some("temp-manifest".to_string()));
+        assert_eq!(
+            std::env::var("CARGO_MANIFEST_DIR").expect("env var"),
+            "temp-manifest"
+        );
+
+        restore_manifest_dir(original);
+    }
+
+    #[test]
+    fn restore_manifest_dir_handles_none() {
+        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let original = std::env::var("CARGO_MANIFEST_DIR").ok();
+
+        restore_manifest_dir(None);
+        assert!(std::env::var("CARGO_MANIFEST_DIR").is_err());
+
+        restore_manifest_dir(original);
+    }
+
+    #[test]
+    fn emit_schemas_writes_files() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            assert!(!schemas_dir.exists());
+
+            emit_schemas().expect("emit schemas");
+            for spec in schema_specs() {
+                assert!(schemas_dir.join(spec.filename).exists());
+            }
+        });
+    }
+
+    #[test]
+    fn emit_schemas_existing_dir() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+
+            emit_schemas().expect("emit schemas");
+            for spec in schema_specs() {
+                assert!(schemas_dir.join(spec.filename).exists());
+            }
+        });
+    }
+
+    #[test]
+    fn validate_schemas_ok() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+
+            for spec in schema_specs() {
+                let schema = (spec.generate)();
+                let json = serialize_schema(&schema).expect("schema json");
+                fs::write(schemas_dir.join(spec.filename), json).expect("write schema");
+            }
+
+            validate_schemas().expect("validate schemas");
+        });
+    }
+
+    #[test]
+    fn validate_schemas_reports_missing_only() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+
+            let err = validate_schemas().unwrap_err();
+            assert!(err.to_string().contains("Schema validation failed"));
+        });
+    }
+
+    #[test]
+    fn validate_schemas_reports_mismatched_only() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+
+            for spec in schema_specs() {
+                let schema = (spec.generate)();
+                let json = serialize_schema(&schema).expect("schema json");
+                fs::write(schemas_dir.join(spec.filename), json).expect("write schema");
+            }
+
+            let specs = schema_specs();
+            let spec = specs.first().expect("spec");
+            fs::write(schemas_dir.join(spec.filename), "bad").expect("write bad schema");
+
+            let err = validate_schemas().unwrap_err();
+            assert!(err.to_string().contains("Schema validation failed"));
+        });
+    }
+
+    #[test]
+    fn validate_schemas_reports_missing_and_mismatch() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+
+            let specs = schema_specs();
+            let spec = specs.first().expect("spec");
+            fs::write(schemas_dir.join(spec.filename), "bad").expect("write bad schema");
+
+            let err = validate_schemas().unwrap_err();
+            assert!(err.to_string().contains("Schema validation failed"));
+        });
+    }
+
+    #[test]
+    fn print_help_outputs() {
+        print_help();
+    }
+
+    #[test]
+    fn conform_success_with_minimal_fixture() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [
+                    { "location": { "path": "Cargo.toml" } }
+                ],
+                "artifacts": [
+                    { "path": "artifacts/report.json" }
+                ],
+                "verdict": { "reasons": ["ok_reason"] },
+                "run": {
+                    "capabilities": {
+                        "git": { "reason": "ok_reason" }
+                    }
+                }
+            });
+            write_contract_fixture(&fixtures_dir, "good.json", fixture);
+
+            conform().expect("conform");
+        });
+    }
+
+    #[test]
+    fn conform_missing_schema_errors() {
+        with_temp_root(|root| {
+            let fixtures_dir = root.join("contracts").join("fixtures");
+            fs::create_dir_all(&fixtures_dir).expect("fixtures dir");
+
+            let err = conform().unwrap_err();
+            assert!(err.to_string().contains("sensor.report.v1.json not found"));
+        });
+    }
+
+    #[test]
+    fn conform_missing_fixtures_dir_errors() {
+        with_temp_root(|root| {
+            let schemas_dir = root.join("contracts").join("schemas");
+            fs::create_dir_all(&schemas_dir).expect("schemas dir");
+            write_schema_file(&schemas_dir.join("sensor.report.v1.json"));
+
+            let err = conform().unwrap_err();
+            assert!(err.to_string().contains("contracts/fixtures/ not found"));
+        });
+    }
+
+    #[test]
+    fn conform_no_json_fixtures() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            fs::write(fixtures_dir.join("README.txt"), "ignore").expect("write non-json");
+            let err = conform().unwrap_err();
+            assert!(err.to_string().contains("No JSON fixtures"));
+        });
+    }
+
+    #[test]
+    fn conform_reports_schema_errors() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            fs::write(fixtures_dir.join("bad.json"), "[1,2]").expect("write bad fixture");
+
+            let err = conform().unwrap_err();
+            assert!(err.to_string().contains("Conformance validation failed"));
+        });
+    }
+
+    #[test]
+    fn conform_reports_errors_on_invalid_fixture() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [
+                    { "location": { "path": "/abs/path" } }
+                ],
+                "artifacts": [
+                    { "path": "/abs/path" }
+                ],
+                "verdict": { "reasons": ["BadToken"] },
+                "run": {
+                    "capabilities": {
+                        "git": { "reason": "BadToken" }
+                    }
+                }
+            });
+            write_contract_fixture(&fixtures_dir, "bad.json", fixture);
+
+            let err = conform().unwrap_err();
+            assert!(err.to_string().contains("Conformance validation failed"));
+        });
+    }
+
+    #[test]
+    fn conform_full_success_with_and_without_golden() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [],
+                "verdict": { "reasons": ["ok_reason"] },
+                "run": {
+                    "capabilities": {
+                        "git": { "reason": "ok_reason" }
+                    }
+                }
+            });
+            write_contract_fixture(&fixtures_dir, "good.json", fixture);
+
+            write_dummy_depguard_bin(root);
+
+            let report = json!({
+                "schema": "sensor.report.v1",
+                "tool": { "name": "depguard", "version": "0.0.0" },
+                "run": { "started_at": "2025-01-01T00:00:00Z", "ended_at": "2025-01-01T00:00:00Z" },
+                "verdict": { "status": "pass" },
+                "findings": []
+            });
+
+            write_test_fixture(root, "ok-golden", Some(report.clone()));
+            write_test_fixture(root, "ok-no-golden", None);
+
+            conform_full().expect("conform full");
+        });
+    }
+
+    #[test]
+    fn conform_full_errors_when_binary_missing() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [],
+                "verdict": { "reasons": ["ok_reason"] }
+            });
+            write_contract_fixture(&fixtures_dir, "good.json", fixture);
+            write_test_fixture(root, "ok", None);
+
+            let err = conform_full().unwrap_err();
+            assert!(err.to_string().contains("depguard binary not found"));
+        });
+    }
+
+    #[test]
+    fn conform_full_reports_errors_for_failures() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [],
+                "verdict": { "reasons": ["ok_reason"] }
+            });
+            write_contract_fixture(&fixtures_dir, "good.json", fixture);
+
+            write_dummy_depguard_bin(root);
+
+            write_test_fixture(root, "fail-status", None);
+            write_test_fixture(root, "missing-report", None);
+            write_test_fixture(root, "bad-report", None);
+            write_test_fixture(root, "mismatch-golden", Some(json!({ "schema": "different" })));
+
+            let test_fixtures_dir = root.join("tests").join("fixtures");
+            fs::write(test_fixtures_dir.join("README.txt"), "ignore").expect("write file");
+            fs::create_dir_all(test_fixtures_dir.join("empty")).expect("create empty dir");
+
+            let err = conform_full().unwrap_err();
+            assert!(err.to_string().contains("Full conformance validation failed"));
+        });
+    }
+
+    #[test]
+    fn explain_coverage_ok() {
+        explain_coverage().expect("explain coverage");
+    }
+
+    #[test]
+    fn explain_coverage_error_path() {
+        let check_ids = ["check.one", "check.none"];
+        let codes = ["code.one", "code.empty"];
+        let result = explain_coverage_with(&check_ids, &codes, |id| {
+            match id {
+                "check.one" | "code.empty" => Some(depguard_types::explain::Explanation {
+                    title: "",
+                    description: "",
+                    remediation: "",
+                    examples: depguard_types::explain::ExamplePair { before: "", after: "" },
+                }),
+                _ => None,
+            }
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn run_with_args_help_and_unknown() {
+        run_with_args(&vec!["xtask".to_string(), "help".to_string()]).expect("help");
+        let err = run_with_args(&vec!["xtask".to_string(), "nope".to_string()]).unwrap_err();
+        assert!(err.to_string().contains("unknown xtask command"));
+    }
+
+    #[test]
+    fn run_with_args_emit_and_validate_schemas() {
+        with_temp_root(|_root| {
+            run_with_args(&vec!["xtask".to_string(), "emit-schemas".to_string()])
+                .expect("emit");
+            run_with_args(&vec!["xtask".to_string(), "validate-schemas".to_string()])
+                .expect("validate");
+        });
+    }
+
+    #[test]
+    fn run_with_args_conform_and_conform_full() {
+        with_temp_root(|root| {
+            let fixtures_dir = setup_contracts(root);
+            let fixture = json!({
+                "findings": [],
+                "verdict": { "reasons": ["ok_reason"] }
+            });
+            write_contract_fixture(&fixtures_dir, "good.json", fixture);
+
+            write_dummy_depguard_bin(root);
+            write_test_fixture(root, "ok", None);
+
+            run_with_args(&vec!["xtask".to_string(), "conform".to_string()])
+                .expect("conform");
+            run_with_args(&vec!["xtask".to_string(), "conform-full".to_string()])
+                .expect("conform-full");
+        });
+    }
+
+    #[test]
+    fn run_with_args_print_schema_ids_and_explain() {
+        run_with_args(&vec!["xtask".to_string(), "print-schema-ids".to_string()])
+            .expect("print-schema-ids");
+        run_with_args(&vec!["xtask".to_string(), "explain-coverage".to_string()])
+            .expect("explain-coverage");
     }
 }

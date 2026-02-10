@@ -152,6 +152,23 @@ mod tests {
     }
 
     #[test]
+    fn per_check_ignore_publish_false_override() {
+        let toml = r#"
+            [checks."deps.path_requires_version"]
+            ignore_publish_false = true
+        "#;
+        let cfg = parse_config_toml(toml).unwrap();
+        let resolved = resolve_config(cfg, Overrides::default()).unwrap();
+
+        let check = resolved
+            .effective
+            .checks
+            .get("deps.path_requires_version")
+            .expect("check");
+        assert!(check.ignore_publish_false);
+    }
+
+    #[test]
     fn invalid_scope_returns_error() {
         let cfg = DepguardConfigV1 {
             scope: Some("invalid".to_string()),

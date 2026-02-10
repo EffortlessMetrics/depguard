@@ -175,4 +175,29 @@ mod tests {
         // But timestamps are still normalized (recursive)
         assert_eq!(result["run"]["started_at"], "__TIMESTAMP__");
     }
+
+    #[test]
+    fn normalize_handles_non_object_and_finished_at() {
+        let input = json!({
+            "schema": "urn:effortless:sensor.report.v1",
+            "tool": { "name": "depguard", "version": "0.1.0" },
+            "run": {
+                "started_at": "2025-01-01T00:00:00Z",
+                "finished_at": "2025-01-01T00:00:01Z",
+                "ended_at": "2025-01-01T00:00:02Z",
+                "duration_ms": 123
+            },
+            "verdict": { "pass": true },
+            "findings": []
+        });
+
+        let result = normalize_nondeterministic(input);
+        assert_eq!(result["run"]["finished_at"], "__TIMESTAMP__");
+        assert_eq!(result["run"]["ended_at"], "__TIMESTAMP__");
+        assert_eq!(result["run"]["duration_ms"], 0);
+
+        let non_object = Value::String("plain".to_string());
+        let normalized = normalize_nondeterministic(non_object.clone());
+        assert_eq!(normalized, non_object);
+    }
 }

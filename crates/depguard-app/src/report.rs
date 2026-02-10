@@ -343,6 +343,10 @@ mod tests {
     }
 
     fn sample_v1(schema: &str) -> DepguardReportV1 {
+        sample_v1_with(schema, Verdict::Warn, Severity::Warning)
+    }
+
+    fn sample_v1_with(schema: &str, verdict: Verdict, severity: Severity) -> DepguardReportV1 {
         DepguardReportV1 {
             schema: schema.to_string(),
             tool: ToolMeta {
@@ -351,9 +355,9 @@ mod tests {
             },
             started_at: OffsetDateTime::UNIX_EPOCH,
             finished_at: OffsetDateTime::UNIX_EPOCH,
-            verdict: Verdict::Warn,
+            verdict,
             findings: vec![Finding {
-                severity: Severity::Warning,
+                severity,
                 check_id: "deps.no_wildcards".to_string(),
                 code: "wildcard_version".to_string(),
                 message: "bad".to_string(),
@@ -496,68 +500,86 @@ mod tests {
     }
 
     #[test]
+    fn to_renderable_covers_all_v1_verdicts_and_severities() {
+        let v1_pass = ReportVariant::V1(sample_v1_with(
+            SCHEMA_REPORT_V1,
+            Verdict::Pass,
+            Severity::Info,
+        ));
+        let renderable = to_renderable(&v1_pass);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Pass);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Info);
+
+        let v1_fail = ReportVariant::V1(sample_v1_with(
+            SCHEMA_REPORT_V1,
+            Verdict::Fail,
+            Severity::Error,
+        ));
+        let renderable = to_renderable(&v1_fail);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Fail);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Error);
+    }
+
+    #[test]
+    fn to_renderable_covers_v2_verdicts_and_info_severity() {
+        let v2_pass = ReportVariant::V2(sample_v2(
+            SCHEMA_REPORT_V2,
+            VerdictStatus::Pass,
+            SeverityV2::Info,
+        ));
+        let renderable = to_renderable(&v2_pass);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Pass);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Info);
+
+        let v2_warn = ReportVariant::V2(sample_v2(
+            SCHEMA_REPORT_V2,
+            VerdictStatus::Warn,
+            SeverityV2::Error,
+        ));
+        let renderable = to_renderable(&v2_warn);
+        assert_eq!(renderable.verdict, RenderableVerdictStatus::Warn);
+        assert_eq!(renderable.findings[0].severity, RenderableSeverity::Error);
+    }
+
+    #[test]
     fn empty_report_versions() {
-        match empty_report(ReportVersion::V1, "repo", "strict") {
-            ReportVariant::V1(r) => {
-                assert_eq!(r.schema, SCHEMA_REPORT_V1);
-                assert_eq!(r.verdict, Verdict::Pass);
-                assert_eq!(r.started_at, r.finished_at);
-            }
-            _ => panic!("expected v1 report"),
-        }
+        let v1 = unwrap_v1(empty_report(ReportVersion::V1, "repo", "strict"));
+        assert_eq!(v1.schema, SCHEMA_REPORT_V1);
+        assert_eq!(v1.verdict, Verdict::Pass);
+        assert_eq!(v1.started_at, v1.finished_at);
 
-        match empty_report(ReportVersion::V2, "repo", "strict") {
-            ReportVariant::V2(r) => {
-                assert_eq!(r.schema, SCHEMA_REPORT_V2);
-                assert!(r.run.capabilities.is_none());
-            }
-            _ => panic!("expected v2 report"),
-        }
+        let v2 = unwrap_v2(empty_report(ReportVersion::V2, "repo", "strict"));
+        assert_eq!(v2.schema, SCHEMA_REPORT_V2);
+        assert!(v2.run.capabilities.is_none());
 
-        match empty_report(ReportVersion::SensorV1, "repo", "strict") {
-            ReportVariant::V2(r) => {
-                assert_eq!(r.schema, SCHEMA_SENSOR_REPORT_V1);
-                let caps = r.run.capabilities.as_ref().expect("caps");
-                assert!(caps.git.is_some());
-                assert!(caps.config.is_some());
-            }
-            _ => panic!("expected sensor report"),
-        }
+        let sensor = unwrap_v2(empty_report(ReportVersion::SensorV1, "repo", "strict"));
+        assert_eq!(sensor.schema, SCHEMA_SENSOR_REPORT_V1);
+        let caps = sensor.run.capabilities.as_ref().expect("caps");
+        assert!(caps.git.is_some());
+        assert!(caps.config.is_some());
     }
 
     #[test]
     fn runtime_error_report_versions() {
-        match runtime_error_report(ReportVersion::V1, "boom") {
-            ReportVariant::V1(r) => {
-                assert_eq!(r.verdict, Verdict::Fail);
-                assert_eq!(r.findings.len(), 1);
-            }
-            _ => panic!("expected v1 report"),
-        }
+        let v1 = unwrap_v1(runtime_error_report(ReportVersion::V1, "boom"));
+        assert_eq!(v1.verdict, Verdict::Fail);
+        assert_eq!(v1.findings.len(), 1);
 
-        match runtime_error_report(ReportVersion::V2, "boom") {
-            ReportVariant::V2(r) => {
-                assert_eq!(r.verdict.status, VerdictStatus::Fail);
-                assert_eq!(r.findings.len(), 1);
-                assert_eq!(r.verdict.counts.error, 1);
-            }
-            _ => panic!("expected v2 report"),
-        }
+        let v2 = unwrap_v2(runtime_error_report(ReportVersion::V2, "boom"));
+        assert_eq!(v2.verdict.status, VerdictStatus::Fail);
+        assert_eq!(v2.findings.len(), 1);
+        assert_eq!(v2.verdict.counts.error, 1);
 
-        match runtime_error_report(ReportVersion::SensorV1, "boom") {
-            ReportVariant::V2(r) => {
-                let caps = r.run.capabilities.as_ref().expect("caps");
-                assert_eq!(
-                    caps.git.as_ref().unwrap().status,
-                    CapabilityAvailability::Missing
-                );
-                assert_eq!(
-                    caps.git.as_ref().unwrap().reason.as_deref(),
-                    Some(ids::REASON_RUNTIME_ERROR)
-                );
-            }
-            _ => panic!("expected sensor report"),
-        }
+        let sensor = unwrap_v2(runtime_error_report(ReportVersion::SensorV1, "boom"));
+        let caps = sensor.run.capabilities.as_ref().expect("caps");
+        assert_eq!(
+            caps.git.as_ref().unwrap().status,
+            CapabilityAvailability::Missing
+        );
+        assert_eq!(
+            caps.git.as_ref().unwrap().reason.as_deref(),
+            Some(ids::REASON_RUNTIME_ERROR)
+        );
     }
 
     #[test]
@@ -586,11 +608,35 @@ mod tests {
                 format: None,
             },
         );
-        match v2 {
-            ReportVariant::V2(ref r) => {
-                assert_eq!(r.artifacts.as_ref().unwrap().len(), 1);
-            }
+        let r = unwrap_v2(v2);
+        assert_eq!(r.artifacts.as_ref().unwrap().len(), 1);
+    }
+
+    fn unwrap_v1(report: ReportVariant) -> DepguardReportV1 {
+        match report {
+            ReportVariant::V1(r) => r,
+            _ => panic!("expected v1 report"),
+        }
+    }
+
+    fn unwrap_v2(report: ReportVariant) -> DepguardReportV2 {
+        match report {
+            ReportVariant::V2(r) => r,
             _ => panic!("expected v2 report"),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "expected v1 report")]
+    fn unwrap_v1_panics_on_v2() {
+        let report = empty_report(ReportVersion::V2, "repo", "strict");
+        let _ = unwrap_v1(report);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected v2 report")]
+    fn unwrap_v2_panics_on_v1() {
+        let report = empty_report(ReportVersion::V1, "repo", "strict");
+        let _ = unwrap_v2(report);
     }
 }
