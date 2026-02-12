@@ -1,3 +1,53 @@
 {
-  "__note__": "Placeholder expected output. In the real repo, golden tests compare this file to emitted report.json."
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'serde' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 9
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "157bc9aee66a5aaf94de931c73988ed120f75c0178d597d32fd3ba19c72543d8",
+      "data": {
+        "current_spec": {
+          "version": "*"
+        },
+        "dependency": "serde",
+        "fix_action": "pin_version",
+        "fix_hint": "Pin to a specific semver requirement",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
 }

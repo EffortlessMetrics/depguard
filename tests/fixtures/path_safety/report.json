@@ -1,0 +1,82 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "2026-02-04T21:35:14.7219017Z",
+    "ended_at": "2026-02-04T21:35:14.7229895Z",
+    "duration_ms": 1
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 3
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "message": "dependency 'abs-unix' uses an absolute path: /opt/libs/abs-unix",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 9
+      },
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "50731d8c1aa18b6d8d83023e748c7eb412abaf99a3ccb4021f7afc7790829fc4",
+      "data": {
+        "dependency": "abs-unix",
+        "manifest": "Cargo.toml",
+        "path": "/opt/libs/abs-unix"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "message": "dependency 'abs-windows' uses an absolute path: C:\\libs\\abs-windows",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 12
+      },
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "9f83c032a191185303de88933c1cb1bc6cd7e06daa9aa98f665afdb451e2c8b2",
+      "data": {
+        "dependency": "abs-windows",
+        "manifest": "Cargo.toml",
+        "path": "C:\\libs\\abs-windows"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'escaping' uses a path that escapes the repo root: ../../../../../../../../outside-repo",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 16
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "f4512f4ed76af6390480e2023f60450e8dc73b418ff1358a25adfd7aea7cf6d4",
+      "data": {
+        "dependency": "escaping",
+        "manifest": "Cargo.toml",
+        "path": "../../../../../../../../outside-repo"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 3,
+    "findings_total": 3,
+    "findings_emitted": 3
+  }
+}

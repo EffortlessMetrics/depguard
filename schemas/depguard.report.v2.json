@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportEnvelopeV2",
+  "description": "V2 report (cockpit-aligned envelope).",
+  "type": "object",
+  "properties": {
+    "artifacts": {
+      "description": "Optional list of additional artifacts produced by this run.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/ArtifactPointer"
+      }
+    },
+    "data": {
+      "$ref": "#/$defs/DepguardData"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FindingV2"
+      }
+    },
+    "run": {
+      "$ref": "#/$defs/RunMeta"
+    },
+    "schema": {
+      "type": "string"
+    },
+    "tool": {
+      "$ref": "#/$defs/ToolMetaV2"
+    },
+    "verdict": {
+      "$ref": "#/$defs/VerdictV2"
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "run",
+    "verdict",
+    "findings",
+    "data"
+  ],
+  "$defs": {
+    "ArtifactPointer": {
+      "description": "Pointer to an additional artifact produced by a sensor run.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "MIME type or format identifier (e.g., \"text/markdown\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path to the artifact file, relative to artifacts directory.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type classification for this artifact.",
+          "$ref": "#/$defs/ArtifactType"
+        }
+      },
+      "required": [
+        "type",
+        "path"
+      ]
+    },
+    "ArtifactType": {
+      "description": "Type classification for artifact pointers.",
+      "type": "string",
+      "enum": [
+        "comment",
+        "annotation",
+        "extra"
+      ]
+    },
+    "Capabilities": {
+      "description": "Capabilities block for No Green By Omission reporting.",
+      "type": "object",
+      "properties": {
+        "config": {
+          "description": "Configuration file status.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CapabilityStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "git": {
+          "description": "Git integration status (for diff scope, blame, etc.).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CapabilityStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CapabilityAvailability": {
+      "description": "Status of a capability (available, missing, or degraded).",
+      "type": "string",
+      "enum": [
+        "available",
+        "missing",
+        "degraded"
+      ]
+    },
+    "CapabilityStatus": {
+      "description": "Status of a single capability with optional reason.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/CapabilityAvailability"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "DepguardData": {
+      "description": "Depguard-specific summary payload for the report.",
+      "type": "object",
+      "properties": {
+        "dependencies_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "findings_emitted": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "findings_total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "manifests_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "profile": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "truncated_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "profile",
+        "manifests_scanned",
+        "dependencies_scanned",
+        "findings_total",
+        "findings_emitted"
+      ]
+    },
+    "FindingV2": {
+      "type": "object",
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "data": true,
+        "fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/SeverityV2"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "severity",
+        "check_id",
+        "code",
+        "message"
+      ]
+    },
+    "Location": {
+      "type": "object",
+      "properties": {
+        "col": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "$ref": "#/$defs/RepoPath"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RepoPath": {
+      "description": "Canonical repo-relative path used in findings and reports.\n\nNormalization rules are intentionally simple and deterministic:\n- always forward slashes (`/`)\n- no leading `./`\n- never absolute (best-effort: absolute inputs are preserved but flagged by checks)",
+      "type": "string"
+    },
+    "RunCi": {
+      "type": "object",
+      "properties": {
+        "job": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunGit": {
+      "type": "object",
+      "properties": {
+        "base_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head_sha": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_base": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunHost": {
+      "type": "object",
+      "properties": {
+        "arch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostname": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "RunMeta": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "description": "Capability status for No Green By Omission reporting.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Capabilities"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ci": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCi"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "git": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunGit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "host": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunHost"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "started_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "started_at"
+      ]
+    },
+    "SeverityV2": {
+      "description": "Severity used in v2 receipts (\"warn\" instead of \"warning\").",
+      "type": "string",
+      "enum": [
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "ToolMetaV2": {
+      "type": "object",
+      "properties": {
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "VerdictCounts": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "info": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "suppressed": {
+          "description": "Count of findings suppressed by baseline filtering.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "warn": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "VerdictStatus": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warn",
+        "fail",
+        "skip"
+      ]
+    },
+    "VerdictV2": {
+      "type": "object",
+      "properties": {
+        "counts": {
+          "$ref": "#/$defs/VerdictCounts"
+        },
+        "reasons": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/VerdictStatus"
+        }
+      },
+      "required": [
+        "status",
+        "counts"
+      ]
+    }
+  }
+}

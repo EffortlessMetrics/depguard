@@ -1,0 +1,164 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 6
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'alpha-wildcard' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 13
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "d832501213e5ee4e3cb052e9658eb05ba1ffb6d9bfa40e915f536a4106114aac",
+      "data": {
+        "current_spec": {
+          "version": "*"
+        },
+        "dependency": "alpha-wildcard",
+        "fix_action": "pin_version",
+        "fix_hint": "Pin to a specific semver requirement",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'zeta-wildcard' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 14
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "3456be19299d90945e9ea62cfba9cecce25688a95437d94b5c736737b33ec1d3",
+      "data": {
+        "current_spec": {
+          "version": "*"
+        },
+        "dependency": "zeta-wildcard",
+        "fix_action": "pin_version",
+        "fix_hint": "Pin to a specific semver requirement",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_requires_version",
+      "code": "path_without_version",
+      "message": "dependency 'path-no-version' uses a path dependency without an explicit version",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 17
+      },
+      "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
+      "fingerprint": "b844364de0fe43c8093e970019d94a577651afb4d4e764a7d64e3edb06257313",
+      "data": {
+        "current_spec": {
+          "path": "../sibling"
+        },
+        "dependency": "path-no-version",
+        "fix_action": "add_version",
+        "fix_hint": "Add version alongside the path dependency",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'path-no-version' uses a path that escapes the repo root: ../sibling",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 17
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "fingerprint": "76fb872ef63dc6313c72e6613e511432ffff2fcea697e069a60248eb579afb7a",
+      "data": {
+        "current_spec": {
+          "path": "../sibling"
+        },
+        "dependency": "path-no-version",
+        "fix_action": "remove_parent_escape",
+        "fix_hint": "Remove parent-escape segments",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "message": "dependency 'absolute-dep' uses an absolute path: /absolute/path",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 20
+      },
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "fingerprint": "3af00e51dbbb76d87d434a5a534559194646db11066b57885832898f3f9d83bd",
+      "data": {
+        "current_spec": {
+          "path": "/absolute/path",
+          "version": "0.1.0"
+        },
+        "dependency": "absolute-dep",
+        "fix_action": "use_repo_relative_path",
+        "fix_hint": "Use a repo-relative path",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'dev-wildcard' uses a wildcard version: *",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 24
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "65c71e0f953fa0260b7916d0b97513df3ad69331406c2464996d4a551ae09ae3",
+      "data": {
+        "current_spec": {
+          "version": "*"
+        },
+        "dependency": "dev-wildcard",
+        "fix_action": "pin_version",
+        "fix_hint": "Pin to a specific semver requirement",
+        "manifest": "Cargo.toml",
+        "section": "dev-dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 5,
+    "findings_total": 6,
+    "findings_emitted": 6
+  }
+}

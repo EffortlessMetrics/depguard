@@ -1,0 +1,88 @@
+{
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": [
+    2026,
+    34,
+    20,
+    42,
+    51,
+    918641800,
+    0,
+    0,
+    0
+  ],
+  "finished_at": [
+    2026,
+    34,
+    20,
+    42,
+    51,
+    919816900,
+    0,
+    0,
+    0
+  ],
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "message": "dependency 'abs-unix' uses an absolute path: /opt/libs/abs-unix",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 9
+      },
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "data": {
+        "dependency": "abs-unix",
+        "manifest": "Cargo.toml",
+        "path": "/opt/libs/abs-unix"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "absolute_path",
+      "message": "dependency 'abs-windows' uses an absolute path: C:\\libs\\abs-windows",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 12
+      },
+      "help": "Use repo-relative paths. Absolute paths are not portable and may leak host layout.",
+      "data": {
+        "dependency": "abs-windows",
+        "manifest": "Cargo.toml",
+        "path": "C:\\libs\\abs-windows"
+      }
+    },
+    {
+      "severity": "error",
+      "check_id": "deps.path_safety",
+      "code": "parent_escape",
+      "message": "dependency 'escaping' uses a path that escapes the repo root: ../../../../../../../../outside-repo",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 16
+      },
+      "help": "Avoid `..` segments that escape the repository root.",
+      "data": {
+        "dependency": "escaping",
+        "manifest": "Cargo.toml",
+        "path": "../../../../../../../../outside-repo"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 3,
+    "findings_total": 3,
+    "findings_emitted": 3
+  }
+}

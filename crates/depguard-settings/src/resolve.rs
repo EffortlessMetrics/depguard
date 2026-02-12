@@ -1,7 +1,8 @@
 use crate::{model::DepguardConfigV1, presets};
 use anyhow::Context;
-use depguard_domain::{CheckPolicy, EffectiveConfig, FailOn, Scope};
+use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
+use globset::Glob;
 
 #[derive(Clone, Debug, Default)]
 pub struct Overrides {
@@ -15,7 +16,10 @@ pub struct ResolvedConfig {
     pub effective: EffectiveConfig,
 }
 
-pub fn resolve_config(cfg: DepguardConfigV1, overrides: Overrides) -> anyhow::Result<ResolvedConfig> {
+pub fn resolve_config(
+    cfg: DepguardConfigV1,
+    overrides: Overrides,
+) -> anyhow::Result<ResolvedConfig> {
     let profile = overrides
         .profile
         .clone()
@@ -39,23 +43,38 @@ pub fn resolve_config(cfg: DepguardConfigV1, overrides: Overrides) -> anyhow::Re
         let entry = effective
             .checks
             .entry(check_id.clone())
-            .or_insert_with(|| CheckPolicy::disabled());
+            .or_insert_with(CheckPolicy::disabled);
 
         if let Some(enabled) = cc.enabled {
             entry.enabled = enabled;
         }
         if let Some(sev) = cc.severity.as_deref() {
-            entry.severity = parse_severity(sev)
-                .with_context(|| format!("invalid severity for {check_id}"))?;
+            entry.severity =
+                parse_severity(sev).with_context(|| format!("invalid severity for {check_id}"))?;
         }
         if !cc.allow.is_empty() {
+            validate_allowlist(check_id, &cc.allow)?;
             entry.allow = cc.allow.clone();
+        }
+        if let Some(ignore_publish_false) = cc.ignore_publish_false {
+            entry.ignore_publish_false = ignore_publish_false;
         }
     }
 
-    // fail_on may be profile-driven for now; keep override space for v2 config.
+    // fail_on override from config
+    if let Some(fail_on_s) = cfg.fail_on.as_deref() {
+        effective.fail_on = parse_fail_on(fail_on_s)?;
+    }
 
     Ok(ResolvedConfig { effective })
+}
+
+fn validate_allowlist(check_id: &str, patterns: &[String]) -> anyhow::Result<()> {
+    for pattern in patterns {
+        Glob::new(pattern)
+            .with_context(|| format!("invalid allow glob for {check_id}: {pattern}"))?;
+    }
+    Ok(())
 }
 
 fn parse_scope(v: &str) -> anyhow::Result<Scope> {
@@ -75,7 +94,6 @@ fn parse_severity(v: &str) -> anyhow::Result<Severity> {
     }
 }
 
-#[allow(dead_code)]
 fn parse_fail_on(v: &str) -> anyhow::Result<FailOn> {
     match v {
         "error" => Ok(FailOn::Error),

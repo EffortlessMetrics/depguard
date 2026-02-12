@@ -17,6 +17,10 @@ pub struct DepguardConfigV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
 
+    /// When to fail the check: `error` (default) or `warn`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fail_on: Option<String>,
+
     /// How many findings to emit before truncating the list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_findings: Option<u32>,
@@ -39,4 +43,8 @@ pub struct CheckConfig {
     /// Generic allowlist patterns (semantics are check-specific).
     #[serde(default)]
     pub allow: Vec<String>,
+
+    /// deps.path_requires_version: ignore publish = false and still enforce.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignore_publish_false: Option<bool>,
 }

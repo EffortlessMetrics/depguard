@@ -11,3 +11,4 @@ depguard-types = { path = "../depguard-types" }
 
 [dev-dependencies]
 insta.workspace = true
+time.workspace = true

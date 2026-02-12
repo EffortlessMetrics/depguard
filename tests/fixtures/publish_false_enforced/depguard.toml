@@ -1,0 +1,3 @@
+# Enable ignore_publish_false to enforce path_requires_version even when publish = false
+[checks."deps.path_requires_version"]
+ignore_publish_false = true

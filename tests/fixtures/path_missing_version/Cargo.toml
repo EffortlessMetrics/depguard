@@ -1,0 +1,11 @@
+[package]
+name = "path-missing-version"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# This path dependency lacks a version field, triggering deps.path_requires_version check
+# Using a non-escaping path (sibling directory within the repo)
+my-local = { path = "./libs/my-local" }

@@ -1,0 +1,19 @@
+# Configuration for cargo-mutants
+# Run with: cargo mutants --package depguard-domain
+
+[default]
+# Allow more time for complex tests
+timeout_multiplier = 3
+
+# Exclude test files from mutation
+[[exclude_globs]]
+glob = "**/*_test*.rs"
+
+[[exclude_globs]]
+glob = "**/tests/**"
+
+[[exclude_globs]]
+glob = "**/proptest*.rs"
+
+# Focus mutation testing on the domain crate for maximum value
+# The domain crate contains pure business logic with no I/O

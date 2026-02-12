@@ -1,0 +1,26 @@
+# Test fixture: publish = false crate with path dependencies
+# This fixture tests that deps.path_requires_version is skipped when:
+# - The crate has `publish = false`
+# - The config does NOT set `ignore_publish_false = true`
+#
+# Since publish = false crates are not published to crates.io, requiring
+# version fields on path dependencies is unnecessary.
+
+[package]
+name = "publish-false-crate"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# These path dependencies lack version fields, but because
+# publish = false, they should NOT trigger deps.path_requires_version
+# Using sibling paths that don't escape the repo (./subdir pattern)
+local-lib = { path = "./libs/local-lib" }
+another-local = { path = "./libs/another-local" }
+
+[dev-dependencies]
+# Same for dev dependencies
+test-helper = { path = "./libs/test-helper" }

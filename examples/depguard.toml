@@ -1,30 +1,44 @@
-# depguard.toml — example
-profile = "team"          # oss|team|strict
-scope = "diff"            # repo|diff
-fail_on = "error"         # error|warn|never
+# depguard.toml - Configuration file for depguard
+#
+# All fields are optional. Defaults are applied from the selected profile.
 
+# Profile determines default severities and behavior.
+# Options: "strict" (default), "warn", "compat"
+profile = "strict"
+
+# Scope determines which manifests are analyzed.
+# Options: "repo" (default), "diff"
+scope = "repo"
+
+# When to fail the check based on finding severity.
+# Options: "error" (default), "warn"
+fail_on = "error"
+
+# Maximum number of findings to emit (default: 200).
 max_findings = 200
-max_comment_findings = 10
-max_annotations = 25
 
-[paths]
-exclude = ["vendor/**", "third_party/**", "target/**"]
+# Per-check configuration
+# Each check can have:
+#   - enabled: bool (override profile default)
+#   - severity: "info" | "warning" | "error" (override profile default)
+#   - allow: list of patterns (check-specific allowlist)
 
-[checks.deps.no_wildcards]
+[checks."deps.no_wildcards"]
 enabled = true
 severity = "error"
 
-[checks.deps.path_requires_version]
+[checks."deps.path_requires_version"]
 enabled = true
 severity = "error"
-ignore_publish_false = true
 
-[checks.deps.path_safety]
+[checks."deps.path_safety"]
 enabled = true
 severity = "error"
-allow_paths = ["crates/**"]
+# Allowlist of path patterns (relative to repo root)
+allow = ["crates/**"]
 
-[checks.deps.workspace_inheritance]
+[checks."deps.workspace_inheritance"]
 enabled = true
 severity = "warn"
-allow_deps = ["tracing"]
+# Allowlist of dependency names that don't need workspace = true
+allow = ["tracing"]

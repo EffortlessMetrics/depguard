@@ -1,4 +1,4 @@
-use depguard_domain::{CheckPolicy, EffectiveConfig, FailOn, Scope};
+use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
 use std::collections::BTreeMap;
 
@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 /// Keep these small and readable. Anything complex should go into repo config.
 pub fn preset(profile: &str) -> EffectiveConfig {
     match profile {
-        "warn" => warn_profile(),
-        "compat" => compat_profile(),
+        "warn" | "team" => warn_profile(),
+        "compat" | "oss" => compat_profile(),
         // default
         _ => strict_profile(),
     }
@@ -61,9 +61,11 @@ fn default_checks(default_severity: Severity) -> BTreeMap<String, CheckPolicy> {
         CHECK_DEPS_PATH_SAFETY.to_string(),
         CheckPolicy::enabled(default_severity),
     );
+    let mut workspace_policy = CheckPolicy::enabled(default_severity);
+    workspace_policy.enabled = false;
     m.insert(
         CHECK_DEPS_WORKSPACE_INHERITANCE.to_string(),
-        CheckPolicy::enabled(default_severity),
+        workspace_policy,
     );
 
     m

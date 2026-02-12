@@ -14,15 +14,26 @@ path = "src/main.rs"
 anyhow.workspace = true
 camino.workspace = true
 clap.workspace = true
-serde_json.workspace = true
-time.workspace = true
 
-depguard-types = { path = "../depguard-types" }
-depguard-settings = { path = "../depguard-settings" }
+depguard-app = { path = "../depguard-app" }
 depguard-domain = { path = "../depguard-domain" }
-depguard-repo = { path = "../depguard-repo" }
 depguard-render = { path = "../depguard-render" }
+depguard-settings = { path = "../depguard-settings" }
+depguard-types = { path = "../depguard-types" }
 
 [dev-dependencies]
 assert_cmd.workspace = true
 predicates.workspace = true
+tempfile.workspace = true
+serde_json.workspace = true
+cucumber.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+jsonschema.workspace = true
+walkdir.workspace = true
+time.workspace = true
+depguard-test-util = { path = "../depguard-test-util" }
+
+[[test]]
+name = "bdd"
+harness = false

@@ -1,0 +1,55 @@
+{
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": [
+    2026,
+    34,
+    20,
+    42,
+    52,
+    625972600,
+    0,
+    0,
+    0
+  ],
+  "finished_at": [
+    2026,
+    34,
+    20,
+    42,
+    52,
+    628016300,
+    0,
+    0,
+    0
+  ],
+  "verdict": "fail",
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.workspace_inheritance",
+      "code": "missing_workspace_true",
+      "message": "dependency 'serde' exists in [workspace.dependencies] but is not declared with `workspace = true`",
+      "location": {
+        "path": "member-crate/Cargo.toml",
+        "line": 9
+      },
+      "help": "Prefer `workspace = true` to inherit the workspace dependency version and features.",
+      "data": {
+        "dependency": "serde",
+        "manifest": "member-crate/Cargo.toml"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 2,
+    "dependencies_scanned": 2,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

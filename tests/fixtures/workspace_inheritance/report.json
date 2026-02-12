@@ -1,0 +1,47 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "run": {
+    "started_at": "2026-02-04T21:35:15.1253952Z",
+    "ended_at": "2026-02-04T21:35:15.1267235Z",
+    "duration_ms": 1
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.workspace_inheritance",
+      "code": "missing_workspace_true",
+      "message": "dependency 'serde' exists in [workspace.dependencies] but is not declared with `workspace = true`",
+      "location": {
+        "path": "member-crate/Cargo.toml",
+        "line": 9
+      },
+      "help": "Prefer `workspace = true` to inherit the workspace dependency version and features.",
+      "fingerprint": "f649405d13514f6abd47f0bf46a305b5a4f1add687946010a71c44ab13806a75",
+      "data": {
+        "dependency": "serde",
+        "manifest": "member-crate/Cargo.toml"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 2,
+    "dependencies_scanned": 2,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

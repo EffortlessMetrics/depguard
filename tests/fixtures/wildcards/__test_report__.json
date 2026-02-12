@@ -1,0 +1,39 @@
+{
+  "schema": "receipt.envelope.v1",
+  "tool": {
+    "name": "depguard",
+    "version": "0.1.0"
+  },
+  "started_at": [
+    2026,
+    34,
+    20,
+    42,
+    52,
+    675893600,
+    0,
+    0,
+    0
+  ],
+  "finished_at": [
+    2026,
+    34,
+    20,
+    42,
+    52,
+    677495500,
+    0,
+    0,
+    0
+  ],
+  "verdict": "pass",
+  "findings": [],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 0,
+    "findings_emitted": 0
+  }
+}

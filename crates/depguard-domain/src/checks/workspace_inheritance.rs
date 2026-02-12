@@ -1,12 +1,15 @@
+use crate::checks::utils::{build_allowlist, is_allowed, section_name, spec_to_json};
+use crate::fingerprint::fingerprint_for_dep;
 use crate::model::WorkspaceModel;
 use crate::policy::EffectiveConfig;
-use depguard_types::{ids, Finding};
+use depguard_types::{Finding, ids};
 use serde_json::json;
 
 pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>) {
     let Some(policy) = cfg.check_policy(ids::CHECK_DEPS_WORKSPACE_INHERITANCE) else {
         return;
     };
+    let allow = build_allowlist(&policy.allow);
 
     if model.workspace_dependencies.is_empty() {
         return;
@@ -22,9 +25,16 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
             }
 
             // Allowlist hook (simple exact match for scaffold).
-            if policy.allow.iter().any(|a| a == &dep.name) {
+            if is_allowed(allow.as_ref(), &dep.name) {
                 continue;
             }
+            let fingerprint = fingerprint_for_dep(
+                ids::CHECK_DEPS_WORKSPACE_INHERITANCE,
+                ids::CODE_MISSING_WORKSPACE_TRUE,
+                manifest.path.as_str(),
+                &dep.name,
+                dep.spec.path.as_deref(),
+            );
 
             out.push(Finding {
                 severity: policy.severity,
@@ -40,11 +50,21 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                         .to_string(),
                 ),
                 url: None,
-                fingerprint: None,
-                data: json!({
-                    "dependency": dep.name,
-                    "manifest": manifest.path.as_str(),
-                }),
+                fingerprint: Some(fingerprint),
+                data: {
+                    let mut d = json!({
+                        "current_spec": spec_to_json(&dep.spec),
+                        "dependency": dep.name,
+                        "fix_action": ids::FIX_ACTION_USE_WORKSPACE_TRUE,
+                        "fix_hint": "Use workspace = true",
+                        "manifest": manifest.path.as_str(),
+                        "section": section_name(dep.kind),
+                    });
+                    if let Some(ref t) = dep.target {
+                        d["target"] = json!(t);
+                    }
+                    d
+                },
             });
         }
     }

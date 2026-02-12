@@ -1,0 +1,53 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_wildcards",
+      "code": "wildcard_version",
+      "message": "dependency 'serde' uses a wildcard version: *",
+      "location": {
+        "path": "crates/active/Cargo.toml",
+        "line": 9
+      },
+      "help": "Replace wildcard versions with an explicit semver requirement.",
+      "fingerprint": "9128672a086e1867dd95a8eba5795114f0074c0dd17b0518a2c8beab0b331b7d",
+      "data": {
+        "current_spec": {
+          "version": "*"
+        },
+        "dependency": "serde",
+        "fix_action": "pin_version",
+        "fix_hint": "Pin to a specific semver requirement",
+        "manifest": "crates/active/Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 2,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

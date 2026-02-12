@@ -1,0 +1,1 @@
+::error file=Cargo.toml,line=9::[deps.no_wildcards:wildcard_version] dependency 'serde' uses a wildcard version: *

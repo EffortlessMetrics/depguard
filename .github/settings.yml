@@ -1,0 +1,4 @@
+repository:
+  description: Repo-truth dependency manifest hygiene sensor for Rust workspaces
+  homepage: https://github.com/EffortlessMetrics/depguard/
+  topics: rust, dependencies, security, cli, dev-tools, hygiene

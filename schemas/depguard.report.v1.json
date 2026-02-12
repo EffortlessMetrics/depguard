@@ -1,65 +1,208 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:depguard.report.v1",
-  "title": "depguard.report.v1",
-  "allOf": [
-    {
-      "$ref": "./receipt.envelope.v1.json"
+  "title": "ReportEnvelope",
+  "description": "A generic receipt/envelope.\n\nKeeping this generic allows Depguard to embed tool-specific data while still enforcing a stable outer shape.",
+  "type": "object",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/DepguardData"
     },
-    {
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "finished_at": {
+      "type": "string"
+    },
+    "schema": {
+      "description": "Versioned schema identifier for the envelope shape.",
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "tool": {
+      "$ref": "#/$defs/ToolMeta"
+    },
+    "verdict": {
+      "$ref": "#/$defs/Verdict"
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "started_at",
+    "finished_at",
+    "verdict",
+    "findings",
+    "data"
+  ],
+  "$defs": {
+    "DepguardData": {
+      "description": "Depguard-specific summary payload for the report.",
       "type": "object",
       "properties": {
-        "schema": {
-          "const": "depguard.report.v1"
+        "dependencies_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
-        "tool": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "const": "depguard"
-            }
-          }
+        "findings_emitted": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "findings_total": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "manifests_scanned": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "profile": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "truncated_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "profile",
+        "manifests_scanned",
+        "dependencies_scanned",
+        "findings_total",
+        "findings_emitted"
+      ]
+    },
+    "Finding": {
+      "type": "object",
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
         },
         "data": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "profile": {
-              "type": "string",
-              "enum": [
-                "oss",
-                "team",
-                "strict"
-              ]
+          "description": "Check-specific structured payload (kept open-ended for forward compatibility)."
+        },
+        "fingerprint": {
+          "description": "Stable identifier intended for dedup and trending. Typically a hash of:\n`check_id + code + canonical_path + (line?) + salient fields`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Location"
             },
-            "scope": {
-              "type": "string",
-              "enum": [
-                "repo",
-                "diff"
-              ]
-            },
-            "manifests_scanned": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "dependency_entries_scanned": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "workspace_dependencies_count": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "truncated": {
-              "type": "boolean"
-            },
-            "truncated_reason": {
-              "type": "string"
+            {
+              "type": "null"
             }
-          }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
-      }
+      },
+      "required": [
+        "severity",
+        "check_id",
+        "code",
+        "message"
+      ]
+    },
+    "Location": {
+      "type": "object",
+      "properties": {
+        "col": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "$ref": "#/$defs/RepoPath"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RepoPath": {
+      "description": "Canonical repo-relative path used in findings and reports.\n\nNormalization rules are intentionally simple and deterministic:\n- always forward slashes (`/`)\n- no leading `./`\n- never absolute (best-effort: absolute inputs are preserved but flagged by checks)",
+      "type": "string"
+    },
+    "Severity": {
+      "description": "Severity is intentionally small: it maps cleanly to CI signals.",
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error"
+      ]
+    },
+    "ToolMeta": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "Verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ]
     }
-  ]
+  }
 }

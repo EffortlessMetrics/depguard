@@ -12,6 +12,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+jsonschema.workspace = true
+schemars.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 
 depguard-types = { path = "../crates/depguard-types" }
+depguard-settings = { path = "../crates/depguard-settings" }
+depguard-test-util = { path = "../crates/depguard-test-util" }

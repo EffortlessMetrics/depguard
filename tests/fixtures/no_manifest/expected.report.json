@@ -1,0 +1,30 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "pass",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 0
+    },
+    "reasons": []
+  },
+  "findings": [],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 0,
+    "dependencies_scanned": 0,
+    "findings_total": 0,
+    "findings_emitted": 0
+  }
+}

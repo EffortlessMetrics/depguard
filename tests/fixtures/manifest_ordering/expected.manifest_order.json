@@ -1,0 +1,8 @@
+[
+  "Cargo.toml",
+  "apps/cli/Cargo.toml",
+  "apps/web/Cargo.toml",
+  "crates/alpha/Cargo.toml",
+  "crates/mu/Cargo.toml",
+  "crates/zeta/Cargo.toml"
+]

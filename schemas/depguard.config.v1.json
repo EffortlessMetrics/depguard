@@ -1,62 +1,87 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:effortless:depguard.config.v1",
-  "title": "depguard.config.v1",
+  "title": "DepguardConfigV1",
+  "description": "`depguard.toml` schema v1.\n\nThis is a *user-facing* config model: it is intentionally permissive so forward-compat is easy.",
   "type": "object",
-  "additionalProperties": false,
   "properties": {
-    "profile": {
-      "type": "string",
-      "enum": [
-        "oss",
-        "team",
-        "strict"
-      ]
-    },
-    "scope": {
-      "type": "string",
-      "enum": [
-        "repo",
-        "diff"
-      ]
+    "checks": {
+      "description": "Map of check_id -> config.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/CheckConfig"
+      },
+      "default": {}
     },
     "fail_on": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "never"
+      "description": "When to fail the check: `error` (default) or `warn`.",
+      "type": [
+        "string",
+        "null"
       ]
     },
     "max_findings": {
-      "type": "integer",
+      "description": "How many findings to emit before truncating the list.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
       "minimum": 0
     },
-    "max_comment_findings": {
-      "type": "integer",
-      "minimum": 0
+    "profile": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
-    "max_annotations": {
-      "type": "integer",
-      "minimum": 0
+    "schema": {
+      "description": "Optional schema string for tooling (`depguard.config.v1`).",
+      "type": [
+        "string",
+        "null"
+      ]
     },
-    "paths": {
+    "scope": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "CheckConfig": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "exclude": {
+        "allow": {
+          "description": "Generic allowlist patterns (semantics are check-specific).",
           "type": "array",
+          "default": [],
           "items": {
             "type": "string"
-          },
-          "default": []
+          }
+        },
+        "enabled": {
+          "description": "Override preset enable/disable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "ignore_publish_false": {
+          "description": "deps.path_requires_version: ignore publish = false and still enforce.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "severity": {
+          "description": "Override preset severity: `info`, `warning`, `error`.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
-    },
-    "checks": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Per-check configuration; keys are check IDs."
     }
   }
 }

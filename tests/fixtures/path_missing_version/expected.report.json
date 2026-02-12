@@ -1,0 +1,53 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.path_requires_version",
+      "code": "path_without_version",
+      "message": "dependency 'my-local' uses a path dependency without an explicit version",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 11
+      },
+      "help": "Add an explicit version alongside `path = ...`, or use `workspace = true` with a workspace dependency.",
+      "fingerprint": "da251da316933dd7c0d84c7dab800b1ca4b7a24f908c5aee28c9e251e28e2521",
+      "data": {
+        "current_spec": {
+          "path": "./libs/my-local"
+        },
+        "dependency": "my-local",
+        "fix_action": "add_version",
+        "fix_hint": "Add version alongside the path dependency",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

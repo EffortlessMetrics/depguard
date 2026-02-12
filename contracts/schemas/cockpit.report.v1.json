@@ -1,0 +1,298 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:effortless:cockpit.report.v1",
+  "title": "Cockpit Report v1",
+  "description": "Director aggregation output schema. Aggregates multiple sensor reports with policy evaluation.",
+  "type": "object",
+  "required": [
+    "schema",
+    "run",
+    "verdict",
+    "sensors"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "cockpit.report.v1",
+      "description": "Schema identifier for this envelope format."
+    },
+    "run": {
+      "$ref": "#/definitions/RunMeta",
+      "description": "Aggregation run metadata."
+    },
+    "verdict": {
+      "$ref": "#/definitions/AggregateVerdict",
+      "description": "Aggregate verdict across all sensors."
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/SensorSummary"
+      },
+      "description": "Summary of each sensor's results."
+    },
+    "policy_snapshot": {
+      "$ref": "#/definitions/PolicySnapshot",
+      "description": "Snapshot of policy configuration for auditability."
+    }
+  },
+  "definitions": {
+    "RunMeta": {
+      "type": "object",
+      "required": [
+        "started_at"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "git": {
+          "$ref": "#/definitions/GitInfo"
+        },
+        "ci": {
+          "$ref": "#/definitions/CiInfo"
+        }
+      }
+    },
+    "GitInfo": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "base_ref": {
+          "type": "string"
+        },
+        "head_ref": {
+          "type": "string"
+        },
+        "base_sha": {
+          "type": "string"
+        },
+        "head_sha": {
+          "type": "string"
+        }
+      }
+    },
+    "CiInfo": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "job": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "AggregateVerdict": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "description": "Worst-case verdict across all sensors."
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Aggregated reason codes."
+        },
+        "degraded_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of sensors with degraded capabilities (No Green By Omission)."
+        }
+      }
+    },
+    "SensorSummary": {
+      "type": "object",
+      "required": [
+        "id",
+        "tool",
+        "state",
+        "verdict",
+        "report_path"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique sensor identifier."
+        },
+        "tool": {
+          "type": "string",
+          "description": "Sensor tool name."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "present",
+            "missing",
+            "invalid"
+          ],
+          "description": "Receipt presence and validity state."
+        },
+        "sensor_verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "description": "Raw verdict from the sensor receipt."
+        },
+        "missing_policy": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "warn",
+            "fail"
+          ],
+          "description": "What to do when sensor receipt is missing."
+        },
+        "policy_outcome": {
+          "type": "string",
+          "enum": [
+            "blocked",
+            "allowed",
+            "informational"
+          ],
+          "description": "Director assessment of this sensor's result."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip",
+            "error"
+          ],
+          "description": "Sensor's verdict status."
+        },
+        "report_path": {
+          "type": "string",
+          "description": "Path to the sensor's full report file."
+        },
+        "findings_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total findings from this sensor."
+        },
+        "capability_issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of capability degradations for this sensor."
+        }
+      }
+    },
+    "SensorPolicy": {
+      "type": "object",
+      "properties": {
+        "blocking": {
+          "type": "boolean",
+          "description": "Whether this sensor blocks the pipeline."
+        },
+        "missing_policy": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "warn",
+            "fail"
+          ],
+          "description": "What to do when this sensor's receipt is missing."
+        }
+      }
+    },
+    "PolicySnapshot": {
+      "type": "object",
+      "description": "Captures policy state for audit trail.",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Policy version identifier."
+        },
+        "hash": {
+          "type": "string",
+          "description": "Content hash of policy configuration."
+        },
+        "effective_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this policy version became effective."
+        },
+        "overrides": {
+          "type": "object",
+          "description": "Runtime overrides applied to the policy."
+        },
+        "warn_as_fail": {
+          "type": "boolean",
+          "description": "Whether warnings are treated as failures."
+        },
+        "budgets": {
+          "type": "object",
+          "properties": {
+            "highlights": {
+              "type": "integer",
+              "description": "Maximum number of highlighted findings."
+            },
+            "per_sensor_cap": {
+              "type": "integer",
+              "description": "Maximum findings per sensor."
+            },
+            "annotations_cap": {
+              "type": "integer",
+              "description": "Maximum number of annotations."
+            }
+          },
+          "description": "Budget limits for report output."
+        },
+        "comment_section_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered list of PR comment sections."
+        },
+        "sensors": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SensorPolicy"
+          },
+          "description": "Per-sensor policy configuration."
+        }
+      }
+    }
+  }
+}
