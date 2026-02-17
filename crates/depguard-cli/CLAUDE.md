@@ -35,6 +35,7 @@ Options:
   --markdown-out <PATH>    Markdown output path (default: stdout)
   --base <REF>             Git base ref for diff scope
   --head <REF>             Git head ref for diff scope
+  --diff-file <PATH>       Precomputed changed-files list for diff scope
 ```
 
 ### md
@@ -62,12 +63,14 @@ depguard explain <CHECK_ID|CODE>
 
 ## Git Integration
 
-For diff scope, the CLI calls:
+For diff scope, the CLI can either call:
 ```bash
-git diff --name-only <base>...<head>
+git diff --name-only <base>..<head>
 ```
 
-This is the **only** external process call. Missing git is a runtime error.
+or read changed files from `--diff-file` (including GitHub Actions output formats) without invoking git.
+
+`git` remains the only external process call when `--diff-file` is not used.
 
 ## Design Constraints
 

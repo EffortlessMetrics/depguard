@@ -30,27 +30,38 @@ jobs:
       - name: Create artifacts directory
         run: mkdir -p artifacts/depguard
 
-      # Full repo scan on push to main
-      - name: Run depguard (full scan)
-        if: github.event_name == 'push'
+      - name: Run depguard
+        id: depguard_run
+        shell: bash
         run: |
-          ./target/release/depguard check \
-            --report-out artifacts/depguard/report.json \
-            --write-markdown \
-            --markdown-out artifacts/depguard/comment.md \
-            --scope repo || echo "::warning::Depguard found policy violations"
+          set +e
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ./target/release/depguard check \
+              --report-out artifacts/depguard/report.json \
+              --write-markdown \
+              --markdown-out artifacts/depguard/comment.md \
+              --scope diff \
+              --base origin/${{ github.base_ref }} \
+              --head HEAD
+          else
+            ./target/release/depguard check \
+              --report-out artifacts/depguard/report.json \
+              --write-markdown \
+              --markdown-out artifacts/depguard/comment.md \
+              --scope repo
+          fi
 
-      # Diff scope on PRs
-      - name: Run depguard (diff scope)
-        if: github.event_name == 'pull_request'
-        run: |
-          ./target/release/depguard check \
-            --report-out artifacts/depguard/report.json \
-            --write-markdown \
-            --markdown-out artifacts/depguard/comment.md \
-            --scope diff \
-            --base origin/${{ github.base_ref }} \
-            --head HEAD || echo "::warning::Depguard found policy violations"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+          if [ "$code" -eq 1 ]; then
+            echo "::error::Depguard encountered a runtime/tooling error."
+          elif [ "$code" -eq 2 ]; then
+            echo "::warning::Depguard found policy violations."
+          fi
+
+          # Defer failing to the final enforcement step so annotations/artifacts always run.
+          exit 0
 
       - name: Generate annotations
         if: always()
@@ -65,6 +76,7 @@ jobs:
         with:
           name: depguard-report
           path: artifacts/depguard/
+          retention-days: 90
 
       - name: Add job summary
         if: always()
@@ -120,3 +132,27 @@ jobs:
                 body: body,
               });
             }
+
+      - name: Enforce depguard exit code
+        if: always()
+        shell: bash
+        run: |
+          code="${{ steps.depguard_run.outputs.exit_code }}"
+
+          if [ -z "$code" ]; then
+            echo "::error::Depguard did not return an exit code."
+            exit 1
+          fi
+
+          if [ "$code" -eq 0 ]; then
+            echo "Depguard passed."
+            exit 0
+          fi
+
+          if [ "$code" -eq 2 ]; then
+            echo "::error::Depguard found policy violations."
+            exit 2
+          fi
+
+          echo "::error::Depguard failed with exit code $code."
+          exit 1

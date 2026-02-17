@@ -9,13 +9,15 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use depguard_app::{
-    CheckInput, ExplainOutput, ReportVariant, ReportVersion, add_artifact, empty_report,
-    parse_report_json, render_annotations, render_markdown, run_check, run_explain,
-    runtime_error_report, serialize_report, to_renderable, verdict_exit_code,
+    CheckInput, ExplainOutput, ReportVariant, ReportVersion, add_artifact, apply_baseline,
+    empty_report, generate_baseline, parse_baseline_json, parse_report_json, render_annotations,
+    render_markdown, run_check, run_explain, runtime_error_report, serialize_baseline,
+    serialize_report, to_renderable, verdict_exit_code,
 };
 use depguard_settings::Overrides;
 use depguard_types::RepoPath;
 use depguard_types::{ArtifactPointer, ArtifactType};
+use std::io::Read;
 use std::process::Command;
 
 #[cfg(test)]
@@ -53,11 +55,21 @@ enum RunMode {
 struct CheckOpts {
     base: Option<String>,
     head: Option<String>,
+    diff_file: Option<Utf8PathBuf>,
+    baseline: Option<Utf8PathBuf>,
     report_out: Utf8PathBuf,
     report_version: String,
     write_markdown: bool,
     markdown_out: Utf8PathBuf,
     mode: RunMode,
+}
+
+/// Options for the baseline command.
+struct BaselineOpts {
+    base: Option<String>,
+    head: Option<String>,
+    diff_file: Option<Utf8PathBuf>,
+    output: Utf8PathBuf,
 }
 
 #[derive(Parser, Debug)]
@@ -101,10 +113,19 @@ enum Commands {
         /// In diff scope: git head revision (e.g. HEAD).
         #[arg(long)]
         head: Option<String>,
+        /// In diff scope: read changed file paths from file instead of calling git.
+        ///
+        /// Accepts plain newline-separated paths and GitHub Actions output formats.
+        #[arg(long)]
+        diff_file: Option<Utf8PathBuf>,
 
         /// Where to write the JSON report.
         #[arg(long, default_value = "artifacts/depguard/report.json")]
         report_out: Utf8PathBuf,
+
+        /// Optional baseline file path to suppress known findings.
+        #[arg(long)]
+        baseline: Option<Utf8PathBuf>,
 
         /// Report schema version to emit (v1, v2, or sensor-v1).
         #[arg(long, default_value = "v2")]
@@ -121,6 +142,22 @@ enum Commands {
         /// Run mode: standard (exit 2 on fail) or cockpit (exit 0 if receipt written).
         #[arg(long, value_enum, default_value = "standard")]
         mode: RunMode,
+    },
+
+    /// Generate a baseline file from current findings.
+    Baseline {
+        /// In diff scope: git base revision (e.g. origin/main).
+        #[arg(long)]
+        base: Option<String>,
+        /// In diff scope: git head revision (e.g. HEAD).
+        #[arg(long)]
+        head: Option<String>,
+        /// In diff scope: read changed file paths from file instead of calling git.
+        #[arg(long)]
+        diff_file: Option<Utf8PathBuf>,
+        /// Where to write the baseline JSON.
+        #[arg(long, default_value = ".depguard-baseline.json")]
+        output: Utf8PathBuf,
     },
 
     /// Render markdown from an existing JSON report.
@@ -159,6 +196,8 @@ fn main() -> anyhow::Result<()> {
         Commands::Check {
             ref base,
             ref head,
+            ref diff_file,
+            ref baseline,
             ref report_out,
             ref report_version,
             write_markdown,
@@ -169,11 +208,27 @@ fn main() -> anyhow::Result<()> {
             CheckOpts {
                 base: base.clone(),
                 head: head.clone(),
+                diff_file: diff_file.clone(),
+                baseline: baseline.clone(),
                 report_out: report_out.clone(),
                 report_version: report_version.clone(),
                 write_markdown,
                 markdown_out: markdown_out.clone(),
                 mode,
+            },
+        ),
+        Commands::Baseline {
+            ref base,
+            ref head,
+            ref diff_file,
+            ref output,
+        } => cmd_baseline(
+            &cli,
+            BaselineOpts {
+                base: base.clone(),
+                head: head.clone(),
+                diff_file: diff_file.clone(),
+                output: output.clone(),
             },
         ),
         Commands::Md { report, output } => cmd_md(report, output),
@@ -202,6 +257,7 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             profile: cli.profile.clone(),
             scope: cli.scope.clone(),
             max_findings: cli.max_findings,
+            baseline: opts.baseline.as_ref().map(|p| p.to_string()),
         };
 
         // Fast path: missing root Cargo.toml -> emit empty report.
@@ -240,16 +296,15 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             return Ok(0);
         }
 
-        // For diff scope, we need to get changed files via git.
-        let changed_files = if cli.scope.as_deref() == Some("diff")
-            || (cli.scope.is_none() && scope_from_config(&cfg_text) == Some("diff"))
-        {
-            let base = opts.base.as_ref().context("diff scope requires --base")?;
-            let head = opts.head.as_ref().context("diff scope requires --head")?;
-            Some(git_changed_files(&repo_root, base, head).context("git diff --name-only failed")?)
-        } else {
-            None
-        };
+        let changed_files = resolve_changed_files(
+            &repo_root,
+            &cfg_text,
+            cli.scope.as_deref(),
+            opts.base.as_deref(),
+            opts.head.as_deref(),
+            opts.diff_file.as_deref(),
+        )
+        .context("resolve diff scope inputs")?;
 
         let input = CheckInput {
             repo_root: &repo_root,
@@ -260,6 +315,24 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
         };
 
         let mut output = run_check(input)?;
+
+        if let Some(baseline_path) = output.resolved_config.baseline_path.as_deref() {
+            let baseline_path = normalize_input_path(&repo_root, baseline_path);
+            let baseline_text = std::fs::read_to_string(&baseline_path)
+                .with_context(|| format!("read baseline file: {}", baseline_path))?;
+            let baseline = parse_baseline_json(&baseline_text).context("parse baseline file")?;
+            let stats = apply_baseline(
+                &mut output.report,
+                &baseline,
+                output.resolved_config.effective.fail_on,
+            );
+            if stats.suppressed > 0 {
+                eprintln!(
+                    "depguard: suppressed {} findings using baseline {}",
+                    stats.suppressed, baseline_path
+                );
+            }
+        }
 
         if opts.write_markdown {
             let renderable = to_renderable(&output.report);
@@ -304,6 +377,55 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             }
         }
     }
+}
+
+fn cmd_baseline(cli: &Cli, opts: BaselineOpts) -> anyhow::Result<()> {
+    let repo_root = cli
+        .repo_root
+        .canonicalize_utf8()
+        .unwrap_or_else(|_| cli.repo_root.clone());
+    if !repo_root.exists() {
+        anyhow::bail!("repo root does not exist: {}", repo_root);
+    }
+
+    let cfg_path = repo_root.join(&cli.config);
+    let cfg_text = std::fs::read_to_string(&cfg_path).unwrap_or_default();
+
+    let overrides = Overrides {
+        profile: cli.profile.clone(),
+        scope: cli.scope.clone(),
+        max_findings: cli.max_findings,
+        baseline: None,
+    };
+
+    let changed_files = resolve_changed_files(
+        &repo_root,
+        &cfg_text,
+        cli.scope.as_deref(),
+        opts.base.as_deref(),
+        opts.head.as_deref(),
+        opts.diff_file.as_deref(),
+    )
+    .context("resolve diff scope inputs")?;
+
+    let input = CheckInput {
+        repo_root: &repo_root,
+        config_text: &cfg_text,
+        overrides,
+        changed_files,
+        report_version: ReportVersion::V2,
+    };
+
+    let output = run_check(input).context("run check for baseline generation")?;
+    let baseline = generate_baseline(&output.report);
+    write_baseline_file(&opts.output, &baseline)?;
+
+    eprintln!(
+        "depguard: wrote baseline with {} fingerprints to {}",
+        baseline.fingerprints.len(),
+        opts.output
+    );
+    Ok(())
 }
 
 /// Quick parse of config to check scope (avoids full resolution just to check diff scope).
@@ -429,6 +551,187 @@ fn git_changed_files(
     Ok(paths)
 }
 
+fn resolve_changed_files(
+    repo_root: &camino::Utf8Path,
+    cfg_text: &str,
+    cli_scope: Option<&str>,
+    base: Option<&str>,
+    head: Option<&str>,
+    diff_file: Option<&camino::Utf8Path>,
+) -> anyhow::Result<Option<Vec<RepoPath>>> {
+    let diff_scope_enabled = cli_scope == Some("diff")
+        || (cli_scope.is_none() && scope_from_config(cfg_text) == Some("diff"));
+
+    if !diff_scope_enabled {
+        if diff_file.is_some() {
+            anyhow::bail!("--diff-file requires --scope diff");
+        }
+        return Ok(None);
+    }
+
+    if let Some(diff_file) = diff_file {
+        let paths = read_changed_files_from_file(repo_root, diff_file)?;
+        return Ok(Some(paths));
+    }
+
+    let base = base.context("diff scope requires --base (or --diff-file)")?;
+    let head = head.context("diff scope requires --head (or --diff-file)")?;
+
+    let changed =
+        git_changed_files(repo_root, base, head).context("git diff --name-only failed")?;
+    Ok(Some(changed))
+}
+
+fn read_changed_files_from_file(
+    repo_root: &camino::Utf8Path,
+    diff_file: &camino::Utf8Path,
+) -> anyhow::Result<Vec<RepoPath>> {
+    let content = if diff_file.as_str() == "-" {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .context("read --diff-file from stdin")?;
+        buf
+    } else {
+        let path = if diff_file.is_absolute() {
+            diff_file.to_path_buf()
+        } else {
+            repo_root.join(diff_file)
+        };
+        std::fs::read_to_string(&path).with_context(|| format!("read diff file: {path}"))?
+    };
+
+    Ok(parse_changed_files_input(&content))
+}
+
+fn parse_changed_files_input(input: &str) -> Vec<RepoPath> {
+    let input = input.trim_start_matches('\u{feff}');
+    let chunks = extract_changed_files_chunks(input);
+
+    let mut seen = std::collections::BTreeSet::new();
+    let mut paths = Vec::new();
+
+    for chunk in chunks {
+        for token in parse_changed_files_chunk(&chunk) {
+            let token = token.trim();
+            if token.is_empty() {
+                continue;
+            }
+            let normalized = RepoPath::new(token);
+            if seen.insert(normalized.as_str().to_string()) {
+                paths.push(normalized);
+            }
+        }
+    }
+
+    paths
+}
+
+fn parse_changed_files_chunk(chunk: &str) -> Vec<String> {
+    let chunk = chunk.trim();
+    if chunk.is_empty() {
+        return Vec::new();
+    }
+
+    if let Ok(values) = serde_json::from_str::<Vec<String>>(chunk) {
+        return values;
+    }
+
+    tokenize_paths(chunk)
+}
+
+fn extract_changed_files_chunks(input: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut lines = input.lines();
+
+    while let Some(line) = lines.next() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some((key, delimiter)) = line.split_once("<<")
+            && is_gha_output_key(key)
+            && !delimiter.is_empty()
+        {
+            let mut block = String::new();
+            for block_line in lines.by_ref() {
+                if block_line.trim() == delimiter {
+                    break;
+                }
+                if !block.is_empty() {
+                    block.push('\n');
+                }
+                block.push_str(block_line.trim_end());
+            }
+            chunks.push(block);
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=')
+            && is_gha_output_key(key)
+            && !value.trim().is_empty()
+        {
+            chunks.push(value.trim().to_string());
+            continue;
+        }
+
+        chunks.push(line.to_string());
+    }
+
+    if chunks.is_empty() && !input.trim().is_empty() {
+        chunks.push(input.trim().to_string());
+    }
+
+    chunks
+}
+
+fn is_gha_output_key(key: &str) -> bool {
+    let key = key.trim();
+    !key.is_empty()
+        && !key.contains('/')
+        && !key.contains('\\')
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+}
+
+fn tokenize_paths(input: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+
+    for ch in input.chars() {
+        match quote {
+            Some(q) => {
+                if ch == q {
+                    quote = None;
+                } else {
+                    current.push(ch);
+                }
+            }
+            None => {
+                if ch == '"' || ch == '\'' {
+                    quote = Some(ch);
+                } else if ch == ',' || ch.is_whitespace() {
+                    if !current.trim().is_empty() {
+                        tokens.push(current.trim().to_string());
+                    }
+                    current.clear();
+                } else {
+                    current.push(ch);
+                }
+            }
+        }
+    }
+
+    if !current.trim().is_empty() {
+        tokens.push(current.trim().to_string());
+    }
+
+    tokens
+}
+
 fn parse_report_version(v: &str) -> anyhow::Result<ReportVersion> {
     match v {
         "v1" | "1" | "depguard.report.v1" => Ok(ReportVersion::V1),
@@ -450,6 +753,15 @@ fn report_exit_code(report: &ReportVariant) -> i32 {
     }
 }
 
+fn normalize_input_path(repo_root: &camino::Utf8Path, path: &str) -> Utf8PathBuf {
+    let path = Utf8PathBuf::from(path);
+    if path.is_absolute() {
+        path
+    } else {
+        repo_root.join(path)
+    }
+}
+
 fn write_report_file(path: &camino::Utf8Path, report: &ReportVariant) -> anyhow::Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.as_str().is_empty()) {
         std::fs::create_dir_all(parent).with_context(|| format!("create directory: {}", parent))?;
@@ -464,6 +776,18 @@ fn write_text_file(path: &camino::Utf8Path, text: &str) -> anyhow::Result<()> {
         std::fs::create_dir_all(parent).with_context(|| format!("create directory: {}", parent))?;
     }
     std::fs::write(path, text).with_context(|| format!("write text: {}", path))?;
+    Ok(())
+}
+
+fn write_baseline_file(
+    path: &camino::Utf8Path,
+    baseline: &depguard_types::DepguardBaselineV1,
+) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_str().is_empty()) {
+        std::fs::create_dir_all(parent).with_context(|| format!("create directory: {}", parent))?;
+    }
+    let data = serialize_baseline(baseline).context("serialize baseline")?;
+    std::fs::write(path, data).with_context(|| format!("write baseline: {}", path))?;
     Ok(())
 }
 
@@ -521,7 +845,7 @@ fn cmd_explain(identifier: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use std::any::Any;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
     use tempfile::TempDir;
 
     #[test]
@@ -592,6 +916,98 @@ mod tests {
             scope = "other"
         "#;
         assert_eq!(scope_from_config(cfg), None);
+    }
+
+    #[test]
+    fn parse_changed_files_input_supports_plain_and_csv_lists() {
+        let input = r#"
+            crates/a/Cargo.toml
+            crates/b/Cargo.toml,crates/c/Cargo.toml
+            crates/a/Cargo.toml
+        "#;
+        let paths = parse_changed_files_input(input);
+        let got: Vec<String> = paths.iter().map(|p| p.as_str().to_string()).collect();
+        assert_eq!(
+            got,
+            vec![
+                "crates/a/Cargo.toml".to_string(),
+                "crates/b/Cargo.toml".to_string(),
+                "crates/c/Cargo.toml".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_changed_files_input_supports_json_array() {
+        let input = r#"["crates/a/Cargo.toml","crates/b/Cargo.toml"]"#;
+        let paths = parse_changed_files_input(input);
+        let got: Vec<String> = paths.iter().map(|p| p.as_str().to_string()).collect();
+        assert_eq!(
+            got,
+            vec![
+                "crates/a/Cargo.toml".to_string(),
+                "crates/b/Cargo.toml".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_changed_files_input_supports_github_output_assignment() {
+        let input = "all_changed_files=crates/a/Cargo.toml crates/b/Cargo.toml";
+        let paths = parse_changed_files_input(input);
+        let got: Vec<String> = paths.iter().map(|p| p.as_str().to_string()).collect();
+        assert_eq!(
+            got,
+            vec![
+                "crates/a/Cargo.toml".to_string(),
+                "crates/b/Cargo.toml".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_changed_files_input_supports_github_output_multiline_block() {
+        let input = r#"
+            all_changed_files<<EOF
+            crates/a/Cargo.toml
+            crates/b/Cargo.toml
+            EOF
+        "#;
+        let paths = parse_changed_files_input(input);
+        let got: Vec<String> = paths.iter().map(|p| p.as_str().to_string()).collect();
+        assert_eq!(
+            got,
+            vec![
+                "crates/a/Cargo.toml".to_string(),
+                "crates/b/Cargo.toml".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_changed_files_rejects_diff_file_without_diff_scope() {
+        let err = resolve_changed_files(
+            camino::Utf8Path::new("."),
+            "",
+            Some("repo"),
+            None,
+            None,
+            Some(camino::Utf8Path::new("changed-files.txt")),
+        )
+        .expect_err("expected error");
+        assert!(
+            err.to_string()
+                .contains("--diff-file requires --scope diff")
+        );
+    }
+
+    #[test]
+    fn cli_parses_diff_file_for_check_subcommand() {
+        let cli = Cli::parse_from(["depguard", "check", "--diff-file", "changed-files.txt"]);
+        let Commands::Check { diff_file, .. } = cli.cmd else {
+            panic!("expected check command");
+        };
+        assert_eq!(diff_file, Some(Utf8PathBuf::from("changed-files.txt")));
     }
 
     #[test]
@@ -718,11 +1134,13 @@ edition = "2021"
             cmd: Commands::Check {
                 base: None,
                 head: None,
+                diff_file: None,
                 report_out: Utf8PathBuf::from("report.json"),
                 report_version: "v2".to_string(),
                 write_markdown: false,
                 markdown_out: Utf8PathBuf::from("comment.md"),
                 mode: RunMode::Standard,
+                baseline: None,
             },
         }
     }
@@ -748,8 +1166,7 @@ edition = "2021"
         let tmp = TempDir::new().expect("temp dir");
         let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
 
-        std::fs::write(root.join("depguard.toml"), "scope = \"diff\"")
-            .expect("write config");
+        std::fs::write(root.join("depguard.toml"), "scope = \"diff\"").expect("write config");
 
         let cli = cli_for_root(&root);
         let report_out = root.join("out").join("report.json");
@@ -757,6 +1174,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out: report_out.clone(),
             report_version: "v2".to_string(),
             write_markdown: true,
@@ -781,6 +1200,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out: report_out.clone(),
             report_version: "v2".to_string(),
             write_markdown: true,
@@ -794,6 +1215,119 @@ edition = "2021"
     }
 
     #[test]
+    fn cmd_check_diff_scope_uses_diff_file_without_git() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, r#"serde = "*""#);
+
+        std::fs::write(
+            root.join("changed-files.txt"),
+            "all_changed_files=Cargo.toml",
+        )
+        .expect("write diff file");
+
+        let mut cli = cli_for_root(&root);
+        cli.scope = Some("diff".to_string());
+
+        let report_out = root.join("diff-file-report.json");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            diff_file: Some(Utf8PathBuf::from("changed-files.txt")),
+            baseline: None,
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: root.join("comment.md"),
+            mode: RunMode::Cockpit,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+        assert!(report_out.exists());
+
+        let report_text = std::fs::read_to_string(report_out).expect("read report");
+        let report = parse_report_json(&report_text).expect("parse report");
+        let ReportVariant::V2(report) = report else {
+            panic!("expected v2 report");
+        };
+        assert_eq!(report.data.scope, "diff");
+        assert!(
+            !report.findings.is_empty(),
+            "expected wildcard finding from changed manifest"
+        );
+    }
+
+    #[test]
+    fn cmd_baseline_writes_file() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, r#"serde = "*""#);
+
+        let cli = cli_for_root(&root);
+        let output = root.join(".depguard-baseline.json");
+        let opts = BaselineOpts {
+            base: None,
+            head: None,
+            diff_file: None,
+            output: output.clone(),
+        };
+
+        cmd_baseline(&cli, opts).expect("cmd_baseline");
+        assert!(output.exists());
+
+        let text = std::fs::read_to_string(output).expect("read baseline");
+        let baseline = parse_baseline_json(&text).expect("parse baseline");
+        assert!(
+            !baseline.fingerprints.is_empty(),
+            "expected at least one finding fingerprint"
+        );
+    }
+
+    #[test]
+    fn cmd_check_with_baseline_suppresses_failures() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
+        write_manifest(&root, r#"serde = "*""#);
+
+        let cli = cli_for_root(&root);
+        let baseline_path = root.join(".depguard-baseline.json");
+        cmd_baseline(
+            &cli,
+            BaselineOpts {
+                base: None,
+                head: None,
+                diff_file: None,
+                output: baseline_path.clone(),
+            },
+        )
+        .expect("generate baseline");
+
+        let report_out = root.join("report.json");
+        let opts = CheckOpts {
+            base: None,
+            head: None,
+            diff_file: None,
+            baseline: Some(Utf8PathBuf::from(".depguard-baseline.json")),
+            report_out: report_out.clone(),
+            report_version: "v2".to_string(),
+            write_markdown: false,
+            markdown_out: root.join("comment.md"),
+            mode: RunMode::Standard,
+        };
+
+        cmd_check(&cli, opts).expect("cmd_check");
+
+        let report_text = std::fs::read_to_string(report_out).expect("read report");
+        let report = parse_report_json(&report_text).expect("parse report");
+        let ReportVariant::V2(report) = report else {
+            panic!("expected v2 report");
+        };
+        assert!(report.findings.is_empty(), "expected suppressed findings");
+        assert_eq!(report.verdict.status, depguard_types::VerdictStatus::Pass);
+        assert_eq!(report.verdict.counts.suppressed, 1);
+    }
+
+    #[test]
     fn cmd_check_cockpit_mode_suppresses_exit_on_fail() {
         let tmp = TempDir::new().expect("temp dir");
         let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
@@ -804,6 +1338,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out,
             report_version: "v2".to_string(),
             write_markdown: false,
@@ -825,6 +1361,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out: report_out.clone(),
             report_version: "v2".to_string(),
             write_markdown: false,
@@ -849,6 +1387,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out: report_out.clone(),
             report_version: "v2".to_string(),
             write_markdown: false,
@@ -896,6 +1436,8 @@ edition = "2021"
             cmd: Commands::Check {
                 base: None,
                 head: None,
+                diff_file: None,
+                baseline: None,
                 report_out: Utf8PathBuf::from("report.json"),
                 report_version: "v2".to_string(),
                 write_markdown: false,
@@ -909,6 +1451,8 @@ edition = "2021"
         let opts = CheckOpts {
             base: None,
             head: None,
+            diff_file: None,
+            baseline: None,
             report_out: report_out.clone(),
             report_version: "v2".to_string(),
             write_markdown: false,

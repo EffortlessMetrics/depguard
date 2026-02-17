@@ -29,7 +29,16 @@ cargo build --release
 depguard check
 
 # Analyze only manifests changed since main (great for PRs)
-depguard check --scope diff --base origin/main
+depguard check --scope diff --base origin/main --head HEAD
+
+# Or use a precomputed changed-files list (no git required at runtime)
+depguard check --scope diff --diff-file changed-files.txt
+
+# Generate baseline for existing violations
+depguard baseline --output .depguard-baseline.json
+
+# Suppress baseline findings during migration
+depguard check --baseline .depguard-baseline.json
 
 # Generate a Markdown report from existing JSON
 depguard md --report artifacts/depguard/report.json
@@ -85,6 +94,7 @@ profile = "strict"        # strict | warn | compat
 scope = "repo"            # repo | diff
 fail_on = "error"         # error | warning
 max_findings = 100
+baseline = ".depguard-baseline.json"  # Optional gradual-adoption baseline
 
 [checks."deps.no_wildcards"]
 enabled = true
@@ -152,6 +162,7 @@ jobs:
 
 **Key points:**
 - Use `--scope diff` in PRs to only check changed manifests
+- Use `--diff-file` when CI already computed changed files (for example via `tj-actions/changed-files`)
 - Exit code `2` means policy failure; `1` means tool error; `0` means pass
 - Use `depguard annotations` to generate inline PR annotations
 

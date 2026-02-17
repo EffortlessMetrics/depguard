@@ -7,7 +7,7 @@
 use anyhow::{Context, bail};
 use schemars::schema_for;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Get the project root (parent of xtask directory).
 fn project_root() -> PathBuf {
@@ -65,6 +65,11 @@ fn generate_config_schema() -> schemars::Schema {
     schema_for!(depguard_settings::DepguardConfigV1)
 }
 
+/// Generate the Depguard baseline schema.
+fn generate_baseline_schema() -> schemars::Schema {
+    schema_for!(depguard_types::DepguardBaselineV1)
+}
+
 /// List of schemas to generate.
 /// Note: receipt.envelope.v1.json is vendored/external and not regenerated.
 fn schema_specs() -> Vec<SchemaSpec> {
@@ -80,6 +85,10 @@ fn schema_specs() -> Vec<SchemaSpec> {
         SchemaSpec {
             filename: "depguard.config.v1.json",
             generate: generate_config_schema,
+        },
+        SchemaSpec {
+            filename: "depguard.baseline.v1.json",
+            generate: generate_baseline_schema,
         },
     ]
 }
@@ -360,9 +369,9 @@ struct RunOutput {
 
 #[cfg(not(any(test, coverage)))]
 fn run_depguard(
-    depguard_bin: &PathBuf,
-    fixture_dir: &PathBuf,
-    report_out: &PathBuf,
+    depguard_bin: &Path,
+    fixture_dir: &Path,
+    report_out: &Path,
 ) -> anyhow::Result<RunOutput> {
     let output = std::process::Command::new(depguard_bin)
         .args([
@@ -394,9 +403,9 @@ fn run_depguard(
 #[allow(unexpected_cfgs)]
 #[cfg(any(test, coverage))]
 fn run_depguard(
-    _depguard_bin: &PathBuf,
-    fixture_dir: &PathBuf,
-    report_out: &PathBuf,
+    _depguard_bin: &Path,
+    fixture_dir: &Path,
+    report_out: &Path,
 ) -> anyhow::Result<RunOutput> {
     let fixture_name = fixture_dir
         .file_name()
@@ -499,9 +508,7 @@ fn conform_full() -> anyhow::Result<()> {
         if !output.success {
             errors.push(format!(
                 "fixture '{}': depguard exited with {:?}: {}",
-                fixture_name,
-                output.code,
-                output.stderr
+                fixture_name, output.code, output.stderr
             ));
             continue;
         }
@@ -577,14 +584,14 @@ fn explain_coverage() -> anyhow::Result<()> {
     let check_ids = depguard_types::explain::all_check_ids();
     let codes = depguard_types::explain::all_codes();
 
-    explain_coverage_with(check_ids, codes, depguard_types::explain::lookup_explanation)
+    explain_coverage_with(
+        check_ids,
+        codes,
+        depguard_types::explain::lookup_explanation,
+    )
 }
 
-fn explain_coverage_with<F>(
-    check_ids: &[&str],
-    codes: &[&str],
-    mut lookup: F,
-) -> anyhow::Result<()>
+fn explain_coverage_with<F>(check_ids: &[&str], codes: &[&str], mut lookup: F) -> anyhow::Result<()>
 where
     F: FnMut(&str) -> Option<depguard_types::explain::Explanation>,
 {
@@ -729,7 +736,7 @@ mod tests {
         }
     }
 
-    fn write_schema_file(path: &PathBuf) {
+    fn write_schema_file(path: &Path) {
         let schema = json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object"
@@ -738,7 +745,7 @@ mod tests {
         fs::write(path, json).expect("write schema");
     }
 
-    fn setup_contracts(root: &PathBuf) -> PathBuf {
+    fn setup_contracts(root: &Path) -> PathBuf {
         let schemas_dir = root.join("contracts").join("schemas");
         let fixtures_dir = root.join("contracts").join("fixtures");
         fs::create_dir_all(&schemas_dir).expect("create schemas");
@@ -747,12 +754,12 @@ mod tests {
         fixtures_dir
     }
 
-    fn write_contract_fixture(fixtures_dir: &PathBuf, name: &str, value: serde_json::Value) {
+    fn write_contract_fixture(fixtures_dir: &Path, name: &str, value: serde_json::Value) {
         let content = serde_json::to_string(&value).expect("fixture json");
         fs::write(fixtures_dir.join(name), content).expect("write fixture");
     }
 
-    fn write_test_fixture(root: &PathBuf, name: &str, golden: Option<serde_json::Value>) {
+    fn write_test_fixture(root: &Path, name: &str, golden: Option<serde_json::Value>) {
         let dir = root.join("tests").join("fixtures").join(name);
         fs::create_dir_all(&dir).expect("create fixture dir");
         fs::write(
@@ -770,7 +777,7 @@ version = "0.1.0"
         }
     }
 
-    fn write_dummy_depguard_bin(root: &PathBuf) {
+    fn write_dummy_depguard_bin(root: &Path) {
         let bin_dir = root.join("target").join("debug");
         fs::create_dir_all(&bin_dir).expect("create bin dir");
         let mut bin = bin_dir.join("depguard");
@@ -805,6 +812,7 @@ version = "0.1.0"
         assert!(names.contains(&"depguard.report.v1.json"));
         assert!(names.contains(&"depguard.report.v2.json"));
         assert!(names.contains(&"depguard.config.v1.json"));
+        assert!(names.contains(&"depguard.baseline.v1.json"));
 
         for spec in schema_specs() {
             let _schema = (spec.generate)();
@@ -1180,14 +1188,21 @@ version = "0.1.0"
             write_test_fixture(root, "fail-status", None);
             write_test_fixture(root, "missing-report", None);
             write_test_fixture(root, "bad-report", None);
-            write_test_fixture(root, "mismatch-golden", Some(json!({ "schema": "different" })));
+            write_test_fixture(
+                root,
+                "mismatch-golden",
+                Some(json!({ "schema": "different" })),
+            );
 
             let test_fixtures_dir = root.join("tests").join("fixtures");
             fs::write(test_fixtures_dir.join("README.txt"), "ignore").expect("write file");
             fs::create_dir_all(test_fixtures_dir.join("empty")).expect("create empty dir");
 
             let err = conform_full().unwrap_err();
-            assert!(err.to_string().contains("Full conformance validation failed"));
+            assert!(
+                err.to_string()
+                    .contains("Full conformance validation failed")
+            );
         });
     }
 
@@ -1200,34 +1215,39 @@ version = "0.1.0"
     fn explain_coverage_error_path() {
         let check_ids = ["check.one", "check.none"];
         let codes = ["code.one", "code.empty"];
-        let result = explain_coverage_with(&check_ids, &codes, |id| {
-            match id {
-                "check.one" | "code.empty" => Some(depguard_types::explain::Explanation {
-                    title: "",
-                    description: "",
-                    remediation: "",
-                    examples: depguard_types::explain::ExamplePair { before: "", after: "" },
-                }),
-                _ => None,
-            }
+        let result = explain_coverage_with(&check_ids, &codes, |id| match id {
+            "check.one" | "code.empty" => Some(depguard_types::explain::Explanation {
+                title: "",
+                description: "",
+                remediation: "",
+                examples: depguard_types::explain::ExamplePair {
+                    before: "",
+                    after: "",
+                },
+            }),
+            _ => None,
         });
         assert!(result.is_err());
     }
 
     #[test]
     fn run_with_args_help_and_unknown() {
-        run_with_args(&vec!["xtask".to_string(), "help".to_string()]).expect("help");
-        let err = run_with_args(&vec!["xtask".to_string(), "nope".to_string()]).unwrap_err();
+        let help_args = ["xtask".to_string(), "help".to_string()];
+        run_with_args(&help_args).expect("help");
+
+        let unknown_args = ["xtask".to_string(), "nope".to_string()];
+        let err = run_with_args(&unknown_args).unwrap_err();
         assert!(err.to_string().contains("unknown xtask command"));
     }
 
     #[test]
     fn run_with_args_emit_and_validate_schemas() {
         with_temp_root(|_root| {
-            run_with_args(&vec!["xtask".to_string(), "emit-schemas".to_string()])
-                .expect("emit");
-            run_with_args(&vec!["xtask".to_string(), "validate-schemas".to_string()])
-                .expect("validate");
+            let emit_args = ["xtask".to_string(), "emit-schemas".to_string()];
+            run_with_args(&emit_args).expect("emit");
+
+            let validate_args = ["xtask".to_string(), "validate-schemas".to_string()];
+            run_with_args(&validate_args).expect("validate");
         });
     }
 
@@ -1244,18 +1264,20 @@ version = "0.1.0"
             write_dummy_depguard_bin(root);
             write_test_fixture(root, "ok", None);
 
-            run_with_args(&vec!["xtask".to_string(), "conform".to_string()])
-                .expect("conform");
-            run_with_args(&vec!["xtask".to_string(), "conform-full".to_string()])
-                .expect("conform-full");
+            let conform_args = ["xtask".to_string(), "conform".to_string()];
+            run_with_args(&conform_args).expect("conform");
+
+            let conform_full_args = ["xtask".to_string(), "conform-full".to_string()];
+            run_with_args(&conform_full_args).expect("conform-full");
         });
     }
 
     #[test]
     fn run_with_args_print_schema_ids_and_explain() {
-        run_with_args(&vec!["xtask".to_string(), "print-schema-ids".to_string()])
-            .expect("print-schema-ids");
-        run_with_args(&vec!["xtask".to_string(), "explain-coverage".to_string()])
-            .expect("explain-coverage");
+        let print_args = ["xtask".to_string(), "print-schema-ids".to_string()];
+        run_with_args(&print_args).expect("print-schema-ids");
+
+        let explain_args = ["xtask".to_string(), "explain-coverage".to_string()];
+        run_with_args(&explain_args).expect("explain-coverage");
     }
 }

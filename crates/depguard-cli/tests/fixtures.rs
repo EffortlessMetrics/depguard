@@ -187,6 +187,54 @@ fn fixture_default_features_explicit_fails() {
 }
 
 #[test]
+fn fixture_git_requires_version_fails() {
+    let (exit_code, report) = run_check_on_fixture("git_requires_version");
+    let expected = load_expected_report("git_requires_version");
+
+    assert_eq!(
+        exit_code, 2,
+        "git_requires_version fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "git_requires_version");
+}
+
+#[test]
+fn fixture_no_multiple_versions_fails() {
+    let (exit_code, report) = run_check_on_fixture("no_multiple_versions");
+    let expected = load_expected_report("no_multiple_versions");
+
+    assert_eq!(
+        exit_code, 2,
+        "no_multiple_versions fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "no_multiple_versions");
+}
+
+#[test]
+fn fixture_optional_unused_fails() {
+    let (exit_code, report) = run_check_on_fixture("optional_unused");
+    let expected = load_expected_report("optional_unused");
+
+    assert_eq!(
+        exit_code, 2,
+        "optional_unused fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "optional_unused");
+}
+
+#[test]
+fn fixture_dev_only_in_normal_fails() {
+    let (exit_code, report) = run_check_on_fixture("dev_only_in_normal");
+    let expected = load_expected_report("dev_only_in_normal");
+
+    assert_eq!(
+        exit_code, 2,
+        "dev_only_in_normal fixture should exit with 2 (fail)"
+    );
+    assert_reports_match(report, expected, "dev_only_in_normal");
+}
+
+#[test]
 fn fixture_multi_violation_fails() {
     let (exit_code, report) = run_check_on_fixture("multi_violation");
     let expected = load_expected_report("multi_violation");
@@ -540,6 +588,55 @@ fn missing_repo_root_returns_error() {
         .arg(&report_path)
         .assert()
         .failure();
+}
+
+#[test]
+fn baseline_command_generates_file_and_suppresses_known_findings() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let baseline_path = temp_dir.path().join(".depguard-baseline.json");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("baseline")
+        .arg("--output")
+        .arg(&baseline_path)
+        .assert()
+        .success();
+
+    assert!(baseline_path.exists(), "baseline file should be created");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--baseline")
+        .arg(&baseline_path)
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .success();
+
+    let report_text = std::fs::read_to_string(&report_path).expect("read report");
+    let report: Value = serde_json::from_str(&report_text).expect("parse report");
+    assert_eq!(
+        report["verdict"]["status"].as_str(),
+        Some("pass"),
+        "baseline should suppress existing findings"
+    );
+    assert_eq!(
+        report["findings"].as_array().map(|v| v.len()),
+        Some(0),
+        "suppressed report should have no findings"
+    );
+    assert!(
+        report["verdict"]["counts"]["suppressed"]
+            .as_u64()
+            .unwrap_or(0)
+            >= 1
+    );
 }
 
 #[test]

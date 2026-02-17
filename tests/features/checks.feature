@@ -178,3 +178,151 @@ Feature: Individual check behaviors
       """
     When I run the check
     Then no finding is emitted for "deps.default_features_explicit"
+
+  # ===========================================================================
+  # deps.git_requires_version
+  # ===========================================================================
+
+  Scenario: Git dependency without version is flagged
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { git = "https://github.com/serde-rs/serde.git" }
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.git_requires_version"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then a finding is emitted with check_id "deps.git_requires_version" and code "git_without_version"
+
+  Scenario: Git dependency with explicit version passes
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { git = "https://github.com/serde-rs/serde.git", version = "1.0" }
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.git_requires_version"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then no finding is emitted for "deps.git_requires_version"
+
+  # ===========================================================================
+  # deps.no_multiple_versions
+  # ===========================================================================
+
+  Scenario: Multiple versions of the same crate are flagged
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = "1.0"
+
+      [dev-dependencies]
+      serde = "1.1"
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.no_multiple_versions"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then a finding is emitted with check_id "deps.no_multiple_versions" and code "duplicate_different_versions"
+
+  Scenario: Single version of a crate passes
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = "1.0"
+
+      [dev-dependencies]
+      serde_json = "1.0"
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.no_multiple_versions"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then no finding is emitted for "deps.no_multiple_versions"
+
+  # ===========================================================================
+  # deps.optional_unused
+  # ===========================================================================
+
+  Scenario: Optional dependency without feature reference is flagged
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { version = "1.0", optional = true }
+
+      [features]
+      default = []
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.optional_unused"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then a finding is emitted with check_id "deps.optional_unused" and code "optional_not_in_features"
+
+  Scenario: Optional dependency referenced from feature passes
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      serde = { version = "1.0", optional = true }
+
+      [features]
+      serde_support = ["dep:serde"]
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.optional_unused"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then no finding is emitted for "deps.optional_unused"
+
+  # ===========================================================================
+  # deps.dev_only_in_normal
+  # ===========================================================================
+
+  Scenario: Dev-only crate in normal dependencies is flagged
+    Given a Cargo.toml with:
+      """
+      [dependencies]
+      proptest = "1.0"
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.dev_only_in_normal"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then a finding is emitted with check_id "deps.dev_only_in_normal" and code "dev_dep_in_normal"
+
+  Scenario: Dev-only crate in dev-dependencies passes
+    Given a Cargo.toml with:
+      """
+      [dev-dependencies]
+      proptest = "1.0"
+      """
+    And a depguard.toml with:
+      """
+      [checks."deps.dev_only_in_normal"]
+      enabled = true
+      severity = "error"
+      """
+    When I run the check
+    Then no finding is emitted for "deps.dev_only_in_normal"

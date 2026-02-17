@@ -4,6 +4,13 @@
   "description": "`depguard.toml` schema v1.\n\nThis is a *user-facing* config model: it is intentionally permissive so forward-compat is easy.",
   "type": "object",
   "properties": {
+    "baseline": {
+      "description": "Optional baseline file path for suppressing known findings.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "checks": {
       "description": "Map of check_id -> config.",
       "type": "object",

@@ -104,7 +104,7 @@ Depguard supports two scopes (selected by CLI/config):
 | Scope | Behavior |
 |-------|----------|
 | `repo` | Scan all manifests reachable from the workspace root |
-| `diff` | Scan only manifests affected by a git diff (`--base`/`--head`), plus root for workspace deps |
+| `diff` | Scan only manifests affected by git refs (`--base`/`--head`) or a precomputed diff file (`--diff-file`), plus root for workspace deps |
 
 Scope selection is an **adapter concern** (repo/git). The domain only sees the final manifest set.
 

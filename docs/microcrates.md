@@ -189,6 +189,7 @@ pub fn render_github_annotations(report: &DepguardReport) -> Vec<String>
 **Owns**
 - Use case orchestration (check, md, annotations, explain)
 - Report serialization to JSON
+- Baseline parsing/generation/suppression transforms
 - Verdict → exit code mapping
 
 **Does not own**
@@ -202,9 +203,12 @@ pub fn run_check(input: CheckInput) -> Result<CheckOutput>
 pub fn run_markdown(report: &DepguardReport) -> String
 pub fn run_annotations(report: &DepguardReport) -> Vec<String>
 pub fn run_explain(identifier: &str) -> Option<Explanation>
+pub fn generate_baseline(report: &ReportVariant) -> DepguardBaselineV1
+pub fn apply_baseline(report: &mut ReportVariant, baseline: &DepguardBaselineV1, fail_on: FailOn)
 
 // Serialization
 pub fn serialize_report(report: &DepguardReport) -> Result<String>
+pub fn serialize_baseline(baseline: &DepguardBaselineV1) -> Result<String>
 
 // Exit codes
 pub fn verdict_exit_code(verdict: Verdict) -> i32  // 0=pass, 2=fail
@@ -228,7 +232,8 @@ pub fn verdict_exit_code(verdict: Verdict) -> i32  // 0=pass, 2=fail
 
 **Commands**
 ```
-depguard check [--report-out PATH] [--write-markdown] [--base REF] [--head REF]
+depguard check [--report-out PATH] [--write-markdown] [--base REF] [--head REF] [--diff-file PATH]
+depguard baseline [--output PATH] [--base REF] [--head REF] [--diff-file PATH]
 depguard md --report PATH [--output PATH]
 depguard annotations --report PATH [--max N]
 depguard explain <CHECK_ID|CODE>

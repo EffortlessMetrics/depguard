@@ -162,10 +162,28 @@ Only analyze manifests changed in a PR:
 depguard check --scope diff --base origin/main --head HEAD
 ```
 
+Or use a precomputed changed-files list (for CI environments without git history):
+
+```bash
+depguard check --scope diff --diff-file changed-files.txt
+```
+
 This is useful for:
 - Faster CI runs
 - Gradual adoption (only new code must comply)
 - Reducing noise on large existing codebases
+
+## Baseline mode
+
+Generate a baseline for existing violations, then fail only on new findings:
+
+```bash
+depguard baseline --output .depguard-baseline.json
+depguard check --baseline .depguard-baseline.json
+```
+
+You can also set `baseline = ".depguard-baseline.json"` in `depguard.toml`.
+When baseline suppression is active, suppressed findings are counted in `verdict.counts.suppressed`.
 
 ## Exit codes
 

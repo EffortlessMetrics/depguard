@@ -62,6 +62,21 @@ Only analyze changed manifests:
   run: depguard check
 ```
 
+If your workflow already computes changed files, you can avoid git ref lookups:
+
+```yaml
+- name: Compute changed files
+  id: changed
+  uses: tj-actions/changed-files@v47
+  with:
+    files: "**/Cargo.toml"
+    json: true
+    write_output_files: true
+
+- name: Run depguard (diff file)
+  run: depguard check --scope diff --diff-file .github/outputs/all_changed_files.json
+```
+
 ### PR comments with Job Summary
 
 ```yaml

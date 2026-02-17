@@ -1,0 +1,504 @@
+use crate::report::ReportVariant;
+use anyhow::Context;
+use depguard_domain::policy::FailOn;
+use depguard_types::{
+    BaselineFinding, DepguardBaselineV1, Finding, FindingV2, SCHEMA_BASELINE_V1, Severity,
+    SeverityV2, ToolMeta, Verdict, VerdictStatus, ids,
+};
+use std::collections::{BTreeMap, BTreeSet};
+use time::OffsetDateTime;
+
+/// Summary returned after baseline suppression is applied.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BaselineApplyResult {
+    pub suppressed: u32,
+    pub remaining: u32,
+}
+
+/// Parse and normalize a baseline file.
+pub fn parse_baseline_json(text: &str) -> anyhow::Result<DepguardBaselineV1> {
+    let baseline: DepguardBaselineV1 = serde_json::from_str(text).context("parse baseline json")?;
+    if baseline.schema != SCHEMA_BASELINE_V1 {
+        anyhow::bail!(
+            "unsupported baseline schema: {} (expected {})",
+            baseline.schema,
+            SCHEMA_BASELINE_V1
+        );
+    }
+    Ok(normalize_baseline(baseline))
+}
+
+/// Serialize a baseline file in pretty JSON.
+pub fn serialize_baseline(baseline: &DepguardBaselineV1) -> anyhow::Result<Vec<u8>> {
+    serde_json::to_vec_pretty(baseline).context("serialize baseline")
+}
+
+/// Generate a baseline from report findings.
+pub fn generate_baseline(report: &ReportVariant) -> DepguardBaselineV1 {
+    let tool = baseline_tool_meta(report);
+    let entries = baseline_entries(report);
+    let fingerprints = entries.iter().map(|e| e.fingerprint.clone()).collect();
+
+    DepguardBaselineV1 {
+        schema: SCHEMA_BASELINE_V1.to_string(),
+        tool,
+        generated_at: OffsetDateTime::now_utc(),
+        fingerprints,
+        findings: entries,
+    }
+}
+
+/// Apply baseline suppression and recompute verdict/counts.
+pub fn apply_baseline(
+    report: &mut ReportVariant,
+    baseline: &DepguardBaselineV1,
+    fail_on: FailOn,
+) -> BaselineApplyResult {
+    let suppressions = baseline_fingerprint_set(baseline);
+
+    if suppressions.is_empty() {
+        let remaining = match report {
+            ReportVariant::V1(r) => r.findings.len() as u32,
+            ReportVariant::V2(r) => r.findings.len() as u32,
+        };
+        return BaselineApplyResult {
+            suppressed: 0,
+            remaining,
+        };
+    }
+
+    match report {
+        ReportVariant::V1(r) => {
+            let before = r.findings.len();
+            r.findings.retain(|f| {
+                let key = finding_key_v1(f);
+                !is_suppressible_check_id(&f.check_id) || !suppressions.contains(&key)
+            });
+
+            let suppressed = (before - r.findings.len()) as u32;
+            r.verdict = verdict_from_v1_findings(&r.findings, fail_on);
+            r.data.findings_emitted = r.findings.len() as u32;
+
+            BaselineApplyResult {
+                suppressed,
+                remaining: r.findings.len() as u32,
+            }
+        }
+        ReportVariant::V2(r) => {
+            let before = r.findings.len();
+            r.findings.retain(|f| {
+                let key = finding_key_v2(f);
+                !is_suppressible_check_id(&f.check_id) || !suppressions.contains(&key)
+            });
+
+            let suppressed = (before - r.findings.len()) as u32;
+            let (info, warn, error) = counts_from_v2_findings(&r.findings);
+            r.verdict.status = verdict_from_v2_findings(&r.findings, fail_on);
+            r.verdict.counts.info = info;
+            r.verdict.counts.warn = warn;
+            r.verdict.counts.error = error;
+            r.verdict.counts.suppressed = r.verdict.counts.suppressed.saturating_add(suppressed);
+            r.verdict.reasons.clear();
+            r.data.findings_emitted = r.findings.len() as u32;
+
+            BaselineApplyResult {
+                suppressed,
+                remaining: r.findings.len() as u32,
+            }
+        }
+    }
+}
+
+fn normalize_baseline(mut baseline: DepguardBaselineV1) -> DepguardBaselineV1 {
+    let mut fingerprints = BTreeSet::new();
+    for fp in baseline.fingerprints {
+        let trimmed = fp.trim();
+        if !trimmed.is_empty() {
+            fingerprints.insert(trimmed.to_string());
+        }
+    }
+
+    let mut findings = BTreeMap::new();
+    for finding in baseline.findings {
+        let trimmed = finding.fingerprint.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        fingerprints.insert(trimmed.to_string());
+        findings
+            .entry(trimmed.to_string())
+            .or_insert(BaselineFinding {
+                fingerprint: trimmed.to_string(),
+                check_id: finding.check_id,
+                code: finding.code,
+                location: finding.location,
+            });
+    }
+
+    baseline.fingerprints = fingerprints.into_iter().collect();
+    baseline.findings = findings.into_values().collect();
+    baseline
+}
+
+fn baseline_fingerprint_set(baseline: &DepguardBaselineV1) -> BTreeSet<String> {
+    let mut set = BTreeSet::new();
+    for fp in &baseline.fingerprints {
+        let trimmed = fp.trim();
+        if !trimmed.is_empty() {
+            set.insert(trimmed.to_string());
+        }
+    }
+    for finding in &baseline.findings {
+        let trimmed = finding.fingerprint.trim();
+        if !trimmed.is_empty() {
+            set.insert(trimmed.to_string());
+        }
+    }
+    set
+}
+
+fn baseline_tool_meta(report: &ReportVariant) -> ToolMeta {
+    match report {
+        ReportVariant::V1(r) => r.tool.clone(),
+        ReportVariant::V2(r) => ToolMeta {
+            name: r.tool.name.clone(),
+            version: r.tool.version.clone(),
+        },
+    }
+}
+
+fn baseline_entries(report: &ReportVariant) -> Vec<BaselineFinding> {
+    let mut map = BTreeMap::new();
+    match report {
+        ReportVariant::V1(r) => {
+            for finding in &r.findings {
+                if !is_suppressible_check_id(&finding.check_id) {
+                    continue;
+                }
+                let key = finding_key_v1(finding);
+                map.entry(key.clone()).or_insert(BaselineFinding {
+                    fingerprint: key,
+                    check_id: finding.check_id.clone(),
+                    code: finding.code.clone(),
+                    location: finding.location.clone(),
+                });
+            }
+        }
+        ReportVariant::V2(r) => {
+            for finding in &r.findings {
+                if !is_suppressible_check_id(&finding.check_id) {
+                    continue;
+                }
+                let key = finding_key_v2(finding);
+                map.entry(key.clone()).or_insert(BaselineFinding {
+                    fingerprint: key,
+                    check_id: finding.check_id.clone(),
+                    code: finding.code.clone(),
+                    location: finding.location.clone(),
+                });
+            }
+        }
+    }
+    map.into_values().collect()
+}
+
+fn finding_key_v1(finding: &Finding) -> String {
+    finding.fingerprint.clone().unwrap_or_else(|| {
+        legacy_finding_key(
+            &finding.check_id,
+            &finding.code,
+            finding
+                .location
+                .as_ref()
+                .map(|loc| (loc.path.as_str(), loc.line, loc.col)),
+        )
+    })
+}
+
+fn finding_key_v2(finding: &FindingV2) -> String {
+    finding.fingerprint.clone().unwrap_or_else(|| {
+        legacy_finding_key(
+            &finding.check_id,
+            &finding.code,
+            finding
+                .location
+                .as_ref()
+                .map(|loc| (loc.path.as_str(), loc.line, loc.col)),
+        )
+    })
+}
+
+fn legacy_finding_key(
+    check_id: &str,
+    code: &str,
+    location: Option<(&str, Option<u32>, Option<u32>)>,
+) -> String {
+    let (path, line, col) = location.unwrap_or(("", None, None));
+    format!(
+        "legacy|{check_id}|{code}|{path}|{}|{}",
+        line.unwrap_or(0),
+        col.unwrap_or(0)
+    )
+}
+
+fn verdict_from_v1_findings(findings: &[Finding], fail_on: FailOn) -> Verdict {
+    let has_error = findings.iter().any(|f| f.severity == Severity::Error);
+    if has_error {
+        return Verdict::Fail;
+    }
+
+    let has_warn = findings.iter().any(|f| f.severity == Severity::Warning);
+    if has_warn {
+        return match fail_on {
+            FailOn::Error => Verdict::Warn,
+            FailOn::Warning => Verdict::Fail,
+        };
+    }
+
+    Verdict::Pass
+}
+
+fn verdict_from_v2_findings(findings: &[FindingV2], fail_on: FailOn) -> VerdictStatus {
+    let has_error = findings.iter().any(|f| f.severity == SeverityV2::Error);
+    if has_error {
+        return VerdictStatus::Fail;
+    }
+
+    let has_warn = findings.iter().any(|f| f.severity == SeverityV2::Warn);
+    if has_warn {
+        return match fail_on {
+            FailOn::Error => VerdictStatus::Warn,
+            FailOn::Warning => VerdictStatus::Fail,
+        };
+    }
+
+    VerdictStatus::Pass
+}
+
+fn counts_from_v2_findings(findings: &[FindingV2]) -> (u32, u32, u32) {
+    let mut info = 0;
+    let mut warn = 0;
+    let mut error = 0;
+
+    for finding in findings {
+        match finding.severity {
+            SeverityV2::Info => info += 1,
+            SeverityV2::Warn => warn += 1,
+            SeverityV2::Error => error += 1,
+        }
+    }
+
+    (info, warn, error)
+}
+
+fn is_suppressible_check_id(check_id: &str) -> bool {
+    check_id != ids::CHECK_TOOL_RUNTIME
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::report::{ReportVersion, empty_report};
+    use depguard_types::{
+        Finding, FindingV2, Location, RepoPath, SeverityV2, VerdictCounts, VerdictV2,
+    };
+
+    #[test]
+    fn generate_baseline_is_sorted_and_deduped() {
+        let report = ReportVariant::V1(depguard_types::DepguardReportV1 {
+            schema: depguard_types::SCHEMA_REPORT_V1.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: "0.1.0".to_string(),
+            },
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: OffsetDateTime::UNIX_EPOCH,
+            verdict: Verdict::Fail,
+            findings: vec![
+                Finding {
+                    severity: Severity::Error,
+                    check_id: "deps.no_wildcards".to_string(),
+                    code: "wildcard_version".to_string(),
+                    message: "a".to_string(),
+                    location: None,
+                    help: None,
+                    url: None,
+                    fingerprint: Some("b".to_string()),
+                    data: serde_json::Value::Null,
+                },
+                Finding {
+                    severity: Severity::Error,
+                    check_id: "deps.no_wildcards".to_string(),
+                    code: "wildcard_version".to_string(),
+                    message: "dup".to_string(),
+                    location: None,
+                    help: None,
+                    url: None,
+                    fingerprint: Some("a".to_string()),
+                    data: serde_json::Value::Null,
+                },
+                Finding {
+                    severity: Severity::Error,
+                    check_id: "deps.no_wildcards".to_string(),
+                    code: "wildcard_version".to_string(),
+                    message: "dup-2".to_string(),
+                    location: None,
+                    help: None,
+                    url: None,
+                    fingerprint: Some("a".to_string()),
+                    data: serde_json::Value::Null,
+                },
+            ],
+            data: depguard_types::DepguardData::default(),
+        });
+
+        let baseline = generate_baseline(&report);
+        assert_eq!(baseline.schema, SCHEMA_BASELINE_V1);
+        assert_eq!(
+            baseline.fingerprints,
+            vec!["a".to_string(), "b".to_string()]
+        );
+        assert_eq!(baseline.findings.len(), 2);
+        assert_eq!(baseline.findings[0].fingerprint, "a");
+        assert_eq!(baseline.findings[1].fingerprint, "b");
+    }
+
+    #[test]
+    fn apply_baseline_updates_v2_verdict_counts_and_data() {
+        let mut report = empty_report(ReportVersion::V2, "repo", "strict");
+        let ReportVariant::V2(ref mut r) = report else {
+            panic!("expected v2 report");
+        };
+        r.verdict = VerdictV2 {
+            status: VerdictStatus::Fail,
+            counts: VerdictCounts {
+                info: 0,
+                warn: 1,
+                error: 1,
+                suppressed: 0,
+            },
+            reasons: vec!["old_reason".to_string()],
+        };
+        r.findings = vec![
+            FindingV2 {
+                severity: SeverityV2::Error,
+                check_id: "deps.no_wildcards".to_string(),
+                code: "wildcard_version".to_string(),
+                message: "error".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(1),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: Some("fp-error".to_string()),
+                data: serde_json::Value::Null,
+            },
+            FindingV2 {
+                severity: SeverityV2::Warn,
+                check_id: "deps.path_safety".to_string(),
+                code: "parent_escape".to_string(),
+                message: "warn".to_string(),
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(2),
+                    col: None,
+                }),
+                help: None,
+                url: None,
+                fingerprint: Some("fp-warn".to_string()),
+                data: serde_json::Value::Null,
+            },
+        ];
+        r.data.findings_total = 2;
+        r.data.findings_emitted = 2;
+
+        let baseline = DepguardBaselineV1 {
+            schema: SCHEMA_BASELINE_V1.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: "0.1.0".to_string(),
+            },
+            generated_at: OffsetDateTime::UNIX_EPOCH,
+            fingerprints: vec!["fp-error".to_string()],
+            findings: Vec::new(),
+        };
+
+        let stats = apply_baseline(&mut report, &baseline, FailOn::Error);
+        assert_eq!(
+            stats,
+            BaselineApplyResult {
+                suppressed: 1,
+                remaining: 1
+            }
+        );
+
+        let ReportVariant::V2(ref r) = report else {
+            panic!("expected v2 report");
+        };
+        assert_eq!(r.findings.len(), 1);
+        assert_eq!(r.verdict.status, VerdictStatus::Warn);
+        assert_eq!(r.verdict.counts.info, 0);
+        assert_eq!(r.verdict.counts.warn, 1);
+        assert_eq!(r.verdict.counts.error, 0);
+        assert_eq!(r.verdict.counts.suppressed, 1);
+        assert_eq!(r.data.findings_total, 2);
+        assert_eq!(r.data.findings_emitted, 1);
+        assert!(r.verdict.reasons.is_empty());
+    }
+
+    #[test]
+    fn parse_baseline_rejects_unknown_schema() {
+        let text = r#"{
+  "schema": "depguard.baseline.v9",
+  "tool": { "name": "depguard", "version": "0.1.0" },
+  "generated_at": "1970-01-01T00:00:00Z",
+  "fingerprints": []
+}"#;
+
+        let err = parse_baseline_json(text).expect_err("expected schema error");
+        assert!(err.to_string().contains("unsupported baseline schema"));
+    }
+
+    #[test]
+    fn apply_baseline_does_not_suppress_runtime_findings() {
+        let mut report = ReportVariant::V1(depguard_types::DepguardReportV1 {
+            schema: depguard_types::SCHEMA_REPORT_V1.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: "0.1.0".to_string(),
+            },
+            started_at: OffsetDateTime::UNIX_EPOCH,
+            finished_at: OffsetDateTime::UNIX_EPOCH,
+            verdict: Verdict::Fail,
+            findings: vec![Finding {
+                severity: Severity::Error,
+                check_id: ids::CHECK_TOOL_RUNTIME.to_string(),
+                code: ids::CODE_RUNTIME_ERROR.to_string(),
+                message: "boom".to_string(),
+                location: None,
+                help: None,
+                url: None,
+                fingerprint: Some("runtime".to_string()),
+                data: serde_json::Value::Null,
+            }],
+            data: depguard_types::DepguardData::default(),
+        });
+
+        let baseline = DepguardBaselineV1 {
+            schema: SCHEMA_BASELINE_V1.to_string(),
+            tool: ToolMeta {
+                name: "depguard".to_string(),
+                version: "0.1.0".to_string(),
+            },
+            generated_at: OffsetDateTime::UNIX_EPOCH,
+            fingerprints: vec!["runtime".to_string()],
+            findings: Vec::new(),
+        };
+
+        let stats = apply_baseline(&mut report, &baseline, FailOn::Error);
+        assert_eq!(stats.suppressed, 0);
+        assert_eq!(stats.remaining, 1);
+    }
+}

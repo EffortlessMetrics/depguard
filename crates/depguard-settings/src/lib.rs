@@ -36,6 +36,7 @@ mod tests {
         let cfg = parse_config_toml("").unwrap();
         assert_eq!(cfg.profile, None);
         assert_eq!(cfg.scope, None);
+        assert_eq!(cfg.baseline, None);
         assert!(cfg.checks.is_empty());
     }
 
@@ -44,10 +45,12 @@ mod tests {
         let toml = r#"
             profile = "warn"
             scope = "diff"
+            baseline = ".depguard-baseline.json"
         "#;
         let cfg = parse_config_toml(toml).unwrap();
         assert_eq!(cfg.profile, Some("warn".to_string()));
         assert_eq!(cfg.scope, Some("diff".to_string()));
+        assert_eq!(cfg.baseline, Some(".depguard-baseline.json".to_string()));
     }
 
     #[test]
@@ -122,12 +125,17 @@ mod tests {
             profile: Some("strict".to_string()),
             scope: Some("diff".to_string()),
             max_findings: Some(50),
+            baseline: Some("custom-baseline.json".to_string()),
         };
         let resolved = resolve_config(cfg, overrides).unwrap();
 
         assert_eq!(resolved.effective.profile, "strict");
         assert_eq!(resolved.effective.scope, Scope::Diff);
         assert_eq!(resolved.effective.max_findings, 50);
+        assert_eq!(
+            resolved.baseline_path.as_deref(),
+            Some("custom-baseline.json")
+        );
     }
 
     #[test]
@@ -229,5 +237,69 @@ mod tests {
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("unknown fail_on"));
+    }
+
+    #[test]
+    fn additional_checks_have_stable_default_severities() {
+        let cfg = DepguardConfigV1::default();
+        let resolved = resolve_config(cfg, Overrides::default()).unwrap();
+
+        let git = resolved
+            .effective
+            .checks
+            .get("deps.git_requires_version")
+            .expect("git check should exist");
+        assert!(!git.enabled);
+        assert_eq!(git.severity, Severity::Error);
+
+        let default_features = resolved
+            .effective
+            .checks
+            .get("deps.default_features_explicit")
+            .expect("default_features check should exist");
+        assert!(!default_features.enabled);
+        assert_eq!(default_features.severity, Severity::Warning);
+
+        let no_multiple = resolved
+            .effective
+            .checks
+            .get("deps.no_multiple_versions")
+            .expect("no_multiple_versions check should exist");
+        assert!(!no_multiple.enabled);
+        assert_eq!(no_multiple.severity, Severity::Warning);
+
+        let optional_unused = resolved
+            .effective
+            .checks
+            .get("deps.optional_unused")
+            .expect("optional_unused check should exist");
+        assert!(!optional_unused.enabled);
+        assert_eq!(optional_unused.severity, Severity::Warning);
+
+        let dev_only = resolved
+            .effective
+            .checks
+            .get("deps.dev_only_in_normal")
+            .expect("dev_only_in_normal check should exist");
+        assert!(!dev_only.enabled);
+        assert_eq!(dev_only.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn enabling_default_features_without_severity_uses_warning_default() {
+        let toml = r#"
+            [checks."deps.default_features_explicit"]
+            enabled = true
+        "#;
+        let cfg = parse_config_toml(toml).unwrap();
+        let resolved = resolve_config(cfg, Overrides::default()).unwrap();
+
+        let check = resolved
+            .effective
+            .checks
+            .get("deps.default_features_explicit")
+            .expect("default_features check should exist");
+        assert!(check.enabled);
+        assert_eq!(check.severity, Severity::Warning);
     }
 }

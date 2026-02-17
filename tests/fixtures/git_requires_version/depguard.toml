@@ -1,0 +1,3 @@
+[checks."deps.git_requires_version"]
+enabled = true
+severity = "error"

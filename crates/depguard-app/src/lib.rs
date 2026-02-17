@@ -7,11 +7,15 @@
 
 #![forbid(unsafe_code)]
 
+mod baseline;
 mod check;
 mod explain;
 mod render;
 mod report;
 
+pub use baseline::{
+    BaselineApplyResult, apply_baseline, generate_baseline, parse_baseline_json, serialize_baseline,
+};
 pub use check::{CheckInput, CheckOutput, run_check, verdict_exit_code};
 pub use explain::{ExplainOutput, format_explanation, format_not_found, run_explain};
 pub use render::{render_annotations, render_markdown};

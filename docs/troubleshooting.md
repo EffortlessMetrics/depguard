@@ -98,6 +98,11 @@ depguard check --repo-root /path/to/your/workspace
    git rev-parse origin/main
    ```
 
+4. Use a precomputed file list instead of git refs:
+   ```bash
+   depguard check --scope diff --diff-file changed-files.txt
+   ```
+
 ### "Permission denied writing report"
 
 **Symptom**: Exit code 1 when writing output files.

@@ -1132,8 +1132,8 @@ proptest! {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use proptest::test_runner::TestRunner;
     use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
 
     #[test]
     fn test_dep_spec_string_version_shape() {

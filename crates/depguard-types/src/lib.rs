@@ -8,11 +8,13 @@
 
 #![forbid(unsafe_code)]
 
+pub mod baseline;
 pub mod explain;
 pub mod ids;
 pub mod path;
 pub mod receipt;
 
+pub use baseline::{BaselineFinding, DepguardBaselineV1, SCHEMA_BASELINE_V1};
 pub use explain::{ExamplePair, Explanation, lookup_explanation};
 pub use path::RepoPath;
 pub use receipt::{

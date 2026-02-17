@@ -9,11 +9,13 @@ pub struct Overrides {
     pub profile: Option<String>,
     pub scope: Option<String>,
     pub max_findings: Option<u32>,
+    pub baseline: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ResolvedConfig {
     pub effective: EffectiveConfig,
+    pub baseline_path: Option<String>,
 }
 
 pub fn resolve_config(
@@ -66,7 +68,12 @@ pub fn resolve_config(
         effective.fail_on = parse_fail_on(fail_on_s)?;
     }
 
-    Ok(ResolvedConfig { effective })
+    let baseline_path = overrides.baseline.or(cfg.baseline);
+
+    Ok(ResolvedConfig {
+        effective,
+        baseline_path,
+    })
 }
 
 fn validate_allowlist(check_id: &str, patterns: &[String]) -> anyhow::Result<()> {

@@ -2,9 +2,9 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use depguard_types::RepoPath;
 use globset::{Glob, GlobSetBuilder};
+use std::path::PathBuf;
 use toml_edit::DocumentMut;
 use walkdir::WalkDir;
-use std::path::PathBuf;
 
 /// Discover Cargo manifests for the workspace rooted at `repo_root`.
 ///

@@ -1077,7 +1077,10 @@ publish = "unexpected"
         let manifest_path = RepoPath::new("Cargo.toml");
         let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
         let pkg = model.package.expect("package meta");
-        assert!(pkg.publish, "unexpected publish type should default to publishable");
+        assert!(
+            pkg.publish,
+            "unexpected publish type should default to publishable"
+        );
     }
 
     #[test]

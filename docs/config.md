@@ -22,6 +22,9 @@ fail_on = "error"
 # Maximum findings to report (0 = unlimited)
 max_findings = 100
 
+# Optional baseline file for suppressing known findings
+baseline = ".depguard-baseline.json"
+
 # Per-check configuration
 [checks."deps.no_wildcards"]
 enabled = true
@@ -74,9 +77,26 @@ Aliases:
 | Value | Behavior |
 |-------|----------|
 | `repo` | Scan all manifests in the workspace |
-| `diff` | Scan only manifests changed between `--base` and `--head` refs |
+| `diff` | Scan only manifests changed between git refs (`--base`/`--head`) or from a precomputed list (`--diff-file`) |
 
 Diff scope always includes the root manifest (for `[workspace.dependencies]`).
+
+## Baseline
+
+Use a baseline file during migration to suppress known findings and fail only on new ones.
+
+```bash
+depguard baseline --output .depguard-baseline.json
+depguard check --baseline .depguard-baseline.json
+```
+
+You can also set this in `depguard.toml`:
+
+```toml
+baseline = ".depguard-baseline.json"
+```
+
+CLI `--baseline` overrides the config value.
 
 ## fail_on
 
@@ -129,8 +149,7 @@ depguard check \
   --profile warn \
   --scope diff \
   --max-findings 50 \
-  --base main \
-  --head HEAD
+  --diff-file changed-files.txt
 ```
 
 | Flag | Purpose |
@@ -138,8 +157,10 @@ depguard check \
 | `--profile <NAME>` | Override profile preset |
 | `--scope <SCOPE>` | Override scope (`repo` or `diff`) |
 | `--max-findings <N>` | Override max findings limit |
-| `--base <REF>` | Git base ref for diff scope |
-| `--head <REF>` | Git head ref for diff scope |
+| `--baseline <PATH>` | Baseline file for suppressing known findings |
+| `--base <REF>` | Git base ref for diff scope (when not using `--diff-file`) |
+| `--head <REF>` | Git head ref for diff scope (when not using `--diff-file`) |
+| `--diff-file <PATH>` | Read changed files from file (`-` for stdin); supports newline lists, JSON arrays, and GitHub Actions output format |
 | `--report-version <v1|v2>` | Report schema version to emit (default: `v2`) |
 | `--report-out <PATH>` | JSON report output path |
 | `--markdown-out <PATH>` | Markdown output path (with `--write-markdown`) |

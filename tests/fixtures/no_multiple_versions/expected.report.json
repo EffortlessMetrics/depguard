@@ -1,0 +1,60 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.no_multiple_versions",
+      "code": "duplicate_different_versions",
+      "message": "crate 'serde' has multiple versions across workspace: 1.0, 1.1",
+      "help": "Align all workspace members to use the same version via [workspace.dependencies].",
+      "fingerprint": "4bd2cb60301825c9",
+      "data": {
+        "crate": "serde",
+        "fix_action": "align_workspace_versions",
+        "fix_hint": "Align versions via [workspace.dependencies]",
+        "occurrences": [
+          [
+            "1.0",
+            "Cargo.toml",
+            "dependencies"
+          ],
+          [
+            "1.1",
+            "Cargo.toml",
+            "dev-dependencies"
+          ]
+        ],
+        "versions": [
+          "1.0",
+          "1.1"
+        ]
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 2,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}
