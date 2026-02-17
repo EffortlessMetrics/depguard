@@ -14,6 +14,18 @@ For machine-readable finding payload shapes and fix action tokens, see [`contrac
 
 Allowlists are **glob patterns** (case-sensitive) across checks unless otherwise noted.
 
+Inline suppressions are also supported for dependency-level findings:
+
+```toml
+[dependencies]
+serde = "*" # depguard: allow(no_wildcards)
+tokio = "*" # depguard: allow(deps.no_wildcards, wildcard_version)
+```
+
+Suppression tokens can be either:
+- check IDs (for example, `deps.no_wildcards` or shorthand `no_wildcards`)
+- codes (for example, `wildcard_version`)
+
 ---
 
 ## `deps.no_wildcards`
@@ -387,6 +399,54 @@ enabled = true
 severity = "warning"
 allow = []
 ```
+
+---
+
+## `deps.yanked_versions`
+
+Detects exact pinned versions (`=x.y.z`) that are listed as yanked in an offline index.
+
+> **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
+> It only evaluates when you pass `--yanked-index <PATH>`.
+
+### Codes
+
+| Code | Trigger |
+|------|---------|
+| `version_yanked` | Dependency has an exact pin (`=x.y.z`) that appears in the yanked index |
+
+### Examples
+
+```toml
+# Bad - yanked in index
+[dependencies]
+serde = "=1.0.188"
+
+# Good - upgraded to non-yanked version
+[dependencies]
+serde = "=1.0.200"
+```
+
+### Remediation
+
+Upgrade to a non-yanked pinned version. If the pin is intentionally temporary, add the dependency to this check's allowlist.
+
+### Configuration
+
+```toml
+[checks."deps.yanked_versions"]
+enabled = true
+severity = "error"
+allow = ["internal-*"]
+```
+
+### Required runtime input
+
+```bash
+depguard check --yanked-index yanked-index.txt
+```
+
+Supported index formats: JSON map/array or line-based text (`crate version`, `crate@version`).
 
 ---
 

@@ -2,13 +2,14 @@
 
 ## Purpose
 
-Use case orchestration layer. Thin application layer that coordinates domain, repo, settings, and render crates. No direct filesystem I/O or CLI dependencies.
+Use case orchestration layer. Thin application layer that coordinates domain, repo, settings, and render crates, and now includes conservative safe-fix application for buildfix plans.
 
 ## Key Modules
 
 | Module | Contents |
 |--------|----------|
 | `check.rs` | `run_check()` — primary analysis use case |
+| `fix.rs` | buildfix plan generation + conservative safe fix application |
 | `render.rs` | `run_markdown()`, `run_annotations()`, `serialize_report()` |
 | `explain.rs` | `run_explain()` — lookup check/code guidance |
 
@@ -27,6 +28,10 @@ pub fn serialize_report(report: &DepguardReport) -> Result<String>
 
 // Lookup explanation
 pub fn run_explain(identifier: &str) -> Option<Explanation>
+
+// Buildfix plan generation and safe auto-fix
+pub fn generate_buildfix_plan(report: &ReportVariant, report_path: &str, dry_run: bool) -> BuildfixPlanV1
+pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixApplyResult
 
 // Map verdict to exit code
 pub fn verdict_exit_code(verdict: Verdict) -> i32
@@ -56,7 +61,7 @@ Tool/runtime errors use exit code 1.
 
 ## Design Constraints
 
-- **Minimal glue code**: All logic delegated to domain/repo/settings/render
+- **Minimal glue code**: Most logic delegated to domain/repo/settings/render; fix application remains conservative and explicit
 - **No clap**: CLI argument handling belongs in `depguard-cli`
 - **Error handling**: Uses anyhow with context for actionable messages
 

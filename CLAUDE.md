@@ -42,6 +42,7 @@ The project uses **hexagonal (ports & adapters)** architecture with a multi-crat
 | Crate | Purpose |
 |-------|---------|
 | `depguard-types` | DTOs, config, report, findings; schema IDs; stable codes |
+| `depguard-yanked` | Offline yanked-index parsing and exact version lookup |
 | `depguard-domain` | Rule implementations; policy evaluation (pure, no I/O) |
 | `depguard-repo` | Workspace discovery; manifest loading; TOML parsing; diff-scope |
 | `depguard-render` | Markdown and GitHub annotations renderers |
@@ -78,9 +79,15 @@ Located in `schemas/`:
 
 ```bash
 depguard check                           # Analyze manifests, emit receipt
+depguard baseline                        # Generate baseline suppressions from current findings
 depguard md --report <path>              # Render Markdown from receipt
 depguard annotations --report <path>     # Render GitHub annotations
+depguard sarif --report <path>           # Render SARIF from receipt
+depguard junit --report <path>           # Render JUnit XML from receipt
+depguard jsonl --report <path>           # Render JSON Lines from receipt
+depguard fix --report <path>             # Generate buildfix plan; optional safe auto-fix
 depguard explain <check_id|code>         # Show remediation guidance
+cargo depguard <args...>                 # Cargo subcommand wrapper
 ```
 
 **Exit codes**: 0 = pass, 2 = policy failure, 1 = tool/runtime error

@@ -1,4 +1,5 @@
 use depguard_types::Severity;
+use depguard_yanked::YankedIndex;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +49,8 @@ pub struct EffectiveConfig {
     pub scope: Scope,
     pub fail_on: FailOn,
     pub max_findings: usize,
+    /// Optional offline yanked-version index used by deps.yanked_versions.
+    pub yanked_index: Option<YankedIndex>,
     pub checks: BTreeMap<String, CheckPolicy>,
 }
 
@@ -89,6 +92,7 @@ mod tests {
             scope: Scope::Repo,
             fail_on: FailOn::Error,
             max_findings: 10,
+            yanked_index: None,
             checks,
         };
 

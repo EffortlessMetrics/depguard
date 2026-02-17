@@ -12,6 +12,17 @@ Understanding exit codes is essential for CI integration:
 | `1` | Tool error — config issues, missing files | Fail (infrastructure problem) |
 | `2` | Policy failure — findings exceed threshold | Fail (code problem) |
 
+## Local pre-commit integration
+
+Depguard includes an example hook at `.githooks/pre-commit`.
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
+
+The hook scans staged files using diff scope and writes `artifacts/depguard/report.json`.
+
 ## GitHub Actions
 
 By default, depguard writes `artifacts/depguard/report.json`. Use `--report-version v1` if you need the legacy schema.
@@ -117,6 +128,20 @@ The annotations command outputs GitHub workflow commands:
 ```
 ::error file=crates/foo/Cargo.toml,line=12::Wildcard version '*' is not allowed
 ::warning file=crates/bar/Cargo.toml,line=8::Path dependency missing version
+```
+
+### SARIF for GitHub Code Scanning
+
+You can render SARIF and upload it to GitHub Code Scanning:
+
+```yaml
+- name: Render SARIF
+  run: depguard sarif --report artifacts/depguard/report.json --output artifacts/depguard/report.sarif
+
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: artifacts/depguard/report.sarif
 ```
 
 ### Complete workflow

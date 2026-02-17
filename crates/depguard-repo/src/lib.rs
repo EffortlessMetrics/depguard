@@ -12,6 +12,7 @@ use anyhow::Context;
 use camino::Utf8Path;
 use depguard_domain::model::WorkspaceModel;
 use depguard_types::RepoPath;
+use rayon::prelude::*;
 
 pub use discover::discover_manifests;
 
@@ -119,12 +120,26 @@ pub fn build_workspace_model(
     model.manifests.push(root_model);
 
     // Parse all other manifests in scope (excluding root, which we already parsed).
-    for manifest_path in in_scope.into_iter().filter(|p| p.as_str() != "Cargo.toml") {
-        let abs = repo_root.join(manifest_path.as_str());
-        let text = std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
-        let m = parse::parse_member_manifest(&manifest_path, &text)
-            .with_context(|| format!("parse {}", manifest_path.as_str()))?;
-        model.manifests.push(m);
+    // This is parallel for large workspaces but deterministic because `par_iter` on Vec
+    // preserves index order in `collect`.
+    let mut member_paths: Vec<RepoPath> = in_scope
+        .into_iter()
+        .filter(|p| p.as_str() != "Cargo.toml")
+        .collect();
+    member_paths.sort();
+
+    let parsed_members: Vec<anyhow::Result<_>> = member_paths
+        .par_iter()
+        .map(|manifest_path| {
+            let abs = repo_root.join(manifest_path.as_str());
+            let text = std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
+            parse::parse_member_manifest(manifest_path, &text)
+                .with_context(|| format!("parse {}", manifest_path.as_str()))
+        })
+        .collect();
+
+    for parsed in parsed_members {
+        model.manifests.push(parsed?);
     }
 
     Ok(model)

@@ -12,6 +12,7 @@ mod path_requires_version;
 mod path_safety;
 mod utils;
 mod workspace_inheritance;
+mod yanked_versions;
 
 pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>) {
     no_wildcards::run(model, cfg, out);
@@ -23,6 +24,7 @@ pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Find
     default_features_explicit::run(model, cfg, out);
     no_multiple_versions::run(model, cfg, out);
     optional_unused::run(model, cfg, out);
+    yanked_versions::run(model, cfg, out);
 }
 
 #[cfg(test)]

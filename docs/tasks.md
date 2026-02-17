@@ -54,7 +54,7 @@ This is a backlog tracking progress from scaffold to production.
 - [x] Markdown renderer (`render_markdown()`)
 - [x] GitHub Actions annotations (`render_github_annotations()`)
 - [x] Character escaping for GHA format
-- [ ] Add SARIF output (optional)
+- [x] Add SARIF output (optional)
 - [ ] Improve Markdown formatting (grouping, counts, links)
 - [x] Snapshot tests for Markdown under multiple finding sets
 
@@ -77,13 +77,13 @@ This is a backlog tracking progress from scaffold to production.
 - [x] Global options: `--repo-root`, `--config`, `--profile`, `--scope`, `--max-findings`
 - [x] Diff scope with `--base`/`--head` git integration
 - [x] Exit code semantics (0=pass, 1=error, 2=fail)
-- [ ] Artifact layout controls (`--out-dir`, etc.)
+- [x] Artifact layout controls (`--out-dir`, etc.)
 - [x] End-to-end integration tests with assert_cmd
 
 ## `xtask`
 
 - [x] Schema generation from Rust types
-- [ ] Fixture update automation
+- [x] Fixture update automation
 - [ ] CI smoke script generation
 - [ ] Release packaging automation
 

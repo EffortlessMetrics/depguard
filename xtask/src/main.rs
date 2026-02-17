@@ -178,6 +178,7 @@ fn print_help() {
     eprintln!("  help              Show this message");
     eprintln!("  emit-schemas      Generate JSON schemas from Rust types to schemas/");
     eprintln!("  validate-schemas  Check if schemas/ matches generated output (for CI)");
+    eprintln!("  fixtures          Regenerate test fixture goldens in tests/fixtures/");
     eprintln!("  print-schema-ids  Print known schema IDs");
     eprintln!("  conform           Validate contract fixtures against sensor.report.v1 schema");
     eprintln!(
@@ -653,6 +654,221 @@ where
     }
 }
 
+fn depguard_bin_path() -> PathBuf {
+    let depguard_bin = project_root().join("target").join("debug").join("depguard");
+    #[cfg(target_os = "windows")]
+    let depguard_bin = depguard_bin.with_extension("exe");
+    depguard_bin
+}
+
+fn run_depguard_cli(depguard_bin: &Path, args: &[String]) -> anyhow::Result<std::process::Output> {
+    std::process::Command::new(depguard_bin)
+        .args(args)
+        .output()
+        .with_context(|| format!("Failed to run depguard with args: {}", args.join(" ")))
+}
+
+/// Regenerate golden outputs in tests/fixtures/.
+///
+/// For each fixture directory, this updates:
+/// - expected.report.json (always)
+/// - expected.comment.md (if file already exists)
+/// - expected.annotations.txt (if file already exists)
+/// - expected.sensor-report.json (if file already exists)
+fn fixtures() -> anyhow::Result<()> {
+    let depguard_bin = depguard_bin_path();
+    if !depguard_bin.exists() {
+        bail!(
+            "depguard binary not found at {}.\n\
+            Run `cargo build -p depguard-cli` first.",
+            depguard_bin.display()
+        );
+    }
+
+    let fixtures_root = project_root().join("tests").join("fixtures");
+    if !fixtures_root.exists() {
+        bail!("fixtures directory not found: {}", fixtures_root.display());
+    }
+
+    let mut fixture_dirs = Vec::new();
+    for entry in fs::read_dir(&fixtures_root)
+        .with_context(|| format!("Failed to read {}", fixtures_root.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            fixture_dirs.push(path);
+        }
+    }
+    fixture_dirs.sort();
+
+    if fixture_dirs.is_empty() {
+        bail!(
+            "No fixture directories found in {}",
+            fixtures_root.display()
+        );
+    }
+
+    let mut updated = 0usize;
+
+    for fixture_dir in fixture_dirs {
+        let fixture_name = fixture_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        let temp_dir = tempfile::tempdir().context("Failed to create temp dir")?;
+        let report_out = temp_dir.path().join("report.json");
+
+        let check_args = vec![
+            "--repo-root".to_string(),
+            fixture_dir.display().to_string(),
+            "check".to_string(),
+            "--mode".to_string(),
+            "cockpit".to_string(),
+            "--report-version".to_string(),
+            "v2".to_string(),
+            "--report-out".to_string(),
+            report_out.display().to_string(),
+        ];
+
+        let output = run_depguard_cli(&depguard_bin, &check_args)?;
+        if !output.status.success() {
+            bail!(
+                "fixture '{}': depguard check failed with {:?}: {}",
+                fixture_name,
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let report_content = fs::read_to_string(&report_out).with_context(|| {
+            format!(
+                "fixture '{}': failed to read generated report {}",
+                fixture_name,
+                report_out.display()
+            )
+        })?;
+        let report_value: serde_json::Value = serde_json::from_str(&report_content)
+            .with_context(|| format!("fixture '{}': report is not valid JSON", fixture_name))?;
+        let normalized = depguard_test_util::normalize_nondeterministic(report_value);
+        let mut report_json = serde_json::to_string_pretty(&normalized)?;
+        report_json.push('\n');
+        fs::write(fixture_dir.join("expected.report.json"), report_json).with_context(|| {
+            format!(
+                "fixture '{}': failed to write expected.report.json",
+                fixture_name
+            )
+        })?;
+
+        let expected_comment = fixture_dir.join("expected.comment.md");
+        if expected_comment.exists() {
+            let md_args = vec![
+                "md".to_string(),
+                "--report".to_string(),
+                report_out.display().to_string(),
+            ];
+            let md_output = run_depguard_cli(&depguard_bin, &md_args)?;
+            if !md_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard md failed with {:?}: {}",
+                    fixture_name,
+                    md_output.status.code(),
+                    String::from_utf8_lossy(&md_output.stderr)
+                );
+            }
+            let md_text = String::from_utf8_lossy(&md_output.stdout).replace("\r\n", "\n");
+            fs::write(&expected_comment, md_text).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.comment.md",
+                    fixture_name
+                )
+            })?;
+        }
+
+        let expected_annotations = fixture_dir.join("expected.annotations.txt");
+        if expected_annotations.exists() {
+            let annotation_args = vec![
+                "annotations".to_string(),
+                "--report".to_string(),
+                report_out.display().to_string(),
+            ];
+            let annotation_output = run_depguard_cli(&depguard_bin, &annotation_args)?;
+            if !annotation_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard annotations failed with {:?}: {}",
+                    fixture_name,
+                    annotation_output.status.code(),
+                    String::from_utf8_lossy(&annotation_output.stderr)
+                );
+            }
+            let annotations =
+                String::from_utf8_lossy(&annotation_output.stdout).replace("\r\n", "\n");
+            fs::write(&expected_annotations, annotations).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.annotations.txt",
+                    fixture_name
+                )
+            })?;
+        }
+
+        let expected_sensor = fixture_dir.join("expected.sensor-report.json");
+        if expected_sensor.exists() {
+            let sensor_out = temp_dir.path().join("sensor-report.json");
+            let sensor_args = vec![
+                "--repo-root".to_string(),
+                fixture_dir.display().to_string(),
+                "check".to_string(),
+                "--mode".to_string(),
+                "cockpit".to_string(),
+                "--report-version".to_string(),
+                "sensor-v1".to_string(),
+                "--report-out".to_string(),
+                sensor_out.display().to_string(),
+            ];
+            let sensor_output = run_depguard_cli(&depguard_bin, &sensor_args)?;
+            if !sensor_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard sensor-v1 check failed with {:?}: {}",
+                    fixture_name,
+                    sensor_output.status.code(),
+                    String::from_utf8_lossy(&sensor_output.stderr)
+                );
+            }
+
+            let sensor_content = fs::read_to_string(&sensor_out).with_context(|| {
+                format!(
+                    "fixture '{}': failed to read generated sensor report {}",
+                    fixture_name,
+                    sensor_out.display()
+                )
+            })?;
+            let sensor_value: serde_json::Value = serde_json::from_str(&sensor_content)
+                .with_context(|| {
+                    format!(
+                        "fixture '{}': sensor report is not valid JSON",
+                        fixture_name
+                    )
+                })?;
+            let sensor_normalized = depguard_test_util::normalize_nondeterministic(sensor_value);
+            let mut sensor_json = serde_json::to_string_pretty(&sensor_normalized)?;
+            sensor_json.push('\n');
+            fs::write(&expected_sensor, sensor_json).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.sensor-report.json",
+                    fixture_name
+                )
+            })?;
+        }
+
+        updated += 1;
+        println!("  ✓ updated fixture '{}'", fixture_name);
+    }
+
+    println!("\n✓ Updated {} fixture(s).", updated);
+    Ok(())
+}
+
 fn run_with_args(args: &[String]) -> anyhow::Result<()> {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
 
@@ -663,6 +879,7 @@ fn run_with_args(args: &[String]) -> anyhow::Result<()> {
         }
         "emit-schemas" => emit_schemas(),
         "validate-schemas" => validate_schemas(),
+        "fixtures" => fixtures(),
         "conform" => conform(),
         "conform-full" => conform_full(),
         "explain-coverage" => explain_coverage(),
@@ -1248,6 +1465,15 @@ version = "0.1.0"
 
             let validate_args = ["xtask".to_string(), "validate-schemas".to_string()];
             run_with_args(&validate_args).expect("validate");
+        });
+    }
+
+    #[test]
+    fn run_with_args_fixtures_requires_depguard_bin() {
+        with_temp_root(|_root| {
+            let fixtures_args = ["xtask".to_string(), "fixtures".to_string()];
+            let err = run_with_args(&fixtures_args).unwrap_err();
+            assert!(format!("{err:#}").contains("xtask failed"));
         });
     }
 

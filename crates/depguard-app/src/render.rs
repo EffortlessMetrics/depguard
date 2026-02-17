@@ -6,6 +6,18 @@ pub fn render_markdown(report: &RenderableReport) -> String {
     depguard_render::render_markdown(report)
 }
 
+pub fn render_sarif(report: &RenderableReport) -> String {
+    depguard_render::render_sarif(report)
+}
+
+pub fn render_junit(report: &RenderableReport) -> String {
+    depguard_render::render_junit(report)
+}
+
+pub fn render_jsonl(report: &RenderableReport) -> String {
+    depguard_render::render_jsonl(report)
+}
+
 pub fn render_annotations(report: &RenderableReport, max: usize) -> Vec<String> {
     depguard_render::render_github_annotations(report)
         .into_iter()
@@ -68,5 +80,28 @@ mod tests {
         let report = sample_report();
         let markdown = render_markdown(&report);
         assert!(!markdown.is_empty());
+    }
+
+    #[test]
+    fn render_sarif_smoke() {
+        let report = sample_report();
+        let sarif = render_sarif(&report);
+        assert!(sarif.contains("\"version\": \"2.1.0\""));
+    }
+
+    #[test]
+    fn render_junit_smoke() {
+        let report = sample_report();
+        let junit = render_junit(&report);
+        assert!(junit.contains("<testsuite"));
+        assert!(junit.contains("depguard"));
+    }
+
+    #[test]
+    fn render_jsonl_smoke() {
+        let report = sample_report();
+        let jsonl = render_jsonl(&report);
+        assert!(jsonl.contains("\"kind\":\"finding\""));
+        assert!(jsonl.contains("\"kind\":\"summary\""));
     }
 }

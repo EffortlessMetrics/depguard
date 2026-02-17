@@ -12,6 +12,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  MUTATION_SCORE_THRESHOLD: "95"
 
 jobs:
   workflow-lint:
@@ -133,6 +134,33 @@ jobs:
         run: cargo install cargo-mutants
       - name: Run mutation tests
         run: cargo mutants --package depguard-domain --timeout-multiplier 3
+      - name: Enforce mutation score threshold
+        shell: bash
+        run: |
+          outcomes="mutants.out/outcomes.json"
+          if [ ! -f "$outcomes" ]; then
+            echo "::error::Missing cargo-mutants outcomes file at $outcomes"
+            exit 1
+          fi
+
+          caught="$(jq -r '.caught // 0' "$outcomes")"
+          missed="$(jq -r '.missed // 0' "$outcomes")"
+          tested=$((caught + missed))
+
+          if [ "$tested" -eq 0 ]; then
+            echo "::error::No killable mutants were tested (caught + missed == 0)."
+            exit 1
+          fi
+
+          score="$(awk "BEGIN { printf \"%.2f\", ($caught * 100) / $tested }")"
+          threshold="${MUTATION_SCORE_THRESHOLD:-95}"
+
+          echo "Mutation score: ${score}% (caught=${caught}, missed=${missed}, tested=${tested})"
+
+          if ! awk "BEGIN { exit !($score >= $threshold) }"; then
+            echo "::error::Mutation score ${score}% is below threshold ${threshold}%"
+            exit 1
+          fi
       - name: Upload mutation results
         uses: actions/upload-artifact@v4
         if: always()

@@ -10,6 +10,7 @@ use depguard_types::{
     RunMeta, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1, ToolMeta, ToolMetaV2,
     Verdict, VerdictCounts, VerdictStatus, VerdictV2, ids,
 };
+use depguard_yanked::YankedIndex;
 use time::OffsetDateTime;
 
 use crate::report::{ReportVariant, ReportVersion};
@@ -27,6 +28,8 @@ pub struct CheckInput<'a> {
     pub changed_files: Option<Vec<depguard_types::RepoPath>>,
     /// Report schema version to emit.
     pub report_version: ReportVersion,
+    /// Optional offline yanked-version index.
+    pub yanked_index: Option<YankedIndex>,
 }
 
 /// Output from the check use case.
@@ -49,8 +52,9 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
         depguard_settings::parse_config_toml(input.config_text).context("parse config")?
     };
 
-    let resolved = depguard_settings::resolve_config(cfg, input.overrides.clone())
+    let mut resolved = depguard_settings::resolve_config(cfg, input.overrides.clone())
         .context("resolve config")?;
+    resolved.effective.yanked_index = input.yanked_index.clone();
 
     let scope_input = match resolved.effective.scope {
         DomainScope::Repo => ScopeInput::Repo,
@@ -237,6 +241,7 @@ license.workspace = true
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V1,
+            yanked_index: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -278,6 +283,7 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V1,
+            yanked_index: None,
         };
 
         let err = run_check(input).expect_err("expected diff scope error");
@@ -299,6 +305,7 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::SensorV1,
+            yanked_index: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -328,6 +335,7 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V2,
+            yanked_index: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -353,6 +361,7 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: Some(vec![depguard_types::RepoPath::new("Cargo.toml")]),
             report_version: ReportVersion::SensorV1,
+            yanked_index: None,
         };
 
         let output = run_check(input).expect("run_check");

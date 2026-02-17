@@ -4,7 +4,7 @@ Normative shapes for the `data` field in depguard findings. Actuator and buildfi
 
 ## Per-dependency data shape
 
-Used by 9 of 10 checks. Each finding targets a single dependency in a single manifest.
+Used by 10 of 11 checks. Each finding targets a single dependency in a single manifest.
 
 ```json
 {
@@ -68,6 +68,7 @@ Complete set of stable tokens defined in `crates/depguard-types/src/ids.rs`.
 | `add_default_features` | `deps.default_features_explicit` | Add explicit `default-features` |
 | `align_workspace_versions` | `deps.no_multiple_versions` | Consolidate via `[workspace.dependencies]` |
 | `resolve_optional_feature` | `deps.optional_unused` | Add feature ref or remove `optional` |
+| `upgrade_yanked_version` | `deps.yanked_versions` | Upgrade exact pin to non-yanked version |
 
 ## Stability rules
 

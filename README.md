@@ -11,6 +11,7 @@ Depguard inspects `Cargo.toml` manifests and evaluates them against explicit pol
 - **Schema-first** — Versioned JSON schemas define the contract; tooling can rely on stable output
 - **CI-native** — GitHub Actions annotations, Markdown PR comments, configurable exit codes
 - **Gradual adoption** — Profiles (`strict`/`warn`/`compat`) and diff-scope let you roll out incrementally
+- **Autofix ready** — Generates `buildfix.plan.v1` and supports conservative safe in-place fixes
 
 ## Installation
 
@@ -20,6 +21,9 @@ cargo install --path crates/depguard-cli
 
 # Or build locally
 cargo build --release
+
+# Cargo subcommand is also available
+cargo depguard --help
 ```
 
 ## Quick start
@@ -34,14 +38,32 @@ depguard check --scope diff --base origin/main --head HEAD
 # Or use a precomputed changed-files list (no git required at runtime)
 depguard check --scope diff --diff-file changed-files.txt
 
+# Run yanked-version policy with an offline index
+depguard check --yanked-index yanked-index.txt
+
 # Generate baseline for existing violations
 depguard baseline --output .depguard-baseline.json
 
 # Suppress baseline findings during migration
 depguard check --baseline .depguard-baseline.json
 
+# Generate a buildfix plan from findings (machine-readable)
+depguard fix --report artifacts/depguard/report.json
+
+# Apply only conservative safe fixes in-place
+depguard fix --report artifacts/depguard/report.json --apply
+
 # Generate a Markdown report from existing JSON
 depguard md --report artifacts/depguard/report.json
+
+# Generate SARIF from existing JSON
+depguard sarif --report artifacts/depguard/report.json
+
+# Generate JUnit XML from existing JSON
+depguard junit --report artifacts/depguard/report.json
+
+# Generate JSON Lines stream from existing JSON
+depguard jsonl --report artifacts/depguard/report.json
 
 # Get help for a specific check or code
 depguard explain deps.no_wildcards
@@ -59,7 +81,16 @@ X 2 findings (1 error, 1 warning)
 Report written to artifacts/depguard/report.json
 ```
 
-By default, reports are written to `artifacts/depguard/report.json`. Use `--write-markdown` to also generate `artifacts/depguard/comment.md`.
+By default, reports are written to `artifacts/depguard/report.json`. Use `--out-dir` to change artifact layout, and `--write-markdown`, `--write-junit`, or `--write-jsonl` to emit additional files during `check`.
+
+`depguard fix` writes `artifacts/buildfix/plan.json` by default and applies only high-confidence safe fixes when `--apply` is provided.
+
+For one-off dependency exceptions, use inline suppressions:
+
+```toml
+[dependencies]
+serde = "*" # depguard: allow(no_wildcards)
+```
 
 See [docs/quickstart.md](docs/quickstart.md) for a complete getting-started guide.
 
@@ -104,6 +135,10 @@ severity = "error"
 enabled = true
 allow = ["internal-*"]  # Glob patterns; case-sensitive
 ignore_publish_false = true
+
+[checks."deps.yanked_versions"]
+enabled = true
+severity = "error"
 ```
 
 See [docs/config.md](docs/config.md) for the full configuration reference.
@@ -116,6 +151,7 @@ See [docs/config.md](docs/config.md) for the full configuration reference.
 | `deps.path_requires_version` | Require version alongside path dependencies |
 | `deps.path_safety` | Prevent absolute paths and workspace escapes |
 | `deps.workspace_inheritance` | Enforce `workspace = true` for shared deps (disabled by default) |
+| `deps.yanked_versions` | Flag exact pinned versions listed in an offline yanked index (disabled by default) |
 
 See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and remediation guidance.
 
@@ -168,6 +204,17 @@ jobs:
 
 See [docs/ci-integration.md](docs/ci-integration.md) for GitLab CI, CircleCI, Azure Pipelines, and Jenkins examples.
 
+## Pre-commit hook
+
+An example hook is included at `.githooks/pre-commit`.
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
+
+The hook runs depguard on staged files in diff scope and writes a report to `artifacts/depguard/report.json`.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -183,12 +230,14 @@ Depguard uses hexagonal (ports & adapters) architecture with a pure evaluation c
 ```
 crates/
   depguard-types     # Stable DTOs, schema IDs, finding codes
+  depguard-yanked    # Offline yanked index parsing/lookup
   depguard-settings  # Config parsing, profile presets
   depguard-domain    # Pure policy evaluation (no I/O)
   depguard-repo      # Workspace discovery, TOML parsing
   depguard-render    # Markdown and annotation renderers
   depguard-app       # Use case orchestration
   depguard-cli       # CLI binary
+  depguard-test-util # Shared fixture/report normalization helpers
 xtask/               # Dev tooling
 schemas/             # Versioned JSON schemas
 ```
@@ -216,5 +265,5 @@ See [docs/architecture.md](docs/architecture.md) for the full design.
 
 ## License
 
-[MIT](LICENSE) OR [Apache-2.0](LICENSE-APACHE)
+[MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
 

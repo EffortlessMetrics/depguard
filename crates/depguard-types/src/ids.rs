@@ -12,6 +12,7 @@ pub const CHECK_DEPS_DEV_ONLY_IN_NORMAL: &str = "deps.dev_only_in_normal";
 pub const CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT: &str = "deps.default_features_explicit";
 pub const CHECK_DEPS_NO_MULTIPLE_VERSIONS: &str = "deps.no_multiple_versions";
 pub const CHECK_DEPS_OPTIONAL_UNUSED: &str = "deps.optional_unused";
+pub const CHECK_DEPS_YANKED_VERSIONS: &str = "deps.yanked_versions";
 
 // Codes: deps.no_wildcards
 pub const CODE_WILDCARD_VERSION: &str = "wildcard_version";
@@ -41,6 +42,9 @@ pub const CODE_DUPLICATE_DIFFERENT_VERSIONS: &str = "duplicate_different_version
 // Codes: deps.optional_unused
 pub const CODE_OPTIONAL_NOT_IN_FEATURES: &str = "optional_not_in_features";
 
+// Codes: deps.yanked_versions
+pub const CODE_VERSION_YANKED: &str = "version_yanked";
+
 // Tool-level
 pub const CHECK_TOOL_RUNTIME: &str = "tool.runtime";
 pub const CODE_RUNTIME_ERROR: &str = "runtime_error";
@@ -62,6 +66,7 @@ pub const FIX_ACTION_MOVE_TO_DEV_DEPS: &str = "move_to_dev_deps";
 pub const FIX_ACTION_ADD_DEFAULT_FEATURES: &str = "add_default_features";
 pub const FIX_ACTION_ALIGN_WORKSPACE_VERSIONS: &str = "align_workspace_versions";
 pub const FIX_ACTION_RESOLVE_OPTIONAL_FEATURE: &str = "resolve_optional_feature";
+pub const FIX_ACTION_UPGRADE_YANKED_VERSION: &str = "upgrade_yanked_version";
 
 #[cfg(test)]
 mod tests {
@@ -80,6 +85,7 @@ mod tests {
             CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT,
             CHECK_DEPS_NO_MULTIPLE_VERSIONS,
             CHECK_DEPS_OPTIONAL_UNUSED,
+            CHECK_DEPS_YANKED_VERSIONS,
             CHECK_TOOL_RUNTIME,
         ];
         let codes = vec![
@@ -93,6 +99,7 @@ mod tests {
             CODE_DEFAULT_FEATURES_IMPLICIT,
             CODE_DUPLICATE_DIFFERENT_VERSIONS,
             CODE_OPTIONAL_NOT_IN_FEATURES,
+            CODE_VERSION_YANKED,
             CODE_RUNTIME_ERROR,
         ];
         let reasons = vec![
@@ -112,6 +119,7 @@ mod tests {
             FIX_ACTION_ADD_DEFAULT_FEATURES,
             FIX_ACTION_ALIGN_WORKSPACE_VERSIONS,
             FIX_ACTION_RESOLVE_OPTIONAL_FEATURE,
+            FIX_ACTION_UPGRADE_YANKED_VERSION,
         ];
 
         for id in check_ids

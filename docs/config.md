@@ -46,6 +46,10 @@ allow = []
 enabled = true  # default is disabled
 severity = "warning"
 allow = ["legacy-*"]
+
+[checks."deps.yanked_versions"]
+enabled = true  # default is disabled
+severity = "error"
 ```
 
 ## Profiles
@@ -71,6 +75,7 @@ Aliases:
 | `path_requires_version` severity | `error` | `warning` | `warning` |
 | `path_safety` severity | `error` | `warning` | `warning` |
 | `workspace_inheritance` | `disabled` | `disabled` | `disabled` |
+| `yanked_versions` | `disabled` | `disabled` | `disabled` |
 
 ## Scope
 
@@ -98,6 +103,18 @@ baseline = ".depguard-baseline.json"
 
 CLI `--baseline` overrides the config value.
 
+## Inline suppressions
+
+For dependency-level exceptions, you can suppress specific findings in `Cargo.toml`:
+
+```toml
+[dependencies]
+serde = "*" # depguard: allow(no_wildcards)
+tokio = "*" # depguard: allow(deps.no_wildcards, wildcard_version)
+```
+
+This is useful for local, explicit exceptions without broadening global allowlists.
+
 ## fail_on
 
 Controls when the tool exits with failure code (2):
@@ -119,6 +136,12 @@ allow = ["pattern", ...]  # Allowlist (glob patterns; case-sensitive)
 ignore_publish_false = true|false  # deps.path_requires_version only
 ```
 
+`deps.yanked_versions` also requires an index source at runtime:
+
+```bash
+depguard check --yanked-index yanked-index.txt
+```
+
 ### Check IDs
 
 | Check ID | Purpose |
@@ -127,6 +150,12 @@ ignore_publish_false = true|false  # deps.path_requires_version only
 | `deps.path_requires_version` | Require version with path deps |
 | `deps.path_safety` | Prevent absolute paths and escapes |
 | `deps.workspace_inheritance` | Enforce workspace = true |
+| `deps.git_requires_version` | Require version with git deps |
+| `deps.dev_only_in_normal` | Flag dev-only crates in normal dependencies |
+| `deps.default_features_explicit` | Require explicit default-features in inline specs |
+| `deps.no_multiple_versions` | Detect multiple versions of a crate across workspace |
+| `deps.optional_unused` | Flag optional deps not referenced in features |
+| `deps.yanked_versions` | Flag exact pinned versions listed in a yanked index |
 
 Unknown check IDs are allowed for forward compatibility.
 
@@ -158,12 +187,16 @@ depguard check \
 | `--scope <SCOPE>` | Override scope (`repo` or `diff`) |
 | `--max-findings <N>` | Override max findings limit |
 | `--baseline <PATH>` | Baseline file for suppressing known findings |
+| `--yanked-index <PATH>` | Offline yanked-version index file (used by `deps.yanked_versions`) |
 | `--base <REF>` | Git base ref for diff scope (when not using `--diff-file`) |
 | `--head <REF>` | Git head ref for diff scope (when not using `--diff-file`) |
 | `--diff-file <PATH>` | Read changed files from file (`-` for stdin); supports newline lists, JSON arrays, and GitHub Actions output format |
-| `--report-version <v1|v2>` | Report schema version to emit (default: `v2`) |
+| `--report-version <v1|v2|sensor-v1>` | Report schema version to emit (default: `v2`) |
+| `--out-dir <PATH>` | Base directory for generated artifacts (default: `artifacts/depguard`) |
 | `--report-out <PATH>` | JSON report output path |
 | `--markdown-out <PATH>` | Markdown output path (with `--write-markdown`) |
+| `--junit-out <PATH>` | JUnit XML output path (with `--write-junit`) |
+| `--jsonl-out <PATH>` | JSON Lines output path (with `--write-jsonl`) |
 | `--config <PATH>` | Path to config file (default: `depguard.toml`) |
 | `--repo-root <PATH>` | Repository root (default: current directory) |
 

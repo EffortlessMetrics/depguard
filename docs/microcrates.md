@@ -84,6 +84,32 @@ pub fn preset(profile: &str) -> EffectiveConfig  // "strict", "warn", "compat"
 
 ---
 
+## `depguard-yanked`
+
+**Owns**
+- Offline yanked-version index model (`YankedIndex`)
+- Parsing yanked index text formats (JSON and line-based)
+- Query API for exact crate/version lookup
+
+**Does not own**
+- File I/O (input is text)
+- Policy evaluation
+
+**Public API**
+```rust
+pub struct YankedIndex { ... }
+pub fn parse_yanked_index(input: &str) -> Result<YankedIndex>
+impl YankedIndex {
+    pub fn is_yanked(&self, crate_name: &str, version: &str) -> bool
+}
+```
+
+**Tests**
+- Format parsing tests (JSON map, JSON array, line format)
+- Validation/error message tests
+
+---
+
 ## `depguard-domain`
 
 **Owns**
@@ -167,6 +193,9 @@ pub mod fuzz {
 - Renderers from report → text formats:
   - Markdown (PR comment)
   - GitHub Actions annotations
+  - SARIF (`sarif v2.1.0`)
+  - JUnit XML
+  - JSON Lines (streaming)
 
 **Does not own**
 - Report serialization (that's app layer)
@@ -176,6 +205,9 @@ pub mod fuzz {
 ```rust
 pub fn render_markdown(report: &DepguardReport) -> String
 pub fn render_github_annotations(report: &DepguardReport) -> Vec<String>
+pub fn render_sarif(report: &DepguardReport) -> String
+pub fn render_junit(report: &DepguardReport) -> String
+pub fn render_jsonl(report: &DepguardReport) -> String
 ```
 
 **Tests**
@@ -200,8 +232,10 @@ pub fn render_github_annotations(report: &DepguardReport) -> Vec<String>
 ```rust
 // Use cases
 pub fn run_check(input: CheckInput) -> Result<CheckOutput>
-pub fn run_markdown(report: &DepguardReport) -> String
-pub fn run_annotations(report: &DepguardReport) -> Vec<String>
+pub fn render_markdown(report: &DepguardReport) -> String
+pub fn render_annotations(report: &DepguardReport) -> Vec<String>
+pub fn render_junit(report: &DepguardReport) -> String
+pub fn render_jsonl(report: &DepguardReport) -> String
 pub fn run_explain(identifier: &str) -> Option<Explanation>
 pub fn generate_baseline(report: &ReportVariant) -> DepguardBaselineV1
 pub fn apply_baseline(report: &mut ReportVariant, baseline: &DepguardBaselineV1, fail_on: FailOn)
@@ -232,11 +266,17 @@ pub fn verdict_exit_code(verdict: Verdict) -> i32  // 0=pass, 2=fail
 
 **Commands**
 ```
-depguard check [--report-out PATH] [--write-markdown] [--base REF] [--head REF] [--diff-file PATH]
+depguard check [--out-dir PATH] [--report-out PATH] [--write-markdown] [--write-junit] [--write-jsonl] [--base REF] [--head REF] [--diff-file PATH]
+depguard check [--yanked-index PATH]
 depguard baseline [--output PATH] [--base REF] [--head REF] [--diff-file PATH]
+depguard baseline [--yanked-index PATH]
 depguard md --report PATH [--output PATH]
 depguard annotations --report PATH [--max N]
+depguard sarif --report PATH [--output PATH]
+depguard junit --report PATH [--output PATH]
+depguard jsonl --report PATH [--output PATH]
 depguard explain <CHECK_ID|CODE>
+cargo depguard <ARGS...>
 ```
 
 **Exit codes**: 0 = pass/warn, 1 = tool error, 2 = policy failure
@@ -244,6 +284,27 @@ depguard explain <CHECK_ID|CODE>
 **Tests**
 - `assert_cmd` integration tests
 - End-to-end fixtures in `tests/fixtures/`
+
+---
+
+## `depguard-test-util`
+
+**Owns**
+- Shared test-only helpers reused across workspace crates
+- Normalization of non-deterministic report fields for golden-file comparisons
+
+**Does not own**
+- Production policy logic
+- CLI/runtime behavior
+
+**Public API**
+```rust
+pub fn normalize_nondeterministic(value: serde_json::Value) -> serde_json::Value
+```
+
+**Notes**
+- `publish = false`
+- Used by test suites and `xtask` fixture tooling
 
 ---
 
@@ -257,9 +318,9 @@ depguard explain <CHECK_ID|CODE>
 
 **Commands**
 ```bash
-cargo xtask schemas    # Generate JSON schemas
-cargo xtask fixtures   # Regenerate test fixtures
-cargo xtask release    # Prepare release artifacts
+cargo xtask emit-schemas   # Generate JSON schemas
+cargo xtask fixtures       # Regenerate test fixtures
+cargo xtask conform-full   # Full protocol conformance checks
 ```
 
 ## See also

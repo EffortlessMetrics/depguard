@@ -339,6 +339,18 @@ fn fixture_target_deps_fails() {
     assert_reports_match(report, expected, "target_deps");
 }
 
+#[test]
+fn fixture_inline_suppression_fails_with_unsuppressed_dependency() {
+    let (exit_code, report) = run_check_on_fixture("inline_suppression");
+    let expected = load_expected_report("inline_suppression");
+
+    assert_eq!(
+        exit_code, 2,
+        "inline_suppression fixture should still fail due to unsuppressed tokio wildcard"
+    );
+    assert_reports_match(report, expected, "inline_suppression");
+}
+
 // ============================================================================
 // CLI behavior tests
 // ============================================================================
@@ -392,6 +404,76 @@ fn check_with_markdown_output() {
     assert!(
         md_content.contains("wildcard"),
         "Markdown should contain finding"
+    );
+}
+
+#[test]
+fn check_with_out_dir_uses_default_layout() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let out_dir = temp_dir.path().join("custom-layout");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--out-dir")
+        .arg(&out_dir)
+        .arg("--write-markdown")
+        .assert()
+        .code(2);
+
+    assert!(
+        out_dir.join("report.json").exists(),
+        "report should be written to out-dir/report.json"
+    );
+    assert!(
+        out_dir.join("comment.md").exists(),
+        "markdown should be written to out-dir/comment.md"
+    );
+}
+
+#[test]
+fn check_with_junit_and_jsonl_outputs() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+    let junit_path = temp_dir.path().join("report.junit.xml");
+    let jsonl_path = temp_dir.path().join("report.jsonl");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .arg("--write-junit")
+        .arg("--junit-out")
+        .arg(&junit_path)
+        .arg("--write-jsonl")
+        .arg("--jsonl-out")
+        .arg(&jsonl_path)
+        .assert()
+        .code(2);
+
+    assert!(report_path.exists(), "JSON report should be created");
+    assert!(junit_path.exists(), "JUnit report should be created");
+    assert!(jsonl_path.exists(), "JSONL report should be created");
+
+    let report_text = std::fs::read_to_string(&report_path).expect("read report");
+    let report: Value = serde_json::from_str(&report_text).expect("parse report");
+    let artifacts = report["artifacts"].as_array().expect("artifacts array");
+    assert!(
+        artifacts
+            .iter()
+            .any(|a| { a["path"].as_str() == Some(junit_path.to_string_lossy().as_ref()) }),
+        "report should include junit artifact pointer"
+    );
+    assert!(
+        artifacts
+            .iter()
+            .any(|a| { a["path"].as_str() == Some(jsonl_path.to_string_lossy().as_ref()) }),
+        "report should include jsonl artifact pointer"
     );
 }
 
@@ -460,6 +542,93 @@ fn annotations_command_renders_gha_format() {
         stdout.contains("::error"),
         "Should contain GHA error annotation format"
     );
+}
+
+#[test]
+fn sarif_command_renders_sarif_json() {
+    // First, create a report
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .code(2);
+
+    // Then, render SARIF from it
+    let output = depguard_cmd()
+        .arg("sarif")
+        .arg("--report")
+        .arg(&report_path)
+        .output()
+        .expect("Failed to run sarif command");
+
+    assert!(output.status.success(), "sarif command should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"version\": \"2.1.0\""));
+    assert!(stdout.contains("\"runs\""));
+    assert!(stdout.contains("\"ruleId\""));
+}
+
+#[test]
+fn junit_command_renders_junit_xml() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .code(2);
+
+    let output = depguard_cmd()
+        .arg("junit")
+        .arg("--report")
+        .arg(&report_path)
+        .output()
+        .expect("Failed to run junit command");
+
+    assert!(output.status.success(), "junit command should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("<testsuite"));
+    assert!(stdout.contains("<testcase"));
+}
+
+#[test]
+fn jsonl_command_renders_json_lines() {
+    let fixture_path = fixtures_dir().join("wildcards");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let report_path = temp_dir.path().join("report.json");
+
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(&fixture_path)
+        .arg("check")
+        .arg("--report-out")
+        .arg(&report_path)
+        .assert()
+        .code(2);
+
+    let output = depguard_cmd()
+        .arg("jsonl")
+        .arg("--report")
+        .arg(&report_path)
+        .output()
+        .expect("Failed to run jsonl command");
+
+    assert!(output.status.success(), "jsonl command should succeed");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"kind\":\"finding\""));
+    assert!(stdout.contains("\"kind\":\"summary\""));
 }
 
 #[test]

@@ -20,6 +20,7 @@ fn strict_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks: default_checks(Severity::Error),
     }
 }
@@ -30,6 +31,7 @@ fn warn_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Warning,
         max_findings: 200,
+        yanked_index: None,
         checks: default_checks(Severity::Warning),
     }
 }
@@ -41,6 +43,7 @@ fn compat_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks: default_checks(Severity::Warning),
     }
 }
@@ -98,6 +101,13 @@ fn default_checks(default_severity: Severity) -> BTreeMap<String, CheckPolicy> {
     m.insert(
         CHECK_DEPS_DEV_ONLY_IN_NORMAL.to_string(),
         dev_only_in_normal_policy,
+    );
+
+    let mut yanked_versions_policy = CheckPolicy::disabled();
+    yanked_versions_policy.severity = Severity::Error;
+    m.insert(
+        CHECK_DEPS_YANKED_VERSIONS.to_string(),
+        yanked_versions_policy,
     );
 
     m

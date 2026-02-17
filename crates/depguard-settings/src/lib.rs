@@ -283,6 +283,14 @@ mod tests {
             .expect("dev_only_in_normal check should exist");
         assert!(!dev_only.enabled);
         assert_eq!(dev_only.severity, Severity::Warning);
+
+        let yanked = resolved
+            .effective
+            .checks
+            .get("deps.yanked_versions")
+            .expect("yanked_versions check should exist");
+        assert!(!yanked.enabled);
+        assert_eq!(yanked.severity, Severity::Error);
     }
 
     #[test]

@@ -4,14 +4,20 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description.workspace = true
+description = "CLI binaries for depguard policy checks and report artifact generation"
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
+authors.workspace = true
+readme = "README.md"
 
 [[bin]]
 name = "depguard"
 path = "src/main.rs"
+
+[[bin]]
+name = "cargo-depguard"
+path = "src/cargo_depguard.rs"
 
 [dependencies]
 anyhow.workspace = true
@@ -24,6 +30,7 @@ depguard-domain = { version = "0.1.0", path = "../depguard-domain" }
 depguard-render = { version = "0.1.0", path = "../depguard-render" }
 depguard-settings = { version = "0.1.0", path = "../depguard-settings" }
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
 
 [dev-dependencies]
 assert_cmd.workspace = true

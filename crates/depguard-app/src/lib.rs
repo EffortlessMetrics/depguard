@@ -10,6 +10,7 @@
 mod baseline;
 mod check;
 mod explain;
+mod fix;
 mod render;
 mod report;
 
@@ -18,7 +19,8 @@ pub use baseline::{
 };
 pub use check::{CheckInput, CheckOutput, run_check, verdict_exit_code};
 pub use explain::{ExplainOutput, format_explanation, format_not_found, run_explain};
-pub use render::{render_annotations, render_markdown};
+pub use fix::{FixApplyResult, apply_safe_fixes, generate_buildfix_plan, serialize_buildfix_plan};
+pub use render::{render_annotations, render_jsonl, render_junit, render_markdown, render_sarif};
 pub use report::{
     ReportVariant, ReportVersion, add_artifact, empty_report, parse_report_json,
     runtime_error_report, serialize_report, to_renderable,

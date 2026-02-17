@@ -20,6 +20,10 @@ Commands:
   check        Analyze manifests and emit receipt
   md           Render Markdown from JSON report
   annotations  Render GitHub Actions annotations
+  sarif        Render SARIF from JSON report
+  junit        Render JUnit XML from JSON report
+  jsonl        Render JSON Lines from JSON report
+  fix          Generate buildfix plan and optionally apply safe fixes
   explain      Show remediation guidance for a check or code
 ```
 
@@ -30,12 +34,18 @@ Commands:
 depguard check [OPTIONS]
 
 Options:
+  --out-dir <PATH>         Base output directory for artifacts (default: artifacts/depguard)
   --report-out <PATH>      Write JSON report to file
   --write-markdown         Also write Markdown output
-  --markdown-out <PATH>    Markdown output path (default: stdout)
+  --markdown-out <PATH>    Markdown output path (default: <out-dir>/comment.md)
+  --write-junit            Also write JUnit XML output
+  --junit-out <PATH>       JUnit output path (default: <out-dir>/report.junit.xml)
+  --write-jsonl            Also write JSON Lines output
+  --jsonl-out <PATH>       JSON Lines output path (default: <out-dir>/report.jsonl)
   --base <REF>             Git base ref for diff scope
   --head <REF>             Git head ref for diff scope
   --diff-file <PATH>       Precomputed changed-files list for diff scope
+  --yanked-index <PATH>    Offline yanked-version index for deps.yanked_versions
 ```
 
 ### md
@@ -48,9 +58,34 @@ depguard md --report <PATH> [--output <PATH>]
 depguard annotations --report <PATH> [--max <N>]
 ```
 
+### sarif
+```
+depguard sarif --report <PATH> [--output <PATH>]
+```
+
+### junit
+```
+depguard junit --report <PATH> [--output <PATH>]
+```
+
+### jsonl
+```
+depguard jsonl --report <PATH> [--output <PATH>]
+```
+
+### fix
+```
+depguard fix --report <PATH> [--plan-out <PATH>] [--apply]
+```
+
 ### explain
 ```
 depguard explain <CHECK_ID|CODE>
+```
+
+### cargo subcommand
+```
+cargo depguard [ARGS...]
 ```
 
 ## Exit Codes

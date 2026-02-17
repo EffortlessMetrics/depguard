@@ -252,6 +252,7 @@ fn config_all_enabled(severity: Severity) -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks,
     }
 }
@@ -281,6 +282,7 @@ fn config_all_disabled() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks,
     }
 }
@@ -1018,6 +1020,7 @@ proptest! {
             scope: Scope::Repo,
             fail_on: FailOn::Error,
             max_findings,
+            yanked_index: None,
             checks,
         };
 

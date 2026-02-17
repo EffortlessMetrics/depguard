@@ -1,13 +1,14 @@
 use super::{
     default_features_explicit, dev_only_in_normal, git_requires_version, no_multiple_versions,
     no_wildcards, optional_unused, path_requires_version, path_safety, utils,
-    workspace_inheritance,
+    workspace_inheritance, yanked_versions,
 };
 use crate::model::{DepKind, DepSpec};
 use crate::test_support::{
     config_with_check, config_with_check_allow, dep_decl, manifest, model, workspace_dep,
 };
 use depguard_types::{Severity, ids};
+use depguard_yanked::parse_yanked_index;
 use std::collections::BTreeMap;
 
 #[test]
@@ -809,6 +810,87 @@ fn optional_unused_detects_missing_feature_references() {
 }
 
 #[test]
+fn yanked_versions_flags_pinned_yanked_and_respects_allowlist() {
+    let deps = vec![
+        dep_decl(
+            "serde",
+            DepKind::Normal,
+            DepSpec {
+                version: Some("=1.0.188".to_string()),
+                ..DepSpec::default()
+            },
+            Some("cfg(unix)"),
+        ),
+        dep_decl(
+            "tokio",
+            DepKind::Normal,
+            DepSpec {
+                version: Some("=1.37.0".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+        dep_decl(
+            "time",
+            DepKind::Normal,
+            DepSpec {
+                version: Some("^0.3.30".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+    ];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let mut cfg = config_with_check_allow(
+        ids::CHECK_DEPS_YANKED_VERSIONS,
+        Severity::Error,
+        vec!["tokio"],
+        false,
+    );
+    cfg.yanked_index = Some(
+        parse_yanked_index(
+            r#"
+serde 1.0.188
+tokio 1.37.0
+"#,
+        )
+        .expect("parse yanked index"),
+    );
+
+    let mut out = Vec::new();
+    yanked_versions::run(&model, &cfg, &mut out);
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].code, ids::CODE_VERSION_YANKED);
+    assert_eq!(out[0].data["dependency"], "serde");
+    assert_eq!(out[0].data["pinned_version"], "1.0.188");
+    assert_eq!(out[0].data["target"], "cfg(unix)");
+}
+
+#[test]
+fn yanked_versions_is_noop_without_index() {
+    let deps = vec![dep_decl(
+        "serde",
+        DepKind::Normal,
+        DepSpec {
+            version: Some("=1.0.188".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+    let cfg = config_with_check(ids::CHECK_DEPS_YANKED_VERSIONS, Severity::Error);
+
+    let mut out = Vec::new();
+    yanked_versions::run(&model, &cfg, &mut out);
+    assert!(out.is_empty());
+}
+
+#[test]
 fn utils_allowlist_and_section_helpers() {
     let empty: Vec<String> = Vec::new();
     assert!(utils::build_allowlist(&empty).is_none());
@@ -835,6 +917,7 @@ fn utils_spec_to_json_includes_all_fields() {
         rev: Some("deadbeef".to_string()),
         default_features: Some(false),
         optional: true,
+        inline_suppressions: Vec::new(),
     };
 
     let json = utils::spec_to_json(&spec);

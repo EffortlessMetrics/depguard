@@ -7,7 +7,9 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
-description = "Use case orchestration for depguard (check, md, annotations, explain)"
+authors.workspace = true
+description = "depguard application use cases for check, explain, baseline, and rendering"
+readme = "README.md"
 
 [dependencies]
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
@@ -15,11 +17,13 @@ depguard-domain = { version = "0.1.0", path = "../depguard-domain" }
 depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
 depguard-settings = { version = "0.1.0", path = "../depguard-settings" }
 depguard-render = { version = "0.1.0", path = "../depguard-render" }
+depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
 
 anyhow.workspace = true
 camino.workspace = true
 serde_json.workspace = true
 time.workspace = true
+toml_edit.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

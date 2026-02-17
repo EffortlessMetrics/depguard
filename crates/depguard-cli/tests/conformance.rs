@@ -152,6 +152,7 @@ fn known_check_ids_are_documented() {
         ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT,
         ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS,
         ids::CHECK_DEPS_OPTIONAL_UNUSED,
+        ids::CHECK_DEPS_YANKED_VERSIONS,
         ids::CHECK_TOOL_RUNTIME,
     ];
 
@@ -189,6 +190,7 @@ fn known_codes_are_documented() {
         ids::CODE_DEFAULT_FEATURES_IMPLICIT,
         ids::CODE_DUPLICATE_DIFFERENT_VERSIONS,
         ids::CODE_OPTIONAL_NOT_IN_FEATURES,
+        ids::CODE_VERSION_YANKED,
         ids::CODE_RUNTIME_ERROR,
     ];
 

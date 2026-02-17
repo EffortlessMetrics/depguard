@@ -4,13 +4,16 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description.workspace = true
+description = "Deterministic depguard renderers for Markdown, GHA, SARIF, JUnit, and JSONL"
 repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
+authors.workspace = true
+readme = "README.md"
 
 [dependencies]
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
+serde_json.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

@@ -169,9 +169,9 @@ Implement one check at a time; each adds fixtures and explain entries.
   - [x] Format check: `cargo fmt --check`
   - [x] Clippy: `cargo clippy --all-targets --all-features`
   - [x] Schema validation: `cargo xtask validate-schemas`
-- [ ] Mutation testing job (scheduled):
+- [x] Mutation testing job (scheduled):
   - [x] `cargo mutants --package depguard-domain`
-  - [ ] Fail if mutation score drops below threshold
+  - [x] Fail if mutation score drops below threshold
 
 ### 6.2 Self-Dogfooding Workflow
 - [x] `.github/workflows/depguard.yml`:
@@ -252,9 +252,9 @@ Expand coverage with high-value dependency hygiene checks.
 **Justification**: Reduces transitive deps for consumers; catches copy-paste errors.
 
 ### 7.6 deps.yanked_versions (Future, Optional)
-- [ ] Accept `--yanked-index` file (pre-computed offline list)
-- [ ] Flag pinned versions that are yanked
-- [ ] Code: `version_yanked`
+- [x] Accept `--yanked-index` file (pre-computed offline list)
+- [x] Flag pinned versions that are yanked
+- [x] Code: `version_yanked`
 - [ ] Optional network mode for live crates.io lookup
 
 **Justification**: Yanked versions signal bugs/security issues; blocks publishing.
@@ -275,31 +275,31 @@ Expand coverage with high-value dependency hygiene checks.
 - [x] Support GitHub Actions changed-files action output format
 
 ### 8.2 Suppression & Baseline
-- [ ] Inline suppression comments: `# depguard: allow(no_wildcards)`
+- [x] Inline suppression comments: `# depguard: allow(no_wildcards)`
 - [x] Baseline file: ignore known violations during migration
 - [x] `depguard baseline` command to generate suppression file
 - [x] Gradual adoption: only fail on new violations
 
 ### 8.3 Fix Suggestions
-- [ ] Machine-readable fix suggestions in report
-- [ ] `depguard fix` command for auto-remediation
-- [ ] Integration with buildfix.plan.v1 schema
-- [ ] Conservative: only safe, unambiguous fixes
+- [x] Machine-readable fix suggestions in report
+- [x] `depguard fix` command for auto-remediation
+- [x] Integration with buildfix.plan.v1 schema
+- [x] Conservative: only safe, unambiguous fixes
 
 ### 8.4 Extended Outputs
-- [ ] SARIF output for GitHub Advanced Security
-- [ ] JUnit XML for legacy CI systems
-- [ ] JSON Lines streaming for large workspaces
+- [x] SARIF output for GitHub Advanced Security
+- [x] JUnit XML for legacy CI systems
+- [x] JSON Lines streaming for large workspaces
 
 ### 8.5 Performance & Scale
-- [ ] Parallel manifest parsing for large workspaces
+- [x] Parallel manifest parsing for large workspaces
 - [ ] Incremental mode: cache parsed manifests
 - [ ] Memory-efficient streaming for 1000+ crate workspaces
 
 ### 8.6 Ecosystem Integration
 - [ ] VS Code extension for inline diagnostics
-- [ ] Pre-commit hook integration
-- [ ] Cargo subcommand: `cargo depguard`
+- [x] Pre-commit hook integration
+- [x] Cargo subcommand: `cargo depguard`
 
 ---
 
