@@ -84,11 +84,14 @@ fn start_mock_yanked_api(yanked_pairs: HashMap<(String, String), bool>) -> Strin
                 let crate_name = segments[3];
                 let version = segments[4];
                 match yanked_pairs.get(&(crate_name.to_string(), version.to_string())) {
-                    Some(yanked) => format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                        format!(r#"{{"version":{{"yanked":{}}}}}"#, yanked).len(),
-                        format!(r#"{{"version":{{"yanked":{}}}}}"#, yanked)
-                    ),
+                    Some(yanked) => {
+                        let body = format!(r#"{{"version":{{"yanked":{yanked}}}}}"#);
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    }
                     None => {
                         let body = r#"{"errors":[{"detail":"not found"}]}"#;
                         format!(
