@@ -30,6 +30,8 @@ pub struct CheckInput<'a> {
     pub report_version: ReportVersion,
     /// Optional offline yanked-version index.
     pub yanked_index: Option<YankedIndex>,
+    /// Optional cache directory for incremental manifest parsing.
+    pub manifest_cache_dir: Option<&'a Utf8Path>,
 }
 
 /// Output from the check use case.
@@ -67,8 +69,12 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
         }
     };
 
-    let model = depguard_repo::build_workspace_model(input.repo_root, scope_input)
-        .context("build workspace model")?;
+    let model = depguard_repo::build_workspace_model_with_cache(
+        input.repo_root,
+        scope_input,
+        input.manifest_cache_dir,
+    )
+    .context("build workspace model")?;
 
     let domain_report = depguard_domain::evaluate(&model, &resolved.effective);
     let depguard_domain::report::DomainReport {
@@ -242,6 +248,7 @@ license.workspace = true
             changed_files: None,
             report_version: ReportVersion::V1,
             yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -284,6 +291,7 @@ edition = "2021"
             changed_files: None,
             report_version: ReportVersion::V1,
             yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let err = run_check(input).expect_err("expected diff scope error");
@@ -306,6 +314,7 @@ edition = "2021"
             changed_files: None,
             report_version: ReportVersion::SensorV1,
             yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -336,6 +345,7 @@ edition = "2021"
             changed_files: None,
             report_version: ReportVersion::V2,
             yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -362,6 +372,7 @@ edition = "2021"
             changed_files: Some(vec![depguard_types::RepoPath::new("Cargo.toml")]),
             report_version: ReportVersion::SensorV1,
             yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");

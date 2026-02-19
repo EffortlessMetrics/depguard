@@ -18,9 +18,12 @@ use depguard_app::{
 use depguard_settings::Overrides;
 use depguard_types::RepoPath;
 use depguard_types::{ArtifactPointer, ArtifactType};
-use depguard_yanked::parse_yanked_index;
+use depguard_yanked::{YankedIndex, parse_yanked_index};
+use reqwest::blocking::Client;
+use std::collections::BTreeSet;
 use std::io::Read;
 use std::process::Command;
+use std::time::Duration;
 
 #[cfg(test)]
 fn terminate(code: i32) -> ! {
@@ -59,6 +62,10 @@ struct CheckOpts {
     head: Option<String>,
     diff_file: Option<Utf8PathBuf>,
     yanked_index: Option<Utf8PathBuf>,
+    yanked_live: bool,
+    yanked_api_base_url: Option<String>,
+    incremental: bool,
+    cache_dir: Option<Utf8PathBuf>,
     baseline: Option<Utf8PathBuf>,
     out_dir: Option<Utf8PathBuf>,
     report_out: Option<Utf8PathBuf>,
@@ -78,6 +85,10 @@ struct BaselineOpts {
     head: Option<String>,
     diff_file: Option<Utf8PathBuf>,
     yanked_index: Option<Utf8PathBuf>,
+    yanked_live: bool,
+    yanked_api_base_url: Option<String>,
+    incremental: bool,
+    cache_dir: Option<Utf8PathBuf>,
     output: Utf8PathBuf,
 }
 
@@ -131,6 +142,26 @@ enum Commands {
         /// Offline yanked-version index file used by deps.yanked_versions.
         #[arg(long)]
         yanked_index: Option<Utf8PathBuf>,
+
+        /// Enable live crates.io yanked-version lookup for deps.yanked_versions.
+        #[arg(long)]
+        yanked_live: bool,
+
+        /// Base URL for the yanked-version API (advanced/testing).
+        ///
+        /// Defaults to https://crates.io.
+        #[arg(long)]
+        yanked_api_base_url: Option<String>,
+
+        /// Enable incremental mode by caching parsed manifests between runs.
+        #[arg(long)]
+        incremental: bool,
+
+        /// Directory for incremental cache data.
+        ///
+        /// Defaults to `.depguard-cache` when --incremental is enabled.
+        #[arg(long)]
+        cache_dir: Option<Utf8PathBuf>,
 
         /// Base directory for generated artifacts.
         ///
@@ -201,6 +232,22 @@ enum Commands {
         /// Offline yanked-version index file used by deps.yanked_versions.
         #[arg(long)]
         yanked_index: Option<Utf8PathBuf>,
+        /// Enable live crates.io yanked-version lookup for deps.yanked_versions.
+        #[arg(long)]
+        yanked_live: bool,
+        /// Base URL for the yanked-version API (advanced/testing).
+        ///
+        /// Defaults to https://crates.io.
+        #[arg(long)]
+        yanked_api_base_url: Option<String>,
+        /// Enable incremental mode by caching parsed manifests between runs.
+        #[arg(long)]
+        incremental: bool,
+        /// Directory for incremental cache data.
+        ///
+        /// Defaults to `.depguard-cache` when --incremental is enabled.
+        #[arg(long)]
+        cache_dir: Option<Utf8PathBuf>,
         /// Where to write the baseline JSON.
         #[arg(long, default_value = ".depguard-baseline.json")]
         output: Utf8PathBuf,
@@ -292,6 +339,10 @@ fn main() -> anyhow::Result<()> {
             ref head,
             ref diff_file,
             ref yanked_index,
+            yanked_live,
+            ref yanked_api_base_url,
+            incremental,
+            ref cache_dir,
             ref out_dir,
             ref baseline,
             ref report_out,
@@ -310,6 +361,10 @@ fn main() -> anyhow::Result<()> {
                 head: head.clone(),
                 diff_file: diff_file.clone(),
                 yanked_index: yanked_index.clone(),
+                yanked_live,
+                yanked_api_base_url: yanked_api_base_url.clone(),
+                incremental,
+                cache_dir: cache_dir.clone(),
                 baseline: baseline.clone(),
                 out_dir: out_dir.clone(),
                 report_out: report_out.clone(),
@@ -328,6 +383,10 @@ fn main() -> anyhow::Result<()> {
             ref head,
             ref diff_file,
             ref yanked_index,
+            yanked_live,
+            ref yanked_api_base_url,
+            incremental,
+            ref cache_dir,
             ref output,
         } => cmd_baseline(
             &cli,
@@ -336,6 +395,10 @@ fn main() -> anyhow::Result<()> {
                 head: head.clone(),
                 diff_file: diff_file.clone(),
                 yanked_index: yanked_index.clone(),
+                yanked_live,
+                yanked_api_base_url: yanked_api_base_url.clone(),
+                incremental,
+                cache_dir: cache_dir.clone(),
                 output: output.clone(),
             },
         ),
@@ -496,7 +559,16 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             opts.diff_file.as_deref(),
         )
         .context("resolve diff scope inputs")?;
-        let yanked_index = load_yanked_index(&repo_root, opts.yanked_index.as_ref())?;
+        let scope_input = scope_input_from_changed_files(changed_files.as_ref());
+        let yanked_index = load_yanked_index(
+            &repo_root,
+            opts.yanked_index.as_ref(),
+            opts.yanked_live,
+            opts.yanked_api_base_url.as_deref(),
+            &scope_input,
+        )?;
+        let manifest_cache_dir =
+            effective_cache_dir(opts.incremental, opts.cache_dir.as_ref().cloned());
 
         let input = CheckInput {
             repo_root: &repo_root,
@@ -505,6 +577,7 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             changed_files,
             report_version,
             yanked_index,
+            manifest_cache_dir: manifest_cache_dir.as_deref(),
         };
 
         let mut output = run_check(input)?;
@@ -588,7 +661,16 @@ fn cmd_baseline(cli: &Cli, opts: BaselineOpts) -> anyhow::Result<()> {
         opts.diff_file.as_deref(),
     )
     .context("resolve diff scope inputs")?;
-    let yanked_index = load_yanked_index(&repo_root, opts.yanked_index.as_ref())?;
+    let scope_input = scope_input_from_changed_files(changed_files.as_ref());
+    let yanked_index = load_yanked_index(
+        &repo_root,
+        opts.yanked_index.as_ref(),
+        opts.yanked_live,
+        opts.yanked_api_base_url.as_deref(),
+        &scope_input,
+    )?;
+    let manifest_cache_dir =
+        effective_cache_dir(opts.incremental, opts.cache_dir.as_ref().cloned());
 
     let input = CheckInput {
         repo_root: &repo_root,
@@ -597,6 +679,7 @@ fn cmd_baseline(cli: &Cli, opts: BaselineOpts) -> anyhow::Result<()> {
         changed_files,
         report_version: ReportVersion::V2,
         yanked_index,
+        manifest_cache_dir: manifest_cache_dir.as_deref(),
     };
 
     let output = run_check(input).context("run check for baseline generation")?;
@@ -945,25 +1028,145 @@ fn normalize_input_path(repo_root: &camino::Utf8Path, path: &str) -> Utf8PathBuf
     }
 }
 
+fn effective_cache_dir(enabled: bool, cache_dir: Option<Utf8PathBuf>) -> Option<Utf8PathBuf> {
+    if !enabled {
+        return None;
+    }
+    Some(cache_dir.unwrap_or_else(|| Utf8PathBuf::from(".depguard-cache")))
+}
+
+fn scope_input_from_changed_files(
+    changed_files: Option<&Vec<RepoPath>>,
+) -> depguard_repo::ScopeInput {
+    match changed_files {
+        Some(paths) => depguard_repo::ScopeInput::Diff {
+            changed_files: paths.clone(),
+        },
+        None => depguard_repo::ScopeInput::Repo,
+    }
+}
+
 fn load_yanked_index(
     repo_root: &camino::Utf8Path,
     yanked_index_path: Option<&Utf8PathBuf>,
-) -> anyhow::Result<Option<depguard_yanked::YankedIndex>> {
-    let Some(path) = yanked_index_path else {
-        return Ok(None);
-    };
+    yanked_live: bool,
+    yanked_api_base_url: Option<&str>,
+    scope_input: &depguard_repo::ScopeInput,
+) -> anyhow::Result<Option<YankedIndex>> {
+    let mut merged = if let Some(path) = yanked_index_path {
+        let abs_path = if path.is_absolute() {
+            path.clone()
+        } else {
+            repo_root.join(path)
+        };
 
-    let abs_path = if path.is_absolute() {
-        path.clone()
+        let text = std::fs::read_to_string(&abs_path)
+            .with_context(|| format!("read yanked index file: {}", abs_path))?;
+        let index = parse_yanked_index(&text)
+            .with_context(|| format!("parse yanked index file: {}", abs_path))?;
+        Some(index)
     } else {
-        repo_root.join(path)
+        None
     };
 
-    let text = std::fs::read_to_string(&abs_path)
-        .with_context(|| format!("read yanked index file: {}", abs_path))?;
-    let index = parse_yanked_index(&text)
-        .with_context(|| format!("parse yanked index file: {}", abs_path))?;
-    Ok(Some(index))
+    if yanked_live {
+        let live = fetch_live_yanked_index(repo_root, scope_input, yanked_api_base_url)?;
+        match merged.as_mut() {
+            Some(existing) => existing.merge(live),
+            None => merged = Some(live),
+        }
+    }
+
+    Ok(merged)
+}
+
+fn fetch_live_yanked_index(
+    repo_root: &camino::Utf8Path,
+    scope_input: &depguard_repo::ScopeInput,
+    yanked_api_base_url: Option<&str>,
+) -> anyhow::Result<YankedIndex> {
+    let model = depguard_repo::build_workspace_model(repo_root, scope_input.clone())
+        .context("build workspace model for live yanked lookup")?;
+    let pins = collect_exact_pins(&model);
+    if pins.is_empty() {
+        return Ok(YankedIndex::default());
+    }
+
+    let base_url = yanked_api_base_url
+        .map(str::to_string)
+        .or_else(|| std::env::var("DEPGUARD_YANKED_API_BASE_URL").ok())
+        .unwrap_or_else(|| "https://crates.io".to_string());
+    let base_url = base_url.trim_end_matches('/').to_string();
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent(format!("depguard/{}", env!("CARGO_PKG_VERSION")))
+        .build()
+        .context("build HTTP client for yanked lookup")?;
+
+    let mut index = YankedIndex::default();
+    for (crate_name, version) in pins {
+        let url = format!("{base_url}/api/v1/crates/{crate_name}/{version}");
+        let response = client
+            .get(&url)
+            .send()
+            .with_context(|| format!("request yanked status for {crate_name} {version}"))?;
+
+        let status = response.status();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            continue;
+        }
+        if !status.is_success() {
+            anyhow::bail!(
+                "yanked lookup failed for {crate_name} {version}: HTTP {} from {}",
+                status,
+                url
+            );
+        }
+
+        let body: serde_json::Value = response
+            .json()
+            .with_context(|| format!("parse yanked API response from {url}"))?;
+        let yanked = body
+            .get("version")
+            .and_then(|v| v.get("yanked"))
+            .and_then(|v| v.as_bool())
+            .context(format!(
+                "yanked API response missing version.yanked for {crate_name} {version}"
+            ))?;
+        if yanked {
+            index.insert(&crate_name, &version);
+        }
+    }
+
+    Ok(index)
+}
+
+fn collect_exact_pins(
+    model: &depguard_domain::model::WorkspaceModel,
+) -> BTreeSet<(String, String)> {
+    let mut pins = BTreeSet::new();
+    for manifest in &model.manifests {
+        for dep in &manifest.dependencies {
+            if dep.spec.workspace {
+                continue;
+            }
+            let Some(version_req) = dep.spec.version.as_deref() else {
+                continue;
+            };
+            let Some(pinned) = pinned_version(version_req) else {
+                continue;
+            };
+            pins.insert((dep.name.clone(), pinned.to_string()));
+        }
+    }
+    pins
+}
+
+fn pinned_version(version_req: &str) -> Option<&str> {
+    let trimmed = version_req.trim();
+    let rest = trimmed.strip_prefix('=')?.trim();
+    if rest.is_empty() { None } else { Some(rest) }
 }
 
 fn write_report_file(path: &camino::Utf8Path, report: &ReportVariant) -> anyhow::Result<()> {
@@ -1443,6 +1646,10 @@ edition = "2021"
                 head: None,
                 diff_file: None,
                 yanked_index: None,
+                yanked_live: false,
+                yanked_api_base_url: None,
+                incremental: false,
+                cache_dir: None,
                 out_dir: None,
                 report_out: Some(Utf8PathBuf::from("report.json")),
                 report_version: "v2".to_string(),
@@ -1489,6 +1696,10 @@ edition = "2021"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1521,6 +1732,10 @@ edition = "2021"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1560,6 +1775,10 @@ edition = "2021"
             head: None,
             diff_file: Some(Utf8PathBuf::from("changed-files.txt")),
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1611,6 +1830,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: Some(Utf8PathBuf::from("yanked-index.txt")),
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1652,6 +1875,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             output: output.clone(),
         };
 
@@ -1681,6 +1908,10 @@ severity = "error"
                 head: None,
                 diff_file: None,
                 yanked_index: None,
+                yanked_live: false,
+                yanked_api_base_url: None,
+                incremental: false,
+                cache_dir: None,
                 output: baseline_path.clone(),
             },
         )
@@ -1692,6 +1923,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: Some(Utf8PathBuf::from(".depguard-baseline.json")),
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1730,6 +1965,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out),
@@ -1759,6 +1998,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -1791,6 +2034,10 @@ severity = "error"
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),
@@ -2012,6 +2259,10 @@ serde = { version = "1.0", optional = true }
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: Some(Utf8PathBuf::from("custom-artifacts")),
             report_out: None,
@@ -2067,6 +2318,10 @@ serde = { version = "1.0", optional = true }
                 head: None,
                 diff_file: None,
                 yanked_index: None,
+                yanked_live: false,
+                yanked_api_base_url: None,
+                incremental: false,
+                cache_dir: None,
                 baseline: None,
                 out_dir: None,
                 report_out: Some(Utf8PathBuf::from("report.json")),
@@ -2088,6 +2343,10 @@ serde = { version = "1.0", optional = true }
             head: None,
             diff_file: None,
             yanked_index: None,
+            yanked_live: false,
+            yanked_api_base_url: None,
+            incremental: false,
+            cache_dir: None,
             baseline: None,
             out_dir: None,
             report_out: Some(report_out.clone()),

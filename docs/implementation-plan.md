@@ -255,7 +255,7 @@ Expand coverage with high-value dependency hygiene checks.
 - [x] Accept `--yanked-index` file (pre-computed offline list)
 - [x] Flag pinned versions that are yanked
 - [x] Code: `version_yanked`
-- [ ] Optional network mode for live crates.io lookup
+- [x] Optional network mode for live crates.io lookup
 
 **Justification**: Yanked versions signal bugs/security issues; blocks publishing.
 
@@ -293,7 +293,7 @@ Expand coverage with high-value dependency hygiene checks.
 
 ### 8.5 Performance & Scale
 - [x] Parallel manifest parsing for large workspaces
-- [ ] Incremental mode: cache parsed manifests
+- [x] Incremental mode: cache parsed manifests
 - [ ] Memory-efficient streaming for 1000+ crate workspaces
 
 ### 8.6 Ecosystem Integration

@@ -18,11 +18,12 @@ globset.workspace = true
 toml_edit.workspace = true
 walkdir.workspace = true
 rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
 depguard-domain = { version = "0.1.0", path = "../depguard-domain" }
 
 [dev-dependencies]
 proptest.workspace = true
-serde_json.workspace = true
 tempfile.workspace = true

@@ -47,6 +47,13 @@ impl YankedIndex {
             .or_default()
             .insert(version.to_string());
     }
+
+    /// Merge another index into this one.
+    pub fn merge(&mut self, other: YankedIndex) {
+        for (crate_name, versions) in other.entries {
+            self.entries.entry(crate_name).or_default().extend(versions);
+        }
+    }
 }
 
 /// Parse a yanked index from text.
@@ -251,5 +258,15 @@ time 0.3.21 # inline comment
     fn invalid_line_fails_with_line_number() {
         let err = parse_yanked_index("serde 1.0.1 extra").expect_err("expected parse failure");
         assert!(err.to_string().contains("line 1"));
+    }
+
+    #[test]
+    fn merge_combines_entries() {
+        let mut base = parse_yanked_index("serde 1.0.0").expect("parse base");
+        let extra = parse_yanked_index("serde 1.0.1\ntokio 1.37.0").expect("parse extra");
+        base.merge(extra);
+        assert!(base.is_yanked("serde", "1.0.0"));
+        assert!(base.is_yanked("serde", "1.0.1"));
+        assert!(base.is_yanked("tokio", "1.37.0"));
     }
 }

@@ -142,6 +142,12 @@ ignore_publish_false = true|false  # deps.path_requires_version only
 depguard check --yanked-index yanked-index.txt
 ```
 
+Optional live lookup mode can query crates.io directly:
+
+```bash
+depguard check --yanked-live
+```
+
 ### Check IDs
 
 | Check ID | Purpose |
@@ -188,6 +194,10 @@ depguard check \
 | `--max-findings <N>` | Override max findings limit |
 | `--baseline <PATH>` | Baseline file for suppressing known findings |
 | `--yanked-index <PATH>` | Offline yanked-version index file (used by `deps.yanked_versions`) |
+| `--yanked-live` | Enable live crates.io lookup for `deps.yanked_versions` |
+| `--yanked-api-base-url <URL>` | Override yanked lookup API base URL (advanced/testing) |
+| `--incremental` | Cache parsed manifests across runs |
+| `--cache-dir <PATH>` | Directory for incremental cache data (default: `.depguard-cache`) |
 | `--base <REF>` | Git base ref for diff scope (when not using `--diff-file`) |
 | `--head <REF>` | Git head ref for diff scope (when not using `--diff-file`) |
 | `--diff-file <PATH>` | Read changed files from file (`-` for stdin); supports newline lists, JSON arrays, and GitHub Actions output format |

@@ -407,7 +407,7 @@ allow = []
 Detects exact pinned versions (`=x.y.z`) that are listed as yanked in an offline index.
 
 > **Note**: This check is **disabled by default**. Enable it explicitly if you want enforcement.
-> It only evaluates when you pass `--yanked-index <PATH>`.
+> It only evaluates when you pass a yanked data source (`--yanked-index <PATH>` or `--yanked-live`).
 
 ### Codes
 
@@ -444,6 +444,8 @@ allow = ["internal-*"]
 
 ```bash
 depguard check --yanked-index yanked-index.txt
+# or
+depguard check --yanked-live
 ```
 
 Supported index formats: JSON map/array or line-based text (`crate version`, `crate@version`).

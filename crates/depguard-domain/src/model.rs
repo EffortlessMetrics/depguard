@@ -1,7 +1,8 @@
 use depguard_types::{Location, RepoPath};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceModel {
     pub repo_root: RepoPath,
 
@@ -12,7 +13,7 @@ pub struct WorkspaceModel {
     pub manifests: Vec<ManifestModel>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceDependency {
     pub name: String,
     pub version: Option<String>,
@@ -20,7 +21,7 @@ pub struct WorkspaceDependency {
     pub workspace: bool,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ManifestModel {
     pub path: RepoPath,
     pub package: Option<PackageMeta>,
@@ -29,20 +30,20 @@ pub struct ManifestModel {
     pub features: BTreeMap<String, Vec<String>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PackageMeta {
     pub name: String,
     pub publish: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DepKind {
     Normal,
     Dev,
     Build,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DependencyDecl {
     pub kind: DepKind,
     pub name: String,
@@ -53,7 +54,7 @@ pub struct DependencyDecl {
     pub target: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DepSpec {
     pub version: Option<String>,
     pub path: Option<String>,

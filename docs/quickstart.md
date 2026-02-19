@@ -228,6 +228,12 @@ Run with an offline yanked index:
 depguard check --yanked-index yanked-index.txt
 ```
 
+Or query crates.io live:
+
+```bash
+depguard check --yanked-live
+```
+
 Supported index formats include JSON maps and simple line format (`crate version` or `crate@version`).
 
 ## Baseline mode
@@ -241,6 +247,16 @@ depguard check --baseline .depguard-baseline.json
 
 You can also set `baseline = ".depguard-baseline.json"` in `depguard.toml`.
 When baseline suppression is active, suppressed findings are counted in `verdict.counts.suppressed`.
+
+## Incremental mode
+
+Cache parsed manifests between runs:
+
+```bash
+depguard check --incremental
+```
+
+By default depguard writes cache data to `.depguard-cache/` (override with `--cache-dir`).
 
 ## Inline suppression comments
 
