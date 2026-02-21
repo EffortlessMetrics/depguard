@@ -28,10 +28,11 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
                 continue;
             };
 
-            if !index.is_yanked(&dep.name, pinned) {
+            let canonical_name = dep.spec.package.as_deref().unwrap_or(&dep.name);
+            if !index.is_yanked(canonical_name, pinned) {
                 continue;
             }
-            if is_allowed(allow.as_ref(), &dep.name) {
+            if is_allowed(allow.as_ref(), canonical_name) {
                 continue;
             }
 

@@ -138,7 +138,13 @@ pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixAppl
     }
 
     for (manifest, fixes) in by_manifest {
-        let manifest_path = normalize_manifest_path(repo_root, &manifest);
+        let manifest_path = match normalize_manifest_path(repo_root, &manifest) {
+            Ok(p) => p,
+            Err(_) => {
+                result.failed += fixes.len() as u32;
+                continue;
+            }
+        };
         let text = match std::fs::read_to_string(&manifest_path) {
             Ok(text) => text,
             Err(_) => {
@@ -258,13 +264,17 @@ fn candidate_from_finding(
     })
 }
 
-fn normalize_manifest_path(repo_root: &Utf8Path, path: &str) -> Utf8PathBuf {
+fn normalize_manifest_path(repo_root: &Utf8Path, path: &str) -> anyhow::Result<Utf8PathBuf> {
     let path = Utf8PathBuf::from(path);
     if path.is_absolute() {
-        path
-    } else {
-        repo_root.join(path)
+        anyhow::bail!("manifest path must be relative: {path}");
     }
+    for component in path.components() {
+        if let camino::Utf8Component::ParentDir = component {
+            anyhow::bail!("manifest path must not contain '..': {path}");
+        }
+    }
+    Ok(repo_root.join(path))
 }
 
 fn apply_default_features_fix(doc: &mut DocumentMut, candidate: &SafeFixCandidate) -> bool {
@@ -283,6 +293,15 @@ fn apply_default_features_fix(doc: &mut DocumentMut, candidate: &SafeFixCandidat
                 return false;
             }
             table.insert("default-features", TomlValue::from(true));
+            true
+        }
+        Item::Value(TomlValue::String(version)) => {
+            // Convert `dep = "1.0"` → `dep = { version = "1.0", default-features = true }`
+            let ver = version.value().to_string();
+            let mut table = toml_edit::InlineTable::new();
+            table.insert("version", TomlValue::from(ver));
+            table.insert("default-features", TomlValue::from(true));
+            *dep_item = Item::Value(TomlValue::InlineTable(table));
             true
         }
         Item::Table(table) => {

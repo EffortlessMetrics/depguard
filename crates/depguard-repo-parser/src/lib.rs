@@ -368,6 +368,10 @@ fn parse_inline_table(t: &toml_edit::InlineTable) -> DepSpec {
     if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
         spec.optional = o;
     }
+    // Package rename: `alias = { package = "real-crate", ... }`
+    if let Some(pkg) = t.get("package").and_then(|v| v.as_str()) {
+        spec.package = Some(pkg.to_string());
+    }
     spec
 }
 
@@ -401,6 +405,10 @@ fn parse_table(t: &toml_edit::Table) -> DepSpec {
     }
     if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
         spec.optional = o;
+    }
+    // Package rename: `[dependencies.alias] package = "real-crate"`
+    if let Some(pkg) = t.get("package").and_then(|v| v.as_str()) {
+        spec.package = Some(pkg.to_string());
     }
     spec
 }

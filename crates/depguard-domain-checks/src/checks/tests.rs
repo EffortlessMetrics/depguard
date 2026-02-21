@@ -918,6 +918,7 @@ fn utils_spec_to_json_includes_all_fields() {
         default_features: Some(false),
         optional: true,
         inline_suppressions: Vec::new(),
+        package: None,
     };
 
     let json = utils::spec_to_json(&spec);

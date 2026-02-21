@@ -1070,7 +1070,10 @@ fn load_yanked_index(
     };
 
     if yanked_live {
-        let live = fetch_live_yanked_index(repo_root, scope_input, yanked_api_base_url)?;
+        let model = depguard_repo::build_workspace_model(repo_root, scope_input.clone())
+            .context("build workspace model for live yanked lookup")?;
+        let pins = collect_exact_pins(&model);
+        let live = fetch_live_yanked_index(&pins, yanked_api_base_url)?;
         match merged.as_mut() {
             Some(existing) => existing.merge(live),
             None => merged = Some(live),
@@ -1081,13 +1084,9 @@ fn load_yanked_index(
 }
 
 fn fetch_live_yanked_index(
-    repo_root: &camino::Utf8Path,
-    scope_input: &depguard_repo::ScopeInput,
+    pins: &BTreeSet<(String, String)>,
     yanked_api_base_url: Option<&str>,
 ) -> anyhow::Result<YankedIndex> {
-    let model = depguard_repo::build_workspace_model(repo_root, scope_input.clone())
-        .context("build workspace model for live yanked lookup")?;
-    let pins = collect_exact_pins(&model);
     if pins.is_empty() {
         return Ok(YankedIndex::default());
     }
@@ -1135,7 +1134,7 @@ fn fetch_live_yanked_index(
                 "yanked API response missing version.yanked for {crate_name} {version}"
             ))?;
         if yanked {
-            index.insert(&crate_name, &version);
+            index.insert(crate_name, version);
         }
     }
 
@@ -1157,7 +1156,8 @@ fn collect_exact_pins(
             let Some(pinned) = pinned_version(version_req) else {
                 continue;
             };
-            pins.insert((dep.name.clone(), pinned.to_string()));
+            let canonical_name = dep.spec.package.as_deref().unwrap_or(&dep.name);
+            pins.insert((canonical_name.to_string(), pinned.to_string()));
         }
     }
     pins

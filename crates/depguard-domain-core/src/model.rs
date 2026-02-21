@@ -71,6 +71,11 @@ pub struct DepSpec {
     pub default_features: Option<bool>,
     /// Whether this dependency is marked as optional
     pub optional: bool,
+    /// The canonical crate name when using a rename alias.
+    ///
+    /// When a dependency is declared as `alias = { package = "real-crate", ... }`,
+    /// this field holds `"real-crate"` while `DependencyDecl.name` holds `"alias"`.
+    pub package: Option<String>,
     /// Inline suppression tokens parsed from comments near this dependency.
     ///
     /// Each token can be either a `check_id` (e.g. `deps.no_wildcards`) or a
