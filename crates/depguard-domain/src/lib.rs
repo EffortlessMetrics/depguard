@@ -11,12 +11,9 @@ pub mod report;
 
 pub mod checks;
 mod engine;
-mod fingerprint;
 
 #[cfg(test)]
 mod proptest;
-#[cfg(test)]
-mod test_support;
 
 pub use engine::evaluate;
 pub use policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};

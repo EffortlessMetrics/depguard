@@ -1,0 +1,40 @@
+[package]
+name = "depguard-check-catalog"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+
+description = "Central check catalog metadata and compile-time feature availability"
+
+[dependencies]
+depguard-types = { version = "0.1.0", path = "../depguard-types" }
+
+[features]
+default = [
+    "check-no-wildcards",
+    "check-path-requires-version",
+    "check-path-safety",
+    "check-workspace-inheritance",
+    "check-git-requires-version",
+    "check-dev-only-in-normal",
+    "check-default-features-explicit",
+    "check-no-multiple-versions",
+    "check-optional-unused",
+    "check-yanked-versions",
+]
+
+check-no-wildcards = []
+check-path-requires-version = []
+check-path-safety = []
+check-workspace-inheritance = []
+check-git-requires-version = []
+check-dev-only-in-normal = []
+check-default-features-explicit = []
+check-no-multiple-versions = []
+check-optional-unused = []
+check-yanked-versions = []

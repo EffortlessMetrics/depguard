@@ -26,13 +26,56 @@ clap.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
 
-depguard-app = { version = "0.1.0", path = "../depguard-app" }
-depguard-domain = { version = "0.1.0", path = "../depguard-domain" }
+depguard-app = { version = "0.1.0", path = "../depguard-app", default-features = false }
+depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
 depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
 depguard-render = { version = "0.1.0", path = "../depguard-render" }
-depguard-settings = { version = "0.1.0", path = "../depguard-settings" }
+depguard-settings = { version = "0.1.0", path = "../depguard-settings", default-features = false }
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
 depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
+
+[features]
+default = ["depguard-app/default", "depguard-settings/default"]
+check-no-wildcards = [
+    "depguard-app/check-no-wildcards",
+    "depguard-settings/check-no-wildcards",
+]
+check-path-requires-version = [
+    "depguard-app/check-path-requires-version",
+    "depguard-settings/check-path-requires-version",
+]
+check-path-safety = [
+    "depguard-app/check-path-safety",
+    "depguard-settings/check-path-safety",
+]
+check-workspace-inheritance = [
+    "depguard-app/check-workspace-inheritance",
+    "depguard-settings/check-workspace-inheritance",
+]
+check-git-requires-version = [
+    "depguard-app/check-git-requires-version",
+    "depguard-settings/check-git-requires-version",
+]
+check-dev-only-in-normal = [
+    "depguard-app/check-dev-only-in-normal",
+    "depguard-settings/check-dev-only-in-normal",
+]
+check-default-features-explicit = [
+    "depguard-app/check-default-features-explicit",
+    "depguard-settings/check-default-features-explicit",
+]
+check-no-multiple-versions = [
+    "depguard-app/check-no-multiple-versions",
+    "depguard-settings/check-no-multiple-versions",
+]
+check-optional-unused = [
+    "depguard-app/check-optional-unused",
+    "depguard-settings/check-optional-unused",
+]
+check-yanked-versions = [
+    "depguard-app/check-yanked-versions",
+    "depguard-settings/check-yanked-versions",
+]
 
 [dev-dependencies]
 assert_cmd.workspace = true
@@ -45,6 +88,7 @@ jsonschema.workspace = true
 walkdir.workspace = true
 time.workspace = true
 depguard-test-util = { version = "0.1.0", path = "../depguard-test-util" }
+depguard-check-catalog = { version = "0.1.0", path = "../depguard-check-catalog" }
 
 [[test]]
 name = "bdd"

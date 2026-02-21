@@ -2,14 +2,15 @@
 
 ## Purpose
 
-Repository adapters—filesystem I/O, workspace discovery, and TOML parsing with line number tracking.
+Repository adapters for filesystem I/O, workspace discovery, and model assembly.
+Pure TOML parsing is delegated to `depguard-repo-parser`.
 
 ## Key Modules
 
 | Module | Contents |
 |--------|----------|
 | `discover.rs` | `discover_manifests()` — walks workspace, handles globs |
-| `parse.rs` | `parse_root_manifest()`, `parse_member_manifest()` — TOML with locations |
+| `cache.rs` | Manifest cache IO and invalidation |
 | `fuzz.rs` | Fuzz-friendly APIs that never panic |
 
 ## Public API
@@ -17,12 +18,6 @@ Repository adapters—filesystem I/O, workspace discovery, and TOML parsing with
 ```rust
 // Discover all Cargo.toml files in workspace
 pub fn discover_manifests(repo_root: &Utf8Path) -> Result<Vec<RepoPath>>
-
-// Parse root manifest (extracts [workspace.dependencies])
-pub fn parse_root_manifest(path: &RepoPath, text: &str) -> Result<(HashMap<String, DepSpec>, ManifestModel)>
-
-// Parse member manifest
-pub fn parse_member_manifest(path: &RepoPath, text: &str) -> Result<ManifestModel>
 
 // Build complete workspace model
 pub fn build_workspace_model(repo_root: &Utf8Path, scope: ScopeInput) -> Result<WorkspaceModel>
@@ -39,18 +34,18 @@ pub fn build_workspace_model(repo_root: &Utf8Path, scope: ScopeInput) -> Result<
 
 - Extracts all dependency sections: `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`
 - Handles `[target.'cfg(...)'.dependencies]` sections
-- Tracks byte offsets → line numbers for error reporting
+- Tracks byte offsets → line numbers for error reporting (via parser crate)
 - Handles inline tables and expanded table syntax
 
 ## Fuzz Module
 
-The `fuzz` module exposes APIs that return `Option` instead of `Result` and never panic:
+The `fuzz` module exposes parsing APIs that should not panic on malformed input:
 
 ```rust
 pub mod fuzz {
-    pub fn parse_root_manifest(text: &str) -> Option<(HashMap<String, DepSpec>, ManifestModel)>
-    pub fn parse_member_manifest(text: &str) -> Option<ManifestModel>
-    pub fn expand_globs(patterns: &[&str]) -> Option<Vec<String>>
+    pub fn parse_root_manifest(text: &str) -> anyhow::Result<()>
+    pub fn parse_member_manifest(text: &str) -> anyhow::Result<()>
+    pub fn expand_globs(patterns: &[String], candidates: &[String]) -> anyhow::Result<Vec<String>>
 }
 ```
 
@@ -58,6 +53,7 @@ pub mod fuzz {
 
 - `depguard-types` — `RepoPath`, DTOs
 - `depguard-domain` — `WorkspaceModel`, `ManifestModel`
+- `depguard-repo-parser` — pure manifest parsing (`parse_root_manifest`, `parse_member_manifest`)
 - `toml_edit` — TOML parsing with span preservation
 - `globset` — Workspace member glob expansion
 - `walkdir` — Directory traversal

@@ -1,6 +1,6 @@
 use crate::{model::DepguardConfigV1, presets};
 use anyhow::Context;
-use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
+use depguard_domain_core::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
 use globset::Glob;
 

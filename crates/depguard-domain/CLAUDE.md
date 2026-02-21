@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Pure policy evaluation engine. This is the **core business logic** layer—no I/O, no filesystem, no clap dependencies.
+**Facade crate** for the domain layer. Re-exports model/policy types from `depguard-domain-core` and delegates check execution to `depguard-domain-checks`. Owns the evaluation engine that wraps findings into a `DomainReport`.
 
 ## Critical Constraint
 
@@ -12,28 +12,28 @@ Pure policy evaluation engine. This is the **core business logic** layer—no I/
 
 | Module | Contents |
 |--------|----------|
-| `model.rs` | `WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec` |
-| `policy.rs` | `Scope`, `FailOn`, `CheckPolicy`, `EffectiveConfig` |
+| `model.rs` | Re-exports from `depguard-domain-core` |
+| `policy.rs` | Re-exports from `depguard-domain-core` |
 | `engine.rs` | `evaluate()` orchestrator, verdict computation |
-| `checks/` | Rule implementations (one module per check) |
+| `checks/mod.rs` | Delegates to `depguard-domain-checks::run_all()` |
 | `report.rs` | `DomainReport` struct |
 
-## Checks
+## Internal Domain Split
 
-Each check lives in `checks/` and exports a `run()` function:
+Individual check files have moved to `depguard-domain-checks`:
 
-| Check | File | Detects |
-|-------|------|---------|
-| `no_wildcards` | `checks/no_wildcards.rs` | `*` or `1.*` in version specs |
-| `path_requires_version` | `checks/path_requires_version.rs` | Path deps without version |
-| `path_safety` | `checks/path_safety.rs` | Absolute paths, parent escapes (`../`) |
-| `workspace_inheritance` | `checks/workspace_inheritance.rs` | Deps not using `workspace = true` |
+| Crate | Responsibility |
+|-------|----------------|
+| `depguard-domain-core` | `WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec`, `CheckPolicy`, `EffectiveConfig`, `Scope`, `FailOn` |
+| `depguard-domain-checks` | All 10 check implementations, `run_all()`, fingerprinting, check utilities |
+| `depguard-check-catalog` | Check metadata, feature gates, profile defaults |
+| `depguard-domain` (this crate) | Engine + orchestration + re-exports |
 
 ## Evaluation Flow
 
 ```
 WorkspaceModel + EffectiveConfig
-    → checks::run_all()
+    → depguard-domain-checks::run_all()
     → sort findings deterministically
     → truncate to max_findings
     → compute verdict
@@ -46,17 +46,17 @@ Findings are sorted by: `path → line → check_id → code → message`
 
 ## Dependencies
 
+- `depguard-domain-core` — Model and policy types
+- `depguard-domain-checks` — Check execution
 - `depguard-types` — DTOs and IDs
 - `thiserror` — Error types
-- `serde_json` — Finding data payloads
 
 Dev dependencies: `proptest`, `rand` for property testing
 
 ## Testing
 
 ```bash
-cargo test -p depguard-domain       # Unit tests
-cargo mutants --package depguard-domain  # Mutation testing
+cargo test -p depguard-domain       # Engine + property tests
+cargo test -p depguard-domain-checks # Check unit tests
+cargo mutants --package depguard-domain-checks  # Mutation testing
 ```
-
-Mutation testing is required on this crate to ensure rule logic is properly asserted.

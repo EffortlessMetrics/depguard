@@ -16,7 +16,7 @@ The goal is not microcrates for their own sake; the goal is to keep:
 **Owns**
 - Receipt/envelope DTOs (`ReportEnvelope`, `Finding`, `Verdict`, `Severity`, `Location`)
 - Canonical repo path type (`RepoPath`)
-- Stable check IDs and codes registry (string constants in `ids` module)
+- Stable check IDs and codes constants in `ids` module (string literals only; no policy defaults)
 - Explanation registry (`Explanation`, `lookup_explanation()`)
 - Depguard-specific data summary (`DepguardData`)
 
@@ -65,6 +65,8 @@ pub struct RepoPath(Utf8PathBuf);
 - Domain model types (imports from `depguard-domain`)
 - Filesystem I/O (takes strings)
 
+`depguard-settings` exposes the same `check-*` feature gates as `depguard-domain` so default preset generation tracks check availability consistently across crates.
+
 **Public API**
 ```rust
 // Parse TOML config (no I/O)
@@ -110,42 +112,143 @@ impl YankedIndex {
 
 ---
 
-## `depguard-domain`
+## `depguard-check-catalog`
 
 **Owns**
-- Domain model (`WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec`)
-- Policy types (`EffectiveConfig`, `CheckPolicy`, `Scope`, `FailOn`)
-- Check registry and evaluation engine
-- Deterministic ordering + truncation behavior
+- Check catalog metadata and default policy matrix
+- Check feature gates (`check-*`)
+- Canonical profile-to-check mapping (`checks_for_profile`)
+- API for feature-aware catalog lookups (`is_check_available`, `feature_name`)
+- BDD feature coverage mapping (`bdd_feature_file`)
 
 **Does not own**
-- TOML parsing
-- Filesystem access
-- Git operations
+- Rule implementations or check execution
+- Runtime policy defaults in profiles
+
+Feature availability and defaults for checks are intended to be the single source of truth for:
+- `depguard-settings` preset generation
+- `depguard-domain` runtime check gating
+- `depguard-app` feature passthrough
+
+**Public API**
+```rust
+pub struct CheckCatalogEntry {
+    pub id: &'static str,
+    pub codes: &'static [&'static str],
+    pub strict_enabled: bool,
+    pub strict_severity: Severity,
+    pub warn_enabled: bool,
+    pub warn_severity: Severity,
+    pub feature: CheckFeature,
+    pub bdd_feature_file: &'static str,
+}
+
+pub struct ProfileCheck {
+    pub id: &'static str,
+    pub enabled: bool,
+    pub severity: Severity,
+}
+
+pub fn catalog() -> &'static [CheckCatalogEntry]
+pub fn checks_for_profile(profile: &str) -> Vec<ProfileCheck>
+pub fn is_check_available(check_id: &str) -> bool
+pub fn feature_name(check_id: &str) -> Option<&'static str>
+pub fn bdd_feature_file(check_id: &str) -> Option<&'static str>
+pub fn all_check_ids() -> Vec<&'static str>
+pub fn all_codes() -> Vec<&'static str>
+```
+
+**Tests**
+- `catalog` integrity tests (all checks mapped to known IDs and explanations)
+
+---
+
+## `depguard-domain-core`
+
+**Owns**
+- Domain model (`WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec`, `WorkspaceDependency`, `PackageMeta`, `DepKind`)
+- Policy types (`EffectiveConfig`, `CheckPolicy`, `Scope`, `FailOn`)
+
+**Does not own**
+- Check implementations
+- Evaluation orchestration
+- TOML parsing or filesystem access
+
+**Public API**
+```rust
+// Model types
+pub struct WorkspaceModel { repo_root, workspace_dependencies, manifests }
+pub struct ManifestModel { path, package, dependencies, features }
+pub struct DependencyDecl { kind, name, spec, location, target }
+pub struct DepSpec { version, path, workspace }
+pub enum DepKind { Normal, Dev, Build }
+
+// Policy
+pub struct EffectiveConfig { profile, scope, fail_on, max_findings, yanked_index, checks }
+pub struct CheckPolicy { enabled, severity, allow, ignore_publish_false }
+pub enum Scope { Repo, Diff }
+pub enum FailOn { Error, Warning }
+```
+
+**Tests**
+- Serde roundtrip tests for model types
+
+---
+
+## `depguard-domain-checks`
+
+**Owns**
+- All 10 check implementations (one module per check in `checks/`)
+- `run_all()` orchestration: iterates enabled checks, collects findings
+- Check utilities (`section_name()`, `spec_to_json()`)
+- Finding fingerprinting
+
+**Does not own**
+- Domain model types (imports from `depguard-domain-core`)
+- Policy evaluation / verdict computation
+- TOML parsing or filesystem access
+
+**Public API**
+```rust
+pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig) -> Vec<Finding>
+```
+
+**Tests**
+- Unit tests per check (table-driven via `test_support` helpers)
+- Mutation testing (`cargo mutants --package depguard-domain-checks`)
+
+---
+
+## `depguard-domain`
+
+**Facade crate** — re-exports model/policy from `depguard-domain-core` and delegates check execution to `depguard-domain-checks`. Owns the evaluation engine that wraps check results into a `DomainReport`.
+
+**Owns**
+- `evaluate()` engine: calls `run_all()`, sorts findings, truncates, computes verdict
+- `DomainReport` struct
+- Deterministic ordering + truncation behavior
+- Re-exports of model and policy types for downstream consumers
+
+**Does not own**
+- Individual check implementations (in `depguard-domain-checks`)
+- Model/policy type definitions (in `depguard-domain-core`)
+- TOML parsing, filesystem access, git operations
 
 **Public API**
 ```rust
 // Evaluation
 pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport
 
-// Model types
-pub struct WorkspaceModel { repo_root, workspace_dependencies, manifests }
-pub struct ManifestModel { path, package, dependencies }
-pub struct DependencyDecl { kind, name, spec, location }
-pub struct DepSpec { version, path, workspace }
-
-// Policy
-pub struct EffectiveConfig { profile, scope, fail_on, max_findings, checks }
-pub enum Scope { Repo, Diff }
-pub enum FailOn { Error, Warning }
+// Re-exported from depguard-domain-core:
+pub mod model;   // WorkspaceModel, ManifestModel, DependencyDecl, DepSpec, ...
+pub mod policy;  // EffectiveConfig, CheckPolicy, Scope, FailOn
 ```
 
 **Critical constraint**: No IO; no TOML; no git. If a check needs file context beyond what is in the model, the model must be extended explicitly.
 
 **Tests**
-- Unit tests per check
 - Property tests: determinism, stable sorting, no panics on arbitrary inputs
-- Mutation testing (`cargo mutants`)
+- Engine integration tests
 
 ---
 
@@ -154,7 +257,7 @@ pub enum FailOn { Error, Warning }
 **Owns**
 - Workspace discovery (`Cargo.toml` workspace members/excludes, glob expansion)
 - Reading files from disk
-- Parsing manifests (TOML → domain model with line numbers)
+- Parsing manifests (delegated to `depguard-repo-parser`)
 - Diff scoping (changed file list → manifest set)
 - Fuzz-safe parsing APIs
 
@@ -167,23 +270,44 @@ pub enum FailOn { Error, Warning }
 // Discovery
 pub fn discover_manifests(repo_root: &Utf8Path) -> Result<Vec<RepoPath>>
 
-// Parsing
-pub fn parse_root_manifest(path: &RepoPath, text: &str) -> Result<(HashMap<String, DepSpec>, ManifestModel)>
-pub fn parse_member_manifest(path: &RepoPath, text: &str) -> Result<ManifestModel>
-
 // Model building
 pub fn build_workspace_model(repo_root: &Utf8Path, scope: ScopeInput) -> Result<WorkspaceModel>
+pub fn build_workspace_model_with_cache(repo_root: &Utf8Path, scope: ScopeInput, cache_dir: Option<&Utf8Path>) -> Result<WorkspaceModel>
 
 // Fuzz-safe APIs (never panic)
 pub mod fuzz {
-    pub fn parse_root_manifest(text: &str) -> Option<...>
-    pub fn parse_member_manifest(text: &str) -> Option<...>
+    pub fn parse_root_manifest(text: &str) -> anyhow::Result<()>
+    pub fn parse_member_manifest(text: &str) -> anyhow::Result<()>
 }
 ```
 
 **Tests**
 - Fixture-driven tests with tiny workspaces
 - Fuzzing targets for TOML parsing and workspace member expansion
+
+---
+
+## `depguard-repo-parser`
+
+**Owns**
+- Pure TOML manifest parsing for root and member `Cargo.toml` files.
+- Dependency model extraction (`DepSpec`, `DependencyDecl`, `ManifestModel`).
+- Inline suppression parsing and feature extraction.
+
+**Does not own**
+- Filesystem access
+- Workspace discovery
+- Diff filtering
+
+**Public API**
+```rust
+pub fn parse_root_manifest(path: &RepoPath, text: &str) -> Result<(BTreeMap<String, WorkspaceDependency>, ManifestModel)>
+pub fn parse_member_manifest(path: &RepoPath, text: &str) -> Result<ManifestModel>
+```
+
+**Tests**
+- Unit tests for parser coverage
+- Fuzz-style property checks via `depguard-repo::fuzz` entry points
 
 ---
 
@@ -224,6 +348,8 @@ pub fn render_jsonl(report: &DepguardReport) -> String
 - Baseline parsing/generation/suppression transforms
 - Verdict → exit code mapping
 
+Uses `depguard-settings` and `depguard-domain` and threads the shared `check-*` feature gates through both so config defaults and runtime execution stay aligned.
+
 **Does not own**
 - CLI argument parsing (that's `depguard-cli`)
 - Direct filesystem I/O
@@ -260,6 +386,8 @@ pub fn verdict_exit_code(verdict: Verdict) -> i32  // 0=pass, 2=fail
 - Wiring: settings + repo + domain + render
 - Artifact write layout + exit codes
 - Git subprocess calls for diff scope
+
+Feature flags for checks are passed through `depguard-app` so CLI and dependency graph share a single check metadata source from `depguard-check-catalog`.
 
 **Does not own**
 - Business logic (delegates to app/domain/settings/repo)

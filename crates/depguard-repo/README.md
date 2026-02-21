@@ -10,6 +10,7 @@ This crate is the filesystem boundary between depguard application logic and on-
 - Building the domain `WorkspaceModel` from real files (`build_workspace_model`)
 - Diff scope filtering via caller-provided changed file paths (`ScopeInput`)
 - Fuzz-facing parser entry points that should never panic (`fuzz` module)
+- TOML parsing delegation to `depguard-repo-parser` (pure parser microcrate)
 
 ## Public API
 

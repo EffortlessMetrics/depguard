@@ -463,6 +463,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "depguard-check-catalog"
+version = "0.1.0"
+dependencies = [
+ "depguard-types",
+]
+
+[[package]]
 name = "depguard-cli"
 version = "0.1.0"
 dependencies = [
@@ -473,6 +480,7 @@ dependencies = [
  "clap",
  "cucumber",
  "depguard-app",
+ "depguard-check-catalog",
  "depguard-domain",
  "depguard-render",
  "depguard-repo",
@@ -494,16 +502,36 @@ dependencies = [
 name = "depguard-domain"
 version = "0.1.0"
 dependencies = [
+ "depguard-domain-checks",
+ "depguard-domain-core",
  "depguard-types",
- "depguard-yanked",
- "globset",
- "hex",
  "proptest",
  "rand",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "depguard-domain-checks"
+version = "0.1.0"
+dependencies = [
+ "depguard-check-catalog",
+ "depguard-domain-core",
+ "depguard-types",
+ "depguard-yanked",
+ "globset",
+ "hex",
+ "serde_json",
  "sha2",
- "thiserror 2.0.18",
+]
+
+[[package]]
+name = "depguard-domain-core"
+version = "0.1.0"
+dependencies = [
+ "depguard-types",
+ "depguard-yanked",
+ "serde",
 ]
 
 [[package]]
@@ -522,7 +550,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "camino",
- "depguard-domain",
+ "depguard-domain-core",
+ "depguard-repo-parser",
  "depguard-types",
  "globset",
  "proptest",
@@ -535,11 +564,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "depguard-repo-parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "depguard-domain-core",
+ "depguard-types",
+ "proptest",
+ "toml_edit",
+]
+
+[[package]]
 name = "depguard-settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "depguard-domain",
+ "depguard-check-catalog",
+ "depguard-domain-core",
  "depguard-types",
  "globset",
  "schemars",

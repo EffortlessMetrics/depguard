@@ -1,5 +1,12 @@
+//! Pure manifest parsing for depguard repository models.
+//!
+//! This crate is IO-free and deterministic: all inputs are TOML source strings
+//! and file paths supplied as values.
+
+#![forbid(unsafe_code)]
+
 use anyhow::Context;
-use depguard_domain::model::{
+use depguard_domain_core::model::{
     DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceDependency,
 };
 use depguard_types::{Location, RepoPath};

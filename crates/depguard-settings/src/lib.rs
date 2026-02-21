@@ -28,7 +28,7 @@ pub fn resolve_config(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use depguard_domain::policy::{FailOn, Scope};
+    use depguard_domain_core::policy::{FailOn, Scope};
     use depguard_types::Severity;
 
     #[test]
@@ -243,54 +243,28 @@ mod tests {
     fn additional_checks_have_stable_default_severities() {
         let cfg = DepguardConfigV1::default();
         let resolved = resolve_config(cfg, Overrides::default()).unwrap();
+        let strict = depguard_check_catalog::checks_for_profile("strict");
+        assert_eq!(resolved.effective.checks.len(), strict.len());
 
-        let git = resolved
-            .effective
-            .checks
-            .get("deps.git_requires_version")
-            .expect("git check should exist");
-        assert!(!git.enabled);
-        assert_eq!(git.severity, Severity::Error);
-
-        let default_features = resolved
-            .effective
-            .checks
-            .get("deps.default_features_explicit")
-            .expect("default_features check should exist");
-        assert!(!default_features.enabled);
-        assert_eq!(default_features.severity, Severity::Warning);
-
-        let no_multiple = resolved
-            .effective
-            .checks
-            .get("deps.no_multiple_versions")
-            .expect("no_multiple_versions check should exist");
-        assert!(!no_multiple.enabled);
-        assert_eq!(no_multiple.severity, Severity::Warning);
-
-        let optional_unused = resolved
-            .effective
-            .checks
-            .get("deps.optional_unused")
-            .expect("optional_unused check should exist");
-        assert!(!optional_unused.enabled);
-        assert_eq!(optional_unused.severity, Severity::Warning);
-
-        let dev_only = resolved
-            .effective
-            .checks
-            .get("deps.dev_only_in_normal")
-            .expect("dev_only_in_normal check should exist");
-        assert!(!dev_only.enabled);
-        assert_eq!(dev_only.severity, Severity::Warning);
-
-        let yanked = resolved
-            .effective
-            .checks
-            .get("deps.yanked_versions")
-            .expect("yanked_versions check should exist");
-        assert!(!yanked.enabled);
-        assert_eq!(yanked.severity, Severity::Error);
+        for check in strict {
+            let actual = resolved
+                .effective
+                .checks
+                .get(check.id)
+                .expect("catalog check should be present");
+            let expected_enabled =
+                check.enabled && depguard_check_catalog::is_check_available(check.id);
+            assert_eq!(
+                actual.enabled, expected_enabled,
+                "check {} enabled default should match catalog",
+                check.id
+            );
+            assert_eq!(
+                actual.severity, check.severity,
+                "check {} severity should match catalog",
+                check.id
+            );
+        }
     }
 
     #[test]

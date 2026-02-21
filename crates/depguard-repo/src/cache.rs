@@ -1,6 +1,6 @@
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use depguard_domain::model::{ManifestModel, WorkspaceDependency};
+use depguard_domain_core::model::{ManifestModel, WorkspaceDependency};
 use depguard_types::RepoPath;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

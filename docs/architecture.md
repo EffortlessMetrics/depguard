@@ -9,9 +9,13 @@ Depguard uses **hexagonal (ports & adapters)** architecture with a **pure evalua
 | Crate | Purpose |
 |-------|---------|
 | `depguard-types` | DTOs, config, report, findings; schema IDs; stable codes |
-| `depguard-domain` | Rule implementations; policy evaluation (pure, no I/O) |
+| `depguard-domain` | Facade: re-exports model/policy, delegates checks (pure, no I/O) |
+| `depguard-domain-core` | Core model and policy types shared across domain crates |
+| `depguard-domain-checks` | Pure check implementations (one module per check) |
+| `depguard-check-catalog` | Check metadata, feature gates, and profile defaults |
 | `depguard-settings` | Config parsing; profile presets; override resolution |
-| `depguard-repo` | Workspace discovery; manifest loading; TOML parsing; diff-scope |
+| `depguard-repo` | Workspace discovery; manifest loading; diff-scope |
+| `depguard-repo-parser` | Pure TOML manifest parsing (no filesystem) |
 | `depguard-render` | Markdown and GitHub annotations renderers |
 | `depguard-app` | Use cases: check, md, annotations, explain; error handling |
 | `depguard-cli` | clap wiring; filesystem paths; exit code mapping |
@@ -62,15 +66,22 @@ depguard-cli
   └── depguard-app (use cases)
         ├── depguard-render ────────► depguard-types
         ├── depguard-repo ──────────► depguard-domain ────► depguard-types
+        │     └── depguard-repo-parser (pure TOML parsing)
         ├── depguard-settings ──────► depguard-domain ────► depguard-types
         └── depguard-types
+
+depguard-domain (facade)
+  ├── depguard-domain-core (model/policy types)
+  └── depguard-domain-checks (check runners)
+        └── depguard-check-catalog (feature gates)
 
 xtask (dev tooling) ─► depguard-types, depguard-settings (schemas)
 ```
 
 **Rules:**
-- `depguard-domain` depends on **only** `depguard-types` (plus minimal error types like `thiserror`).
-- `depguard-repo` depends on `depguard-domain` to construct the domain model.
+- `depguard-domain` is a facade: it re-exports from `depguard-domain-core` and delegates checks to `depguard-domain-checks`.
+- `depguard-domain-core` depends on **only** `depguard-types` (plus minimal error types like `thiserror`).
+- `depguard-repo` depends on `depguard-domain` for the domain model and `depguard-repo-parser` for TOML parsing.
 - `depguard-settings` depends on `depguard-domain` for `EffectiveConfig` and policy types.
 - `depguard-app` orchestrates use cases but delegates I/O to callers.
 - `depguard-cli` is the only place allowed to:
@@ -131,7 +142,8 @@ The emitted report is deterministic:
 ## Where "hexagonal" shows up
 
 The "ports" are deliberately simple: rather than define dozens of traits, the domain expects an in-memory model. The "adapters" are:
-- Filesystem + glob expansion + TOML parsing (`depguard-repo`)
+- Filesystem + glob expansion and manifest discovery (`depguard-repo`)
+- Pure TOML parsing (`depguard-repo-parser`)
 - Git diff scoping (`depguard-cli` → `depguard-repo`)
 - Config file parsing (`depguard-settings`)
 

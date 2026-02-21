@@ -1,18 +1,23 @@
-//! Repository adapters: discover workspaces, read and parse Cargo manifests.
+//! Repository adapters: discover workspaces, read manifest files, and assemble parsed models.
 //!
-//! This crate is allowed to do filesystem IO. It should not spawn external processes;
-//! diff scoping should be supplied as a list of changed paths by the caller (typically the CLI).
+//! Parsing is delegated to `depguard-repo-parser`; this crate is responsible for
+//! filesystem IO, manifest discovery, and model caching.
+//! It should not spawn external processes; diff scoping should be supplied as a list
+//! of changed paths by the caller (typically the CLI).
 
 #![forbid(unsafe_code)]
 
 mod cache;
 mod discover;
-mod parse;
 
 use anyhow::Context;
 use cache::{ManifestCache, ManifestStamp};
 use camino::{Utf8Path, Utf8PathBuf};
-use depguard_domain::model::WorkspaceModel;
+use depguard_domain_core::model::WorkspaceModel;
+use depguard_repo_parser::{
+    parse_member_manifest as parse_member_manifest_impl,
+    parse_root_manifest as parse_root_manifest_impl,
+};
 use depguard_types::RepoPath;
 use rayon::prelude::*;
 
@@ -29,7 +34,7 @@ pub mod fuzz {
     /// `Err(...)` otherwise. **Never panics** on any input.
     pub fn parse_root_manifest(text: &str) -> anyhow::Result<()> {
         let path = RepoPath::new("Cargo.toml");
-        let _ = parse::parse_root_manifest(&path, text)?;
+        let _ = parse_root_manifest_impl(&path, text)?;
         Ok(())
     }
 
@@ -39,7 +44,7 @@ pub mod fuzz {
     /// `Err(...)` otherwise. **Never panics** on any input.
     pub fn parse_member_manifest(text: &str) -> anyhow::Result<()> {
         let path = RepoPath::new("crates/fuzz/Cargo.toml");
-        let _ = parse::parse_member_manifest(&path, text)?;
+        let _ = parse_member_manifest_impl(&path, text)?;
         Ok(())
     }
 
@@ -111,7 +116,7 @@ pub fn build_workspace_model_with_cache(
         } else {
             let root_text =
                 std::fs::read_to_string(&root_abs).with_context(|| format!("read {}", root_abs))?;
-            let (deps, model) = parse::parse_root_manifest(&root_manifest, &root_text)
+            let (deps, model) = parse_root_manifest_impl(&root_manifest, &root_text)
                 .context("parse root manifest")?;
             store.store_root(&root_manifest, root_stamp, &deps, &model);
             (deps, model)
@@ -119,7 +124,7 @@ pub fn build_workspace_model_with_cache(
     } else {
         let root_text =
             std::fs::read_to_string(&root_abs).with_context(|| format!("read {}", root_abs))?;
-        parse::parse_root_manifest(&root_manifest, &root_text).context("parse root manifest")?
+        parse_root_manifest_impl(&root_manifest, &root_text).context("parse root manifest")?
     };
 
     let mut model = WorkspaceModel {
@@ -150,7 +155,7 @@ pub fn build_workspace_model_with_cache(
             }
 
             let text = std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
-            let parsed = parse::parse_member_manifest(manifest_path, &text)
+            let parsed = parse_member_manifest_impl(manifest_path, &text)
                 .with_context(|| format!("parse {}", manifest_path.as_str()))?;
             store.store_member(manifest_path, stamp, &parsed);
             model.manifests.push(parsed);
@@ -163,7 +168,7 @@ pub fn build_workspace_model_with_cache(
                 let abs = repo_root.join(manifest_path.as_str());
                 let text =
                     std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
-                parse::parse_member_manifest(manifest_path, &text)
+                parse_member_manifest_impl(manifest_path, &text)
                     .with_context(|| format!("parse {}", manifest_path.as_str()))
             })
             .collect();
