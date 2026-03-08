@@ -2,15 +2,16 @@
 
 ## Purpose
 
-Configuration parsing and profile resolution. Bridges user-facing TOML config files to domain types.
+Configuration parsing and profile resolution. Bridges user-facing TOML config files to domain types. Uses `depguard-check-catalog` for check metadata and defaults.
 
 ## Key Modules
 
 | Module | Contents |
 |--------|----------|
-| `model.rs` | `DepguardConfigV1`, `CheckConfig` — user-facing schema |
-| `presets.rs` | Built-in profiles: `strict`, `warn`, `compat` |
-| `resolve.rs` | `Overrides`, `ResolvedConfig`, `resolve_config()` |
+| [`model.rs`] | `DepguardConfigV1`, `CheckConfig` — user-facing schema |
+| [`presets.rs`] | Built-in profiles: `strict`, `warn`, `compat` |
+| [`resolve.rs`] | `Overrides`, `ResolvedConfig`, `resolve_config()` |
+| [`validation_error.rs`] | Config validation error types |
 
 ## Public API
 
@@ -26,15 +27,17 @@ pub fn resolve_config(cfg: Option<DepguardConfigV1>, overrides: Overrides) -> Re
 
 | Profile | Behavior |
 |---------|----------|
-| `strict` | Default; all checks enabled at Error severity; fail on error |
-| `warn` | All checks enabled at Warning severity; fail on error |
-| `compat` | All checks enabled at Warning severity; fail on error (lenient defaults) |
+| `strict` | Default; checks enabled per catalog defaults; fail on error |
+| `warn` | All checks at Warning severity; fail on error |
+| `compat` | Lenient defaults; warnings only; fail on error |
+
+Profile defaults come from `depguard-check-catalog`.
 
 ## Resolution Precedence
 
 1. CLI flags (highest priority)
 2. Config file values
-3. Preset defaults (lowest priority)
+3. Preset defaults from catalog (lowest priority)
 
 ## Config File Schema
 
@@ -50,14 +53,39 @@ max_findings = 100
 enabled = true
 severity = "error"
 allow = ["some-crate"]
+
+[checks.path_requires_version]
+ignore_publish_false = true
 ```
+
+## Feature Gates
+
+This crate propagates check features to `depguard-check-catalog`:
+
+```toml
+check-no-wildcards = ["depguard-check-catalog/check-no-wildcards"]
+```
+
+All 10 checks have corresponding features. Features control which checks are available at compile time.
+
+## Design Constraints
+
+- **No I/O**: Takes string input, returns config
+- **Validation**: Returns actionable error messages
+- **Extensibility**: New checks add entries to catalog, not here
 
 ## Dependencies
 
-- `depguard-types` — DTOs
-- `depguard-domain` — `EffectiveConfig` and policy types
-- `toml` — Config parsing
-- `schemars` — JSON schema for config
+| Dependency | Purpose |
+|------------|---------|
+| `depguard-types` | DTOs, Severity |
+| `depguard-domain-core` | `EffectiveConfig`, policy types |
+| `depguard-check-catalog` | Check metadata, profile defaults |
+| `anyhow` | Error handling |
+| `schemars` | JSON schema generation |
+| `serde` | Deserialization |
+| `toml` | TOML parsing |
+| `globset` | Pattern matching for allow lists |
 
 ## Testing
 
@@ -65,4 +93,17 @@ allow = ["some-crate"]
 cargo test -p depguard-settings
 ```
 
-Tests cover profile precedence, validation errors, and per-check override merging.
+Tests cover:
+- Profile precedence
+- Validation errors
+- Per-check override merging
+- Feature-gated check availability
+
+## Architecture Notes
+
+This crate depends only on `depguard-domain-core` (not `depguard-domain-checks`) to avoid pulling in check implementations. Check metadata comes from `depguard-check-catalog` which is data-only.
+
+```
+depguard-settings → depguard-domain-core (model/policy)
+depguard-settings → depguard-check-catalog (metadata only)
+```

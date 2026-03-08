@@ -4,6 +4,13 @@
 
 Entry point binary. Handles argument parsing, filesystem I/O, git subprocess calls, and exit code mapping.
 
+## Binaries
+
+| Binary | Entry Point | Purpose |
+|--------|-------------|---------|
+| `depguard` | `src/main.rs` | Main CLI |
+| `cargo-depguard` | `src/cargo_depguard.rs` | Cargo subcommand wrapper |
+
 ## CLI Structure
 
 ```
@@ -18,6 +25,7 @@ Options:
 
 Commands:
   check        Analyze manifests and emit receipt
+  baseline     Generate baseline suppressions from current findings
   md           Render Markdown from JSON report
   annotations  Render GitHub Actions annotations
   sarif        Render SARIF from JSON report
@@ -46,6 +54,15 @@ Options:
   --head <REF>             Git head ref for diff scope
   --diff-file <PATH>       Precomputed changed-files list for diff scope
   --yanked-index <PATH>    Offline yanked-version index for deps.yanked_versions
+```
+
+### baseline
+```
+depguard baseline [OPTIONS]
+
+Options:
+  --report <PATH>         Input report path
+  --output <PATH>         Output baseline file path
 ```
 
 ### md
@@ -107,6 +124,19 @@ or read changed files from `--diff-file` (including GitHub Actions output format
 
 `git` remains the only external process call when `--diff-file` is not used.
 
+## Feature Gates
+
+This crate propagates check feature gates to app and settings:
+
+```toml
+check-no-wildcards = [
+    "depguard-app/check-no-wildcards",
+    "depguard-settings/check-no-wildcards",
+]
+```
+
+All 10 checks have corresponding features.
+
 ## Design Constraints
 
 - **Thin wrapper**: All business logic lives in `depguard-app`
@@ -115,17 +145,29 @@ or read changed files from `--diff-file` (including GitHub Actions output format
 
 ## Dependencies
 
-- `depguard-app` — Use cases
-- `depguard-types`, `depguard-domain`, `depguard-settings` — Types
-- `clap` — Argument parsing
-- `anyhow` — Error handling
-- `camino` — UTF-8 paths
+| Dependency | Purpose |
+|------------|---------|
+| `depguard-app` | Use cases |
+| `depguard-domain` | Domain types |
+| `depguard-repo` | Repository adapters |
+| `depguard-render` | Output formatters |
+| `depguard-settings` | Configuration |
+| `depguard-types` | DTOs |
+| `depguard-yanked` | Yanked version parsing |
+| `clap` | Argument parsing |
+| `anyhow` | Error handling |
+| `camino` | UTF-8 paths |
+| `serde_json` | JSON handling |
+| `reqwest` | HTTP client (for future features) |
 
 ## Testing
 
 ```bash
 cargo test -p depguard-cli       # Unit tests
-cargo test --test '*'            # Integration tests (in tests/)
+cargo test --test conformance    # Conformance tests
+cargo test --test fixtures       # Golden file tests
+cargo test --test bdd            # BDD scenario tests
+cargo test --test help           # Help output tests
 ```
 
 Integration tests use fixtures in `tests/fixtures/` for golden file testing.

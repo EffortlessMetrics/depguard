@@ -150,7 +150,12 @@ See [docs/config.md](docs/config.md) for the full configuration reference.
 | `deps.no_wildcards` | Detect wildcard versions (`*`, `1.*`) |
 | `deps.path_requires_version` | Require version alongside path dependencies |
 | `deps.path_safety` | Prevent absolute paths and workspace escapes |
+| `deps.git_requires_version` | Require version alongside git dependencies (disabled by default) |
 | `deps.workspace_inheritance` | Enforce `workspace = true` for shared deps (disabled by default) |
+| `deps.dev_only_in_normal` | Flag dev-only crates in normal dependencies (disabled by default) |
+| `deps.default_features_explicit` | Require explicit `default-features` setting (disabled by default) |
+| `deps.no_multiple_versions` | Detect duplicate deps with different versions (disabled by default) |
+| `deps.optional_unused` | Flag optional deps not referenced in features (disabled by default) |
 | `deps.yanked_versions` | Flag exact pinned versions listed in an offline yanked index (disabled by default) |
 
 See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and remediation guidance.
@@ -229,17 +234,22 @@ Depguard uses hexagonal (ports & adapters) architecture with a pure evaluation c
 
 ```
 crates/
-  depguard-types     # Stable DTOs, schema IDs, finding codes
-  depguard-yanked    # Offline yanked index parsing/lookup
-  depguard-settings  # Config parsing, profile presets
-  depguard-domain    # Pure policy evaluation (no I/O)
-  depguard-repo      # Workspace discovery, TOML parsing
-  depguard-render    # Markdown and annotation renderers
-  depguard-app       # Use case orchestration
-  depguard-cli       # CLI binary
-  depguard-test-util # Shared fixture/report normalization helpers
-xtask/               # Dev tooling
-schemas/             # Versioned JSON schemas
+  depguard-types              # Stable DTOs, schema IDs, finding codes
+  depguard-yanked             # Offline yanked index parsing/lookup
+  depguard-settings           # Config parsing, profile presets
+  depguard-domain-core        # Core domain types and traits
+  depguard-domain-checks      # Check implementations (pure, no I/O)
+  depguard-check-catalog      # Check metadata and explanations
+  depguard-inline-suppressions # Inline comment suppression parser
+  depguard-repo-parser        # TOML parsing and manifest models
+  depguard-repo               # Workspace discovery, diff-scope
+  depguard-render             # Markdown, SARIF, JUnit, annotations renderers
+  depguard-app                # Use case orchestration
+  depguard-cli                # CLI binary (clap wiring)
+  depguard-test-util          # Shared fixture/report normalization helpers
+xtask/                        # Dev tooling (schema emission, fixtures)
+schemas/                      # Versioned JSON schemas
+contracts/                    # External contracts and fixtures
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the full design.

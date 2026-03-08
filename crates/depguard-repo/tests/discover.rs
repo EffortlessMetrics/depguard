@@ -212,7 +212,11 @@ edition = "2021"
     let manifests = discover_manifests(&root_path).expect("discovery should succeed");
 
     // Should find root + deep manifest
-    assert!(manifests.len() >= 2, "Should find at least root and deep manifest. Found: {:?}", manifests);
+    assert!(
+        manifests.len() >= 2,
+        "Should find at least root and deep manifest. Found: {:?}",
+        manifests
+    );
     assert!(
         manifests.iter().any(|m| m.as_str() == "Cargo.toml"),
         "Should find root manifest"
@@ -232,7 +236,7 @@ fn handles_long_file_names() {
     // Windows temp paths are typically ~100 chars, leaving ~160 for our directory name
     let long_name = "crate".repeat(20); // 100 characters
     let long_dir = root_path.join(&long_name);
-    
+
     // Skip test if directory creation fails (e.g., on filesystems with strict limits)
     if std::fs::create_dir_all(&long_dir).is_err() {
         eprintln!("Skipping test: cannot create directory with long name on this filesystem");
@@ -297,13 +301,17 @@ name = "unicode-crate"
 version = "0.1.0"
 edition = "2021"
 "#;
-    std::fs::write(unicode_dir.join("Cargo.toml"), unicode_manifest).expect("write unicode manifest");
+    std::fs::write(unicode_dir.join("Cargo.toml"), unicode_manifest)
+        .expect("write unicode manifest");
 
     // Discovery should handle unicode paths
     let result = discover_manifests(&root_path);
     assert!(result.is_ok(), "Discovery should handle unicode paths");
     let manifests = result.unwrap();
-    assert!(manifests.len() >= 2, "Should find root and unicode manifest");
+    assert!(
+        manifests.len() >= 2,
+        "Should find root and unicode manifest"
+    );
 }
 
 /// Test behavior with circular workspace references.
@@ -353,18 +361,21 @@ members = ["../workspace-a"]
     // Discovery on workspace A - current behavior is to NOT detect the cycle
     // The discovery will include both manifests (potentially with duplicates)
     let result = discover_manifests(&workspace_a);
-    
+
     // The current implementation should succeed (not error on circular refs)
     // This documents the behavior that circular refs are not detected
-    assert!(result.is_ok(), "Discovery should complete without error on circular refs");
-    
+    assert!(
+        result.is_ok(),
+        "Discovery should complete without error on circular refs"
+    );
+
     // The result should contain at least the root manifest
     let manifests = result.expect("discovery result");
     assert!(
         manifests.iter().any(|m| m.as_str() == "Cargo.toml"),
         "Should find root manifest of workspace-a"
     );
-    
+
     // Note: The behavior for nested/circular workspace inclusion is undefined
     // This test documents that discovery doesn't panic or error
 }

@@ -950,15 +950,24 @@ fn empty_package_with_no_dependencies_produces_no_findings() {
 
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Empty package should produce no wildcard findings");
+    assert!(
+        out.is_empty(),
+        "Empty package should produce no wildcard findings"
+    );
 
     let mut out = Vec::new();
     path_safety::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Empty package should produce no path safety findings");
+    assert!(
+        out.is_empty(),
+        "Empty package should produce no path safety findings"
+    );
 
     let mut out = Vec::new();
     git_requires_version::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Empty package should produce no git findings");
+    assert!(
+        out.is_empty(),
+        "Empty package should produce no git findings"
+    );
 }
 
 /// Test handling of empty dependency specifications.
@@ -983,7 +992,10 @@ fn handles_empty_version_string_gracefully() {
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
     // Empty version string should not be treated as a wildcard
-    assert!(out.is_empty(), "Empty version string should not be flagged as wildcard");
+    assert!(
+        out.is_empty(),
+        "Empty version string should not be flagged as wildcard"
+    );
 }
 
 /// Test handling of completely empty dependency specification (no fields).
@@ -1004,7 +1016,10 @@ fn handles_empty_table_specification() {
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
     // Empty spec should not cause panic or be flagged as wildcard
-    assert!(out.is_empty(), "Empty table specification should not be flagged as wildcard");
+    assert!(
+        out.is_empty(),
+        "Empty table specification should not be flagged as wildcard"
+    );
 }
 
 /// Test that dependency names with unicode characters are handled correctly.
@@ -1049,7 +1064,10 @@ fn handles_unicode_dependency_names() {
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
     // Unicode names should be handled without panic
-    assert!(out.is_empty(), "Unicode dependency names should be handled correctly");
+    assert!(
+        out.is_empty(),
+        "Unicode dependency names should be handled correctly"
+    );
 }
 
 /// Test that deeply nested paths are handled correctly.
@@ -1058,7 +1076,7 @@ fn handles_unicode_dependency_names() {
 fn handles_deeply_nested_paths() {
     // Create a path that is 20+ levels deep
     let deep_path = "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/Cargo.toml";
-    
+
     let deps = vec![dep_decl(
         "nested_dep",
         DepKind::Normal,
@@ -1076,7 +1094,10 @@ fn handles_deeply_nested_paths() {
 
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Deeply nested paths should be handled correctly");
+    assert!(
+        out.is_empty(),
+        "Deeply nested paths should be handled correctly"
+    );
     assert_eq!(model.manifests[0].path.as_str(), deep_path);
 }
 
@@ -1086,7 +1107,7 @@ fn handles_long_file_names() {
     // Create a very long crate name (255+ characters)
     let long_name = "a".repeat(300);
     let long_path = format!("crates/{}/Cargo.toml", long_name);
-    
+
     let deps = vec![dep_decl(
         &long_name,
         DepKind::Normal,
@@ -1104,7 +1125,10 @@ fn handles_long_file_names() {
 
     let mut out = Vec::new();
     no_wildcards::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Long file names should be handled correctly");
+    assert!(
+        out.is_empty(),
+        "Long file names should be handled correctly"
+    );
 }
 
 /// Test that path safety check handles deeply nested relative paths.
@@ -1124,7 +1148,9 @@ fn path_safety_handles_deeply_nested_paths() {
             "deep_escape",
             DepKind::Normal,
             DepSpec {
-                path: Some("a/../../../../../../../../../../../../../../../../../../escape".to_string()),
+                path: Some(
+                    "a/../../../../../../../../../../../../../../../../../../escape".to_string(),
+                ),
                 ..DepSpec::default()
             },
             None,
@@ -1158,5 +1184,8 @@ fn handles_empty_workspace_dependencies() {
 
     let mut out = Vec::new();
     workspace_inheritance::run(&model, &cfg, &mut out);
-    assert!(out.is_empty(), "Empty workspace dependencies should not cause findings");
+    assert!(
+        out.is_empty(),
+        "Empty workspace dependencies should not cause findings"
+    );
 }

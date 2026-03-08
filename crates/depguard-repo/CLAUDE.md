@@ -2,16 +2,15 @@
 
 ## Purpose
 
-Repository adapters for filesystem I/O, workspace discovery, and model assembly.
-Pure TOML parsing is delegated to `depguard-repo-parser`.
+Repository adapters for filesystem I/O, workspace discovery, and model assembly. Pure TOML parsing is delegated to `depguard-repo-parser`.
 
 ## Key Modules
 
 | Module | Contents |
 |--------|----------|
-| `discover.rs` | `discover_manifests()` — walks workspace, handles globs |
-| `cache.rs` | Manifest cache IO and invalidation |
-| `fuzz.rs` | Fuzz-friendly APIs that never panic |
+| [`discover.rs`] | `discover_manifests()` — walks workspace, handles globs |
+| [`cache.rs`] | Manifest cache IO and invalidation |
+| [`lib.rs`] | `build_workspace_model()` — orchestrates discovery and parsing |
 
 ## Public API
 
@@ -20,7 +19,17 @@ Pure TOML parsing is delegated to `depguard-repo-parser`.
 pub fn discover_manifests(repo_root: &Utf8Path) -> Result<Vec<RepoPath>>
 
 // Build complete workspace model
-pub fn build_workspace_model(repo_root: &Utf8Path, scope: ScopeInput) -> Result<WorkspaceModel>
+pub fn build_workspace_model(
+    repo_root: &Utf8Path,
+    scope: ScopeInput,
+) -> Result<WorkspaceModel>
+
+// Scope input for diff mode
+pub enum ScopeInput {
+    Repo,
+    Diff { base: String, head: String },
+    DiffFiles(Vec<RepoPath>),
+}
 ```
 
 ## Discovery Logic
@@ -30,40 +39,69 @@ pub fn build_workspace_model(repo_root: &Utf8Path, scope: ScopeInput) -> Result<
 3. Expand globs, filter exclusions
 4. Return deterministic list of manifest paths
 
-## Parsing Features
+## Model Building Flow
+
+```
+repo_root
+    → discover_manifests()
+    → read each Cargo.toml
+    → depguard-repo-parser::parse_root_manifest() / parse_member_manifest()
+    → assemble WorkspaceModel
+```
+
+## Parsing Features (via depguard-repo-parser)
 
 - Extracts all dependency sections: `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`
 - Handles `[target.'cfg(...)'.dependencies]` sections
-- Tracks byte offsets → line numbers for error reporting (via parser crate)
+- Tracks byte offsets → line numbers for error reporting
 - Handles inline tables and expanded table syntax
+- Parses inline suppressions from comments
+- Extracts `[workspace.dependencies]` from root manifests
 
-## Fuzz Module
+## Design Constraints
 
-The `fuzz` module exposes parsing APIs that should not panic on malformed input:
-
-```rust
-pub mod fuzz {
-    pub fn parse_root_manifest(text: &str) -> anyhow::Result<()>
-    pub fn parse_member_manifest(text: &str) -> anyhow::Result<()>
-    pub fn expand_globs(patterns: &[String], candidates: &[String]) -> anyhow::Result<Vec<String>>
-}
-```
+- **I/O boundary**: This crate owns filesystem access for manifest reading
+- **Deterministic**: Same files → same model
+- **No panics**: Malformed manifests return errors
+- **Parallel**: Uses rayon for parallel manifest parsing
 
 ## Dependencies
 
-- `depguard-types` — `RepoPath`, DTOs
-- `depguard-domain` — `WorkspaceModel`, `ManifestModel`
-- `depguard-repo-parser` — pure manifest parsing (`parse_root_manifest`, `parse_member_manifest`)
-- `toml_edit` — TOML parsing with span preservation
-- `globset` — Workspace member glob expansion
-- `walkdir` — Directory traversal
-- `camino` — UTF-8 paths
+| Dependency | Purpose |
+|------------|---------|
+| `depguard-types` | `RepoPath`, DTOs |
+| `depguard-domain-core` | `WorkspaceModel`, `ManifestModel` |
+| `depguard-repo-parser` | Pure manifest parsing |
+| `anyhow` | Error handling |
+| `camino` | UTF-8 paths |
+| `globset` | Workspace member glob expansion |
+| `walkdir` | Directory traversal |
+| `rayon` | Parallel processing |
+| `serde`, `serde_json` | Serialization |
+| `toml_edit` | TOML manipulation |
+
+Dev dependencies:
+- `proptest` — Property-based testing
+- `tempfile` — Temporary directories for tests
 
 ## Testing
 
 ```bash
 cargo test -p depguard-repo              # Unit tests
-cargo +nightly fuzz run fuzz_toml_parser # Fuzzing
+cargo +nightly fuzz run fuzz_workspace_discovery  # Fuzzing
 ```
 
-The TOML parser must never panic on any input—this is validated via fuzzing.
+## Fuzzing
+
+The workspace discovery and glob expansion are fuzzed via:
+- `fuzz/fuzz_targets/fuzz_workspace_discovery.rs`
+- `fuzz/fuzz_targets/fuzz_glob_expansion.rs`
+
+These ensure no panics on malformed input.
+
+## Architecture Notes
+
+This crate is the I/O boundary for manifest access. The parsing logic lives in `depguard-repo-parser` to allow:
+- Pure parsing without filesystem concerns
+- Fuzzing of parsing logic independently
+- Reuse of parsing in other contexts (e.g., buildfix editing)
