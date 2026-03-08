@@ -268,7 +268,7 @@ edition = "2021"
     let result = discover_manifests(&root_path);
     assert!(result.is_ok(), "Discovery should handle long file names");
     let manifests = result.unwrap();
-    assert!(manifests.len() >= 1, "Should find at least root manifest");
+    assert!(!manifests.is_empty(), "Should find at least root manifest");
 }
 
 /// Test handling of Unicode characters in paths.
