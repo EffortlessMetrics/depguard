@@ -1113,6 +1113,20 @@ fn then_receipt_has_no_findings(world: &mut DepguardWorld) {
     );
 }
 
+#[then(expr = "the receipt has {int} findings")]
+fn then_receipt_has_finding_count(world: &mut DepguardWorld, expected: i32) {
+    let report = world.report.as_ref().expect("No report captured");
+    let findings = report["findings"]
+        .as_array()
+        .expect("Report should have findings array");
+    let actual = findings.len() as i32;
+    assert_eq!(
+        actual, expected,
+        "Expected {} findings, got {}",
+        expected, actual
+    );
+}
+
 #[then("the receipt has a finding with:")]
 fn then_receipt_has_finding_with(world: &mut DepguardWorld, step: &cucumber::gherkin::Step) {
     let report = world.report.as_ref().expect("No report captured");

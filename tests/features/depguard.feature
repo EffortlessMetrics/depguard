@@ -97,6 +97,16 @@ Feature: Dependency manifest hygiene (depguard)
       | code     | dev_dep_in_normal       |
       | severity | error                   |
 
+  Scenario: Inline suppressions filter allowed findings
+    Given a workspace fixture "inline_suppression"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has 1 findings
+    And the receipt has a finding with:
+      | check_id | deps.no_wildcards |
+      | code     | wildcard_version  |
+      | severity | error             |
+
   # ===========================================================================
   # Output rendering
   # ===========================================================================

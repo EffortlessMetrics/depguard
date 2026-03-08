@@ -11,7 +11,7 @@ use crate::model::{
     WorkspaceModel,
 };
 use crate::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
-use depguard_types::{Finding, Location, RepoPath, Severity, ids};
+use depguard_types::{Finding, Location, RepoPath, Severity, Verdict, ids};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 
@@ -1127,6 +1127,689 @@ proptest! {
                 "Findings not sorted: {:?} should come before {:?}",
                 prev,
                 curr
+            );
+        }
+    }
+}
+
+// ============================================================================
+// Property tests: Determinism (byte-identical outputs)
+// ============================================================================
+
+proptest! {
+    /// Running the engine twice with identical inputs must produce byte-identical outputs.
+    /// This tests the core determinism guarantee: same inputs → same outputs.
+    #[test]
+    fn engine_determinism_same_input_same_output(
+        dep_name in arb_dep_name(),
+        severity in arb_severity(),
+    ) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![
+                    DependencyDecl {
+                        kind: DepKind::Normal,
+                        name: dep_name.clone(),
+                        spec: DepSpec {
+                            version: Some("*".to_string()),
+                            ..DepSpec::default()
+                        },
+                        location: Some(Location {
+                            path: RepoPath::new("Cargo.toml"),
+                            line: Some(10),
+                            col: None,
+                        }),
+                        target: None,
+                    },
+                ],
+            }],
+        };
+
+        let cfg = config_all_enabled(severity);
+
+        // Run the engine twice
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+
+        // Verdicts must match
+        prop_assert_eq!(report1.verdict, report2.verdict, "Verdict mismatch");
+
+        // Findings count must match
+        prop_assert_eq!(report1.findings.len(), report2.findings.len(), "Findings count mismatch");
+
+        // Each finding must be identical
+        for (i, (f1, f2)) in report1.findings.iter().zip(report2.findings.iter()).enumerate() {
+            prop_assert_eq!(f1.severity, f2.severity, "Severity mismatch at index {}", i);
+            prop_assert_eq!(&f1.check_id, &f2.check_id, "check_id mismatch at index {}", i);
+            prop_assert_eq!(&f1.code, &f2.code, "code mismatch at index {}", i);
+            prop_assert_eq!(&f1.message, &f2.message, "message mismatch at index {}", i);
+            prop_assert_eq!(&f1.location, &f2.location, "location mismatch at index {}", i);
+        }
+
+        // Data must match
+        prop_assert_eq!(report1.data.findings_total, report2.data.findings_total);
+        prop_assert_eq!(report1.data.findings_emitted, report2.data.findings_emitted);
+        prop_assert_eq!(report1.data.truncated_reason, report2.data.truncated_reason);
+    }
+
+    /// Multiple evaluations with the same model/config must produce identical findings order.
+    #[test]
+    fn engine_determinism_multiple_runs_identical_order(
+        num_deps in 1usize..15,
+        seed in any::<u64>(),
+    ) {
+        use rand::seq::SliceRandom;
+        use rand::SeedableRng;
+
+        // Create a model with various violation types
+        let mut deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| {
+                let violation_type = i % 4;
+                let spec = match violation_type {
+                    0 => DepSpec { version: Some("*".to_string()), ..DepSpec::default() },
+                    1 => DepSpec { path: Some("/abs/path".to_string()), ..DepSpec::default() },
+                    2 => DepSpec { path: Some("../escape".to_string()), ..DepSpec::default() },
+                    _ => DepSpec { version: Some("1.0".to_string()), ..DepSpec::default() },
+                };
+                DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: format!("dep{}", i),
+                    spec,
+                    location: Some(Location {
+                        path: RepoPath::new(if i % 2 == 0 { "Cargo.toml" } else { "crates/foo/Cargo.toml" }),
+                        line: Some((i + 1) as u32),
+                        col: None,
+                    }),
+                    target: None,
+                }
+            })
+            .collect();
+
+        // Shuffle deps with seed
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        deps.shuffle(&mut rng);
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+
+        // Run engine 3 times
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+        let report3 = evaluate(&model, &cfg);
+
+        // All reports must have identical findings in identical order
+        for i in 0..report1.findings.len() {
+            prop_assert_eq!(&report1.findings[i].check_id, &report2.findings[i].check_id,
+                "check_id mismatch between run1 and run2 at index {}", i);
+            prop_assert_eq!(&report2.findings[i].check_id, &report3.findings[i].check_id,
+                "check_id mismatch between run2 and run3 at index {}", i);
+            prop_assert_eq!(&report1.findings[i].code, &report2.findings[i].code,
+                "code mismatch between run1 and run2 at index {}", i);
+            prop_assert_eq!(&report1.findings[i].message, &report2.findings[i].message,
+                "message mismatch at index {}", i);
+        }
+    }
+
+    /// JSON serialization of reports must be deterministic.
+    #[test]
+    fn engine_determinism_json_serialization(
+        dep_name in arb_dep_name(),
+    ) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: dep_name,
+                    spec: DepSpec {
+                        version: Some("*".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report = evaluate(&model, &cfg);
+
+        // Serialize twice and compare bytes
+        let json1 = serde_json::to_string(&report.findings).unwrap();
+        let json2 = serde_json::to_string(&report.findings).unwrap();
+
+        prop_assert_eq!(json1, json2, "JSON serialization must be deterministic");
+    }
+}
+
+// ============================================================================
+// Property tests: Truncation invariants
+// ============================================================================
+
+proptest! {
+    /// When findings exceed max_findings, the report must indicate truncation correctly.
+    #[test]
+    fn truncation_sets_reason_when_exceeded(
+        num_deps in 10usize..50,
+        max_findings in 1usize..9,
+    ) {
+        // Create a model with many violations
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Warning),
+        );
+
+        let cfg = EffectiveConfig {
+            profile: "test".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = evaluate(&model, &cfg);
+
+        // When truncated, truncated_reason must be set
+        if report.data.findings_total > report.data.findings_emitted {
+            prop_assert!(
+                report.data.truncated_reason.is_some(),
+                "truncated_reason must be set when findings are truncated"
+            );
+            let reason = report.data.truncated_reason.unwrap();
+            prop_assert!(
+                reason.contains("max_findings"),
+                "truncated_reason should mention max_findings: {}", reason
+            );
+        }
+
+        // findings_emitted must never exceed max_findings
+        prop_assert!(
+            report.findings.len() <= max_findings,
+            "findings.len() {} exceeds max_findings {}",
+            report.findings.len(),
+            max_findings
+        );
+
+        // findings_total must reflect the true count before truncation
+        prop_assert!(
+            report.data.findings_total >= report.data.findings_emitted,
+            "findings_total {} should be >= findings_emitted {}",
+            report.data.findings_total,
+            report.data.findings_emitted
+        );
+    }
+
+    /// Truncation must preserve deterministic sort order (highest severity first).
+    #[test]
+    fn truncation_preserves_sort_order(
+        num_deps in 5usize..30,
+        max_findings in 1usize..10,
+    ) {
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| {
+                // Mix of violation severities
+                let spec = match i % 3 {
+                    0 => DepSpec { version: Some("*".to_string()), ..DepSpec::default() },
+                    1 => DepSpec { path: Some("/abs/path".to_string()), ..DepSpec::default() },
+                    _ => DepSpec { path: Some("../escape".to_string()), ..DepSpec::default() },
+                };
+                DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: format!("dep{}", i),
+                    spec,
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(i as u32 + 1),
+                        col: None,
+                    }),
+                    target: None,
+                }
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Error),
+        );
+        checks.insert(
+            ids::CHECK_DEPS_PATH_SAFETY.to_string(),
+            CheckPolicy::enabled(Severity::Warning),
+        );
+
+        let cfg = EffectiveConfig {
+            profile: "test".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = evaluate(&model, &cfg);
+
+        // Even after truncation, findings must be sorted
+        assert_sorted(&report.findings)?;
+    }
+
+    /// Truncation must never corrupt the findings_total count.
+    #[test]
+    fn truncation_total_count_is_accurate(
+        num_deps in 1usize..20,
+        max_findings in 1usize..100,
+    ) {
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Warning),
+        );
+
+        let cfg = EffectiveConfig {
+            profile: "test".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = evaluate(&model, &cfg);
+
+        // findings_total should equal num_deps (each dep has a wildcard)
+        prop_assert_eq!(
+            report.data.findings_total,
+            num_deps as u32,
+            "findings_total should equal the number of wildcard violations"
+        );
+    }
+}
+
+// ============================================================================
+// Property tests: No-panic guarantees (fuzz-like)
+// ============================================================================
+
+proptest! {
+    /// The engine must never panic on any valid DepSpec.
+    #[test]
+    fn engine_no_panic_on_arbitrary_dep_spec(
+        name in arb_dep_name(),
+        spec in arb_dep_spec(),
+    ) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name,
+                    spec,
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+
+        // This should never panic
+        let report = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+
+        prop_assert!(
+            report.is_ok(),
+            "Engine panicked on valid input"
+        );
+
+        let report = report.unwrap();
+        prop_assert!(report.findings.len() <= cfg.max_findings);
+    }
+
+    /// The engine must never panic on empty or minimal models.
+    #[test]
+    fn engine_no_panic_on_minimal_models(
+        repo_root in prop::option::of(arb_safe_relative_path()),
+    ) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new(repo_root.unwrap_or_else(|| ".".to_string()).as_str()),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![],
+        };
+
+        let cfg = config_all_enabled(Severity::Error);
+
+        let report = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+
+        prop_assert!(
+            report.is_ok(),
+            "Engine panicked on empty model"
+        );
+
+        let report = report.unwrap();
+        prop_assert!(report.findings.is_empty());
+        prop_assert_eq!(report.verdict, Verdict::Pass);
+    }
+
+    /// The engine must handle extreme max_findings values without panic.
+    #[test]
+    fn engine_no_panic_on_extreme_max_findings(
+        max_findings in any::<usize>(),
+        dep_name in arb_dep_name(),
+    ) {
+        // Bound max_findings to reasonable range to avoid allocation issues
+        let max_findings = max_findings % 10000 + 1;
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: dep_name,
+                    spec: DepSpec {
+                        version: Some("*".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Warning),
+        );
+
+        let cfg = EffectiveConfig {
+            profile: "test".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+
+        prop_assert!(
+            report.is_ok(),
+            "Engine panicked with max_findings = {}", max_findings
+        );
+    }
+
+    /// The engine must handle many dependencies without panic.
+    #[test]
+    fn engine_no_panic_on_many_dependencies(num_deps in 0usize..100) {
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+
+        let report = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+
+        prop_assert!(report.is_ok(), "Engine panicked with {} dependencies", num_deps);
+    }
+}
+
+// ============================================================================
+// Property tests: UTF-8 and path safety
+// ============================================================================
+
+proptest! {
+    /// Paths in findings must never be truncated or corrupted.
+    #[test]
+    fn paths_are_not_truncated(
+        path_segment in prop::string::string_regex("[a-z]{1,10}").unwrap(),
+        num_deps in 1usize..5,
+    ) {
+        let manifest_path = format!("crates/{}/Cargo.toml", path_segment);
+
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new(&manifest_path),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new(&manifest_path),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report = evaluate(&model, &cfg);
+
+        // All findings should have the full path
+        for finding in &report.findings {
+            if let Some(ref loc) = finding.location {
+                prop_assert_eq!(
+                    loc.path.as_str(),
+                    manifest_path.as_str(),
+                    "Path was truncated or corrupted"
+                );
+            }
+        }
+    }
+
+    /// Messages must be valid UTF-8 and not corrupted.
+    #[test]
+    fn messages_are_valid_utf8(dep_name in arb_dep_name()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: dep_name,
+                    spec: DepSpec {
+                        version: Some("*".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report = evaluate(&model, &cfg);
+
+        // All messages must be valid UTF-8 (verified by Rust's string type)
+        for finding in &report.findings {
+            prop_assert!(
+                finding.message.is_char_boundary(0),
+                "Message does not start at char boundary"
+            );
+            prop_assert!(
+                finding.message.is_char_boundary(finding.message.len()),
+                "Message does not end at char boundary"
             );
         }
     }

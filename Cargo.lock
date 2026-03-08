@@ -568,6 +568,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "depguard-inline-suppressions"
+version = "0.1.0"
+dependencies = [
+ "depguard-types",
+ "proptest",
+]
+
+[[package]]
 name = "depguard-render"
 version = "0.1.0"
 dependencies = [
@@ -602,6 +610,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "depguard-domain-core",
+ "depguard-inline-suppressions",
  "depguard-types",
  "proptest",
  "toml_edit",

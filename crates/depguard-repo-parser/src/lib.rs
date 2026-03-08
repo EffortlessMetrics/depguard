@@ -9,6 +9,7 @@ use anyhow::Context;
 use depguard_domain_core::model::{
     DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceDependency,
 };
+use depguard_inline_suppressions::parse_inline_suppressions;
 use depguard_types::{Location, RepoPath};
 use std::collections::BTreeMap;
 use toml_edit::{Document, Item, Value};
@@ -168,88 +169,6 @@ fn parse_dep_table(
         });
     }
     out
-}
-
-/// Parse inline suppression tokens for a dependency declaration line.
-///
-/// Supported forms:
-/// - `serde = "*" # depguard: allow(deps.no_wildcards)`
-/// - `serde = "*" # depguard: allow(no_wildcards, wildcard_version)`
-/// - `# depguard: allow(deps.no_wildcards)` directly above a dependency line
-fn parse_inline_suppressions(source: &str, line: u32) -> Vec<String> {
-    let mut out = Vec::new();
-
-    if line == 0 {
-        return out;
-    }
-
-    // Current line inline comment: dep = "..." # depguard: allow(...)
-    if let Some(line_text) = line_text(source, line)
-        && let Some((_, comment)) = line_text.split_once('#')
-    {
-        out.extend(parse_suppressions_from_comment(comment));
-    }
-
-    // Contiguous comment lines directly above the declaration.
-    let mut current = line.saturating_sub(1);
-    while current > 0 {
-        let Some(line_text) = line_text(source, current) else {
-            break;
-        };
-        let trimmed = line_text.trim();
-        if let Some(comment) = trimmed.strip_prefix('#') {
-            out.extend(parse_suppressions_from_comment(comment));
-            current = current.saturating_sub(1);
-            continue;
-        }
-        break;
-    }
-
-    out.sort();
-    out.dedup();
-    out
-}
-
-fn line_text(source: &str, line: u32) -> Option<&str> {
-    source.lines().nth(line.saturating_sub(1) as usize)
-}
-
-fn parse_suppressions_from_comment(comment: &str) -> Vec<String> {
-    let trimmed = comment.trim();
-    let Some(rest) = trimmed.strip_prefix("depguard:") else {
-        return Vec::new();
-    };
-    let rest = rest.trim_start();
-    let Some(allow_rest) = rest.strip_prefix("allow(") else {
-        return Vec::new();
-    };
-    let Some(end_idx) = allow_rest.find(')') else {
-        return Vec::new();
-    };
-    let inner = &allow_rest[..end_idx];
-
-    inner
-        .split(',')
-        .filter_map(normalize_suppression_token)
-        .collect()
-}
-
-fn normalize_suppression_token(token: &str) -> Option<String> {
-    let token = token.trim().trim_matches('"').trim_matches('\'');
-    if token.is_empty() {
-        return None;
-    }
-
-    if token.contains('.') {
-        return Some(token.to_string());
-    }
-
-    let dep_check_id = format!("deps.{token}");
-    if depguard_types::explain::lookup_explanation(&dep_check_id).is_some() {
-        return Some(dep_check_id);
-    }
-
-    Some(token.to_string())
 }
 
 /// Parse target-specific dependencies from `[target.*]` tables.
@@ -1204,81 +1123,5 @@ serde = "1.0"
         let dep = &model.dependencies[0];
         assert_eq!(dep.name, "serde");
         assert_eq!(dep.target.as_deref(), Some("cfg(unix)"));
-    }
-
-    #[test]
-    fn parse_inline_suppression_from_dependency_comment() {
-        let manifest = r#"
-[package]
-name = "pkg"
-version = "0.1.0"
-
-[dependencies]
-serde = "*" # depguard: allow(no_wildcards, wildcard_version)
-"#;
-
-        let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
-        let dep = model
-            .dependencies
-            .iter()
-            .find(|d| d.name == "serde")
-            .expect("serde dep");
-
-        assert_eq!(
-            dep.spec.inline_suppressions,
-            vec![
-                "deps.no_wildcards".to_string(),
-                "wildcard_version".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn parse_inline_suppression_from_preceding_comment_line() {
-        let manifest = r#"
-[package]
-name = "pkg"
-version = "0.1.0"
-
-[dependencies]
-# depguard: allow(deps.no_wildcards)
-serde = "*"
-"#;
-
-        let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
-        let dep = model
-            .dependencies
-            .iter()
-            .find(|d| d.name == "serde")
-            .expect("serde dep");
-
-        assert_eq!(
-            dep.spec.inline_suppressions,
-            vec!["deps.no_wildcards".to_string()]
-        );
-    }
-
-    #[test]
-    fn parse_inline_suppression_ignores_unrelated_comments() {
-        let manifest = r#"
-[package]
-name = "pkg"
-version = "0.1.0"
-
-[dependencies]
-serde = "*" # this is not a depguard directive
-"#;
-
-        let manifest_path = RepoPath::new("Cargo.toml");
-        let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
-        let dep = model
-            .dependencies
-            .iter()
-            .find(|d| d.name == "serde")
-            .expect("serde dep");
-
-        assert!(dep.spec.inline_suppressions.is_empty());
     }
 }

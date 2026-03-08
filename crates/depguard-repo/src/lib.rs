@@ -51,20 +51,56 @@ pub mod fuzz {
     /// Expand workspace member glob patterns against a list of candidate paths.
     ///
     /// This tests the glob compilation and matching logic without filesystem access.
+    /// Supports exclusion patterns (starting with `!`) as per Cargo semantics.
     /// Returns `Ok(matched_paths)` if the pattern is valid, `Err(...)` otherwise.
     /// **Never panics** on any input.
     pub fn expand_globs(patterns: &[String], candidates: &[String]) -> anyhow::Result<Vec<String>> {
         use globset::{Glob, GlobSetBuilder};
 
-        let mut builder = GlobSetBuilder::new();
-        for p in patterns {
-            builder.add(Glob::new(p)?);
-        }
-        let set = builder.build()?;
+        // Separate inclusion and exclusion patterns
+        let (include_patterns, exclude_patterns): (Vec<_>, Vec<_>) = patterns
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .partition(|p| !p.starts_with('!'));
 
+        // Normalize inclusion patterns (strip ./ prefix)
+        let include_patterns: Vec<&str> = include_patterns
+            .into_iter()
+            .map(|p| p.strip_prefix("./").unwrap_or(p))
+            .collect();
+
+        // Normalize exclusion patterns (strip ! and ./ prefixes)
+        let exclude_patterns: Vec<&str> = exclude_patterns
+            .into_iter()
+            .map(|p| p.strip_prefix('!').unwrap_or(p).trim())
+            .map(|p| p.strip_prefix("./").unwrap_or(p))
+            .filter(|p| !p.is_empty())
+            .collect();
+
+        // Build inclusion globset
+        let mut include_builder = GlobSetBuilder::new();
+        for p in &include_patterns {
+            include_builder.add(Glob::new(p)?);
+        }
+        let include_set = include_builder.build()?;
+
+        // Build exclusion globset
+        let mut exclude_builder = GlobSetBuilder::new();
+        for p in &exclude_patterns {
+            exclude_builder.add(Glob::new(p)?);
+        }
+        let exclude_set = exclude_builder.build()?;
+
+        // Match candidates: include if matched by inclusion set and not by exclusion set
         let matched: Vec<String> = candidates
             .iter()
-            .filter(|c| set.is_match(c))
+            .filter(|c| {
+                let matches_include =
+                    include_patterns.is_empty() || include_set.is_match(c.as_str());
+                let matches_exclude = exclude_set.is_match(c.as_str());
+                matches_include && !matches_exclude
+            })
             .cloned()
             .collect();
 

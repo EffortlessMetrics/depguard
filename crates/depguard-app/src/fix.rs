@@ -1,4 +1,5 @@
 use crate::report::ReportVariant;
+use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use depguard_types::{
     BuildfixAction, BuildfixActionTarget, BuildfixActionType, BuildfixConfidence,
@@ -119,7 +120,11 @@ pub fn generate_buildfix_plan(
 }
 
 pub fn serialize_buildfix_plan(plan: &BuildfixPlanV1) -> anyhow::Result<Vec<u8>> {
-    serde_json::to_vec_pretty(plan).map_err(|err| anyhow::anyhow!("serialize buildfix plan: {err}"))
+    serde_json::to_vec_pretty(plan).context(
+        "Failed to serialize buildfix plan to JSON. \
+         This is an internal error - the plan data structure may contain invalid values. \
+         Please report this issue if it persists.",
+    )
 }
 
 pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixApplyResult {
@@ -267,11 +272,22 @@ fn candidate_from_finding(
 fn normalize_manifest_path(repo_root: &Utf8Path, path: &str) -> anyhow::Result<Utf8PathBuf> {
     let path = Utf8PathBuf::from(path);
     if path.is_absolute() {
-        anyhow::bail!("manifest path must be relative: {path}");
+        anyhow::bail!(
+            "Manifest path '{}' is absolute but must be relative to the repository root '{}'. \
+             Update the manifest path in your report or regenerate the report from the correct repository.",
+            path,
+            repo_root
+        );
     }
     for component in path.components() {
         if let camino::Utf8Component::ParentDir = component {
-            anyhow::bail!("manifest path must not contain '..': {path}");
+            anyhow::bail!(
+                "Manifest path '{}' contains '..' which is not allowed for security reasons. \
+                 Paths must stay within the repository root '{}'. \
+                 This may indicate a malformed report or attempted path traversal.",
+                path,
+                repo_root
+            );
         }
     }
     Ok(repo_root.join(path))

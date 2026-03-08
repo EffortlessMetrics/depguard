@@ -8,6 +8,7 @@ members = [
   "crates/depguard-domain-core",
   "crates/depguard-domain-checks",
   "crates/depguard-check-catalog",
+  "crates/depguard-inline-suppressions",
   "crates/depguard-repo-parser",
   "crates/depguard-repo",
   "crates/depguard-render",

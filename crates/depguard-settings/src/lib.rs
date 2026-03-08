@@ -7,9 +7,11 @@
 mod model;
 mod presets;
 mod resolve;
+mod validation_error;
 
 pub use model::{CheckConfig, DepguardConfigV1};
 pub use resolve::{Overrides, ResolvedConfig};
+pub use validation_error::{ValidationError, ValidationErrors};
 
 /// Parse `depguard.toml` (or equivalent) into a typed model.
 pub fn parse_config_toml(input: &str) -> anyhow::Result<DepguardConfigV1> {
@@ -184,7 +186,16 @@ mod tests {
         };
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unknown scope"));
+        let err_msg = result.unwrap_err().to_string();
+        // Check for the key path and error type
+        assert!(
+            err_msg.contains("scope:"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("unknown scope"),
+            "error message should contain 'unknown scope': {err_msg}"
+        );
     }
 
     #[test]
@@ -196,7 +207,16 @@ mod tests {
         let cfg = parse_config_toml(toml).unwrap();
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid severity"));
+        let err_msg = result.unwrap_err().to_string();
+        // Check for the key path and error type
+        assert!(
+            err_msg.contains("checks.deps.no_wildcards.severity"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("unknown severity"),
+            "error message should contain 'unknown severity': {err_msg}"
+        );
     }
 
     #[test]
@@ -208,11 +228,15 @@ mod tests {
         let cfg = parse_config_toml(toml).unwrap();
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // Check for the key path and error type
         assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("invalid allow glob for deps.no_wildcards")
+            err_msg.contains("checks.deps.no_wildcards.allow"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("invalid glob pattern"),
+            "error message should contain 'invalid glob pattern': {err_msg}"
         );
     }
 
@@ -236,7 +260,16 @@ mod tests {
         };
         let result = resolve_config(cfg, Overrides::default());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unknown fail_on"));
+        let err_msg = result.unwrap_err().to_string();
+        // Check for the key path and error type
+        assert!(
+            err_msg.contains("fail_on:"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("unknown fail_on"),
+            "error message should contain 'unknown fail_on': {err_msg}"
+        );
     }
 
     #[test]
@@ -283,5 +316,91 @@ mod tests {
             .expect("default_features check should exist");
         assert!(check.enabled);
         assert_eq!(check.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn validation_error_can_be_extracted_from_anyhow() {
+        use crate::ValidationError;
+
+        let cfg = DepguardConfigV1 {
+            scope: Some("invalid".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        // The ValidationError should be extractable via downcast
+        let validation_err = err.downcast_ref::<ValidationError>();
+        assert!(
+            validation_err.is_some(),
+            "should be able to downcast to ValidationError"
+        );
+
+        let ve = validation_err.unwrap();
+        assert_eq!(ve.key_path(), "scope");
+        assert!(ve.message().contains("invalid"));
+        assert_eq!(ve.suggestion(), Some("expected 'repo' or 'diff'"));
+        assert_eq!(ve.file_path(), None);
+        assert_eq!(ve.line(), None);
+    }
+
+    #[test]
+    fn validation_error_with_file_info() {
+        use crate::ValidationError;
+        use std::path::PathBuf;
+
+        let err = ValidationError::unknown_severity("deps.no_wildcards", "fatal")
+            .with_file(PathBuf::from("depguard.toml"))
+            .with_line(10);
+
+        let display = err.to_string();
+        assert!(
+            display.contains("depguard.toml:10"),
+            "should contain file and line: {display}"
+        );
+        assert!(
+            display.contains("checks.deps.no_wildcards.severity"),
+            "should contain key path: {display}"
+        );
+    }
+
+    #[test]
+    fn validation_errors_can_aggregate_multiple() {
+        use crate::{ValidationError, ValidationErrors};
+
+        let mut errors = ValidationErrors::new();
+        errors.push(ValidationError::unknown_scope("invalid"));
+        errors.push(ValidationError::unknown_fail_on("never"));
+        errors.push(ValidationError::unknown_severity("some.check", "bad"));
+
+        assert_eq!(errors.len(), 3);
+        assert!(!errors.is_empty());
+
+        // Verify iteration works
+        let count = errors.iter().count();
+        assert_eq!(count, 3);
+
+        // Verify display shows all errors
+        let display = errors.to_string();
+        assert!(display.contains("scope:"));
+        assert!(display.contains("fail_on:"));
+        assert!(display.contains("checks.some.check.severity:"));
+    }
+
+    #[test]
+    fn validation_error_backwards_compatible_with_anyhow() {
+        // Ensure that ValidationError works seamlessly with anyhow's context
+        let cfg = DepguardConfigV1 {
+            fail_on: Some("invalid_value".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_config(cfg, Overrides::default());
+
+        let err_msg = result.unwrap_err().to_string();
+        // The error message should still be human-readable
+        assert!(err_msg.contains("fail_on:"));
+        assert!(err_msg.contains("unknown fail_on"));
+        assert!(err_msg.contains("hint:") || err_msg.contains("expected"));
     }
 }

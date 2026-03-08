@@ -1,9 +1,9 @@
 [package]
 name = "depguard-fuzz"
 version = "0.0.0"
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
+edition = "2021"
+rust-version = "1.81"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [package.metadata]
@@ -15,6 +15,9 @@ arbitrary = { version = "1.4.2", features = ["derive"] }
 
 [dependencies.depguard-repo]
 path = "../crates/depguard-repo"
+
+[dependencies.depguard-inline-suppressions]
+path = "../crates/depguard-inline-suppressions"
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -30,6 +33,34 @@ bench = false
 [[bin]]
 name = "fuzz_glob_expansion"
 path = "fuzz_targets/fuzz_glob_expansion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_inline_suppressions"
+path = "fuzz_targets/fuzz_inline_suppressions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_workspace_discovery"
+path = "fuzz_targets/fuzz_workspace_discovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_manifest_parser"
+path = "fuzz_targets/fuzz_manifest_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_dependency_spec"
+path = "fuzz_targets/fuzz_dependency_spec.rs"
 test = false
 doc = false
 bench = false

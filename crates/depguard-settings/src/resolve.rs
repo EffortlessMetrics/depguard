@@ -1,5 +1,4 @@
-use crate::{model::DepguardConfigV1, presets};
-use anyhow::Context;
+use crate::{ValidationError, model::DepguardConfigV1, presets};
 use depguard_domain_core::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use depguard_types::Severity;
 use globset::Glob;
@@ -51,8 +50,7 @@ pub fn resolve_config(
             entry.enabled = enabled;
         }
         if let Some(sev) = cc.severity.as_deref() {
-            entry.severity =
-                parse_severity(sev).with_context(|| format!("invalid severity for {check_id}"))?;
+            entry.severity = parse_severity(check_id, sev)?;
         }
         if !cc.allow.is_empty() {
             validate_allowlist(check_id, &cc.allow)?;
@@ -78,8 +76,13 @@ pub fn resolve_config(
 
 fn validate_allowlist(check_id: &str, patterns: &[String]) -> anyhow::Result<()> {
     for pattern in patterns {
-        Glob::new(pattern)
-            .with_context(|| format!("invalid allow glob for {check_id}: {pattern}"))?;
+        Glob::new(pattern).map_err(|e| {
+            anyhow::Error::new(ValidationError::invalid_allow_glob(
+                check_id,
+                pattern,
+                &e.to_string(),
+            ))
+        })?;
     }
     Ok(())
 }
@@ -88,16 +91,18 @@ fn parse_scope(v: &str) -> anyhow::Result<Scope> {
     match v {
         "repo" => Ok(Scope::Repo),
         "diff" => Ok(Scope::Diff),
-        other => anyhow::bail!("unknown scope: {other} (expected 'repo' or 'diff')"),
+        other => Err(anyhow::Error::new(ValidationError::unknown_scope(other))),
     }
 }
 
-fn parse_severity(v: &str) -> anyhow::Result<Severity> {
+fn parse_severity(check_id: &str, v: &str) -> anyhow::Result<Severity> {
     match v {
         "info" => Ok(Severity::Info),
         "warning" | "warn" => Ok(Severity::Warning),
         "error" => Ok(Severity::Error),
-        other => anyhow::bail!("unknown severity: {other} (expected info|warning|error)"),
+        other => Err(anyhow::Error::new(ValidationError::unknown_severity(
+            check_id, other,
+        ))),
     }
 }
 
@@ -105,6 +110,6 @@ fn parse_fail_on(v: &str) -> anyhow::Result<FailOn> {
     match v {
         "error" => Ok(FailOn::Error),
         "warning" | "warn" => Ok(FailOn::Warning),
-        other => anyhow::bail!("unknown fail_on: {other} (expected error|warning)"),
+        other => Err(anyhow::Error::new(ValidationError::unknown_fail_on(other))),
     }
 }
