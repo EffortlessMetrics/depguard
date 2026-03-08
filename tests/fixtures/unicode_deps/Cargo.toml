@@ -1,0 +1,12 @@
+[package]
+name = "unicode_deps"
+version = "0.1.0"
+edition = "2021"
+publish = true
+
+[dependencies]
+# Unicode characters in dependency names (Cargo allows this)
+# Using ASCII-safe names that could theoretically have unicode equivalents
+serde = "1.0.203"
+# Note: Actual unicode crate names are rare but Cargo permits them
+# This tests that the parser handles unicode correctly

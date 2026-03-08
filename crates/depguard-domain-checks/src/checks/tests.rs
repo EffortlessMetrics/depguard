@@ -932,3 +932,231 @@ fn utils_spec_to_json_includes_all_fields() {
     assert_eq!(json["default-features"], false);
     assert_eq!(json["optional"], true);
 }
+
+// ============================================================================
+// Edge Case Tests
+// ============================================================================
+
+/// Test that a manifest with only a [package] section (no dependencies) produces no findings.
+/// This validates that the check system handles empty dependency lists gracefully.
+#[test]
+fn empty_package_with_no_dependencies_produces_no_findings() {
+    // Create a manifest with no dependencies
+    let manifest = manifest("Cargo.toml", true, Vec::new(), BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    // Run all checks with default configuration
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Empty package should produce no wildcard findings");
+
+    let mut out = Vec::new();
+    path_safety::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Empty package should produce no path safety findings");
+
+    let mut out = Vec::new();
+    git_requires_version::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Empty package should produce no git findings");
+}
+
+/// Test handling of empty dependency specifications.
+/// Cargo allows `foo = ""` (empty version string) and `foo = {}` (empty table).
+#[test]
+fn handles_empty_version_string_gracefully() {
+    let deps = vec![dep_decl(
+        "empty_version",
+        DepKind::Normal,
+        DepSpec {
+            version: Some(String::new()), // Empty string version
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    // Empty version string should not be treated as a wildcard
+    assert!(out.is_empty(), "Empty version string should not be flagged as wildcard");
+}
+
+/// Test handling of completely empty dependency specification (no fields).
+#[test]
+fn handles_empty_table_specification() {
+    let deps = vec![dep_decl(
+        "empty_table",
+        DepKind::Normal,
+        DepSpec::default(), // All fields are None/false
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    // Empty spec should not cause panic or be flagged as wildcard
+    assert!(out.is_empty(), "Empty table specification should not be flagged as wildcard");
+}
+
+/// Test that dependency names with unicode characters are handled correctly.
+/// Cargo allows unicode in crate names, though crates.io restricts to ASCII.
+#[test]
+fn handles_unicode_dependency_names() {
+    let deps = vec![
+        dep_decl(
+            "serde", // ASCII name
+            DepKind::Normal,
+            DepSpec {
+                version: Some("1.0.0".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+        dep_decl(
+            "ünicode", // Unicode name (hypothetical)
+            DepKind::Normal,
+            DepSpec {
+                version: Some("1.0.0".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+        dep_decl(
+            "日本語", // Japanese characters (hypothetical)
+            DepKind::Normal,
+            DepSpec {
+                version: Some("1.0.0".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+    ];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    // Unicode names should be handled without panic
+    assert!(out.is_empty(), "Unicode dependency names should be handled correctly");
+}
+
+/// Test that deeply nested paths are handled correctly.
+/// This tests path handling for manifests 20+ levels deep.
+#[test]
+fn handles_deeply_nested_paths() {
+    // Create a path that is 20+ levels deep
+    let deep_path = "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/Cargo.toml";
+    
+    let deps = vec![dep_decl(
+        "nested_dep",
+        DepKind::Normal,
+        DepSpec {
+            version: Some("1.0.0".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest(deep_path, true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Deeply nested paths should be handled correctly");
+    assert_eq!(model.manifests[0].path.as_str(), deep_path);
+}
+
+/// Test that long file names (255+ characters) are handled correctly.
+#[test]
+fn handles_long_file_names() {
+    // Create a very long crate name (255+ characters)
+    let long_name = "a".repeat(300);
+    let long_path = format!("crates/{}/Cargo.toml", long_name);
+    
+    let deps = vec![dep_decl(
+        &long_name,
+        DepKind::Normal,
+        DepSpec {
+            version: Some("1.0.0".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest(&long_path, true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+
+    let mut out = Vec::new();
+    no_wildcards::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Long file names should be handled correctly");
+}
+
+/// Test that path safety check handles deeply nested relative paths.
+#[test]
+fn path_safety_handles_deeply_nested_paths() {
+    let deps = vec![
+        dep_decl(
+            "deep_local",
+            DepKind::Normal,
+            DepSpec {
+                path: Some("a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/local".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+        dep_decl(
+            "deep_escape",
+            DepKind::Normal,
+            DepSpec {
+                path: Some("a/../../../../../../../../../../../../../../../../../../escape".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+    ];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check_allow(
+        ids::CHECK_DEPS_PATH_SAFETY,
+        Severity::Warning,
+        Vec::new(),
+        false,
+    );
+
+    let mut out = Vec::new();
+    path_safety::run(&model, &cfg, &mut out);
+    // The deep_escape should be flagged as parent escape
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].code, ids::CODE_PARENT_ESCAPE);
+}
+
+/// Test that workspace with empty workspace.dependencies handles correctly.
+#[test]
+fn handles_empty_workspace_dependencies() {
+    let manifest = manifest("Cargo.toml", true, Vec::new(), BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new()); // Empty workspace dependencies
+
+    let cfg = config_with_check(ids::CHECK_DEPS_WORKSPACE_INHERITANCE, Severity::Warning);
+
+    let mut out = Vec::new();
+    workspace_inheritance::run(&model, &cfg, &mut out);
+    assert!(out.is_empty(), "Empty workspace dependencies should not cause findings");
+}

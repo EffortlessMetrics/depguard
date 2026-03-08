@@ -1,0 +1,11 @@
+[package]
+name = "empty_dep_spec"
+version = "0.1.0"
+edition = "2021"
+publish = true
+
+[dependencies]
+# Empty string version - this is technically allowed by Cargo but problematic
+empty_version = ""
+# Empty table (no fields at all)
+empty_table = {}

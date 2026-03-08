@@ -1,5 +1,15 @@
 # Configuration for cargo-mutants
-# Run with: cargo mutants --package depguard-domain
+# 
+# Usage:
+#   cargo mutants                                    # Run on all workspace crates
+#   cargo mutants --package depguard-domain          # Run on specific crate
+#   cargo mutants --package depguard-domain-checks   # Run on check implementations
+#   cargo mutants --package depguard-settings        # Run on config parsing
+#
+# Recommended crates for mutation testing (pure business logic):
+#   - depguard-domain         : Core domain logic, policy evaluation
+#   - depguard-domain-checks  : Individual check implementations
+#   - depguard-settings       : Configuration parsing and validation
 
 [default]
 # Allow more time for complex tests
@@ -15,5 +25,6 @@ glob = "**/tests/**"
 [[exclude_globs]]
 glob = "**/proptest*.rs"
 
-# Focus mutation testing on the domain crate for maximum value
-# The domain crate contains pure business logic with no I/O
+# Exclude test support files (test helpers, not production code)
+[[exclude_globs]]
+glob = "**/test_support.rs"

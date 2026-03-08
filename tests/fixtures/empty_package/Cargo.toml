@@ -1,0 +1,7 @@
+[package]
+name = "empty_package"
+version = "0.1.0"
+edition = "2021"
+publish = true
+
+# No dependencies - this is a minimal package with just [package] section

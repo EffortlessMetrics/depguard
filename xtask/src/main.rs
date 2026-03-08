@@ -1353,8 +1353,8 @@ fn parse_release_options(args: &[String]) -> ReleaseOptions {
             options.skip_changelog = true;
         } else if arg == "--build" {
             options.build_artifacts = true;
-        } else if arg.starts_with("--version=") {
-            options.target_version = Some(arg[10..].to_string());
+        } else if let Some(stripped) = arg.strip_prefix("--version=") {
+            options.target_version = Some(stripped.to_string());
         } else if !arg.starts_with("--") {
             // Positional argument: version
             options.target_version = Some(arg.clone());
@@ -1483,10 +1483,10 @@ fn validate_repo_state(options: &ReleaseOptions) -> anyhow::Result<()> {
 fn get_current_version() -> anyhow::Result<String> {
     // First try workspace Cargo.toml
     let cargo_toml_path = project_root().join("Cargo.toml");
-    if let Ok(content) = fs::read_to_string(&cargo_toml_path) {
-        if let Some(version) = extract_version_from_toml(&content) {
-            return Ok(version);
-        }
+    if let Ok(content) = fs::read_to_string(&cargo_toml_path)
+        && let Some(version) = extract_version_from_toml(&content)
+    {
+        return Ok(version);
     }
 
     // Fallback to CLI crate Cargo.toml
@@ -1494,10 +1494,10 @@ fn get_current_version() -> anyhow::Result<String> {
         .join("crates")
         .join("depguard-cli")
         .join("Cargo.toml");
-    if let Ok(content) = fs::read_to_string(&cli_cargo_toml) {
-        if let Some(version) = extract_version_from_toml(&content) {
-            return Ok(version);
-        }
+    if let Ok(content) = fs::read_to_string(&cli_cargo_toml)
+        && let Some(version) = extract_version_from_toml(&content)
+    {
+        return Ok(version);
     }
 
     bail!("Could not find version in Cargo.toml files")
@@ -1524,11 +1524,11 @@ fn extract_version_from_toml(content: &str) -> Option<String> {
 /// Bump the patch version (e.g., "1.2.3" -> "1.2.4").
 fn bump_patch_version(version: &str) -> String {
     let parts: Vec<&str> = version.split('.').collect();
-    if parts.len() >= 3 {
-        if let Ok(mut patch) = parts[2].parse::<u32>() {
-            patch += 1;
-            return format!("{}.{}.{}", parts[0], parts[1], patch);
-        }
+    if parts.len() >= 3
+        && let Ok(mut patch) = parts[2].parse::<u32>()
+    {
+        patch += 1;
+        return format!("{}.{}.{}", parts[0], parts[1], patch);
     }
     // Fallback: just append "-next"
     format!("{}-next", version)
@@ -1793,7 +1793,7 @@ fn build_release_artifacts(options: &ReleaseOptions) -> anyhow::Result<()> {
 
 /// Get the current target triple.
 fn get_target_triple() -> String {
-    let target = std::env::var("TARGET").unwrap_or_else(|_| {
+    std::env::var("TARGET").unwrap_or_else(|_| {
         // Fallback: guess based on OS
         let os = if cfg!(target_os = "linux") {
             "unknown-linux-gnu"
@@ -1812,8 +1812,7 @@ fn get_target_triple() -> String {
             "unknown"
         };
         format!("{}-{}", arch, os)
-    });
-    target
+    })
 }
 
 /// Generate SHA256 checksum for a file.
