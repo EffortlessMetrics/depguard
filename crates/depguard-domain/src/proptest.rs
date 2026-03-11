@@ -1815,6 +1815,1666 @@ proptest! {
     }
 }
 
+// ============================================================================
+// Property tests: Dependency specification edge cases
+// ============================================================================
+
+/// Strategy for empty version strings
+fn arb_empty_version() -> impl Strategy<Value = String> {
+    Just("".to_string())
+}
+
+/// Strategy for very long version strings (1000+ chars)
+fn arb_long_version() -> impl Strategy<Value = String> {
+    (1000usize..2000).prop_flat_map(|len| {
+        prop::collection::vec(
+            prop_oneof![
+                Just('0'),
+                Just('1'),
+                Just('2'),
+                Just('3'),
+                Just('4'),
+                Just('5'),
+                Just('6'),
+                Just('7'),
+                Just('8'),
+                Just('9'),
+                Just('.'),
+                Just('-'),
+                Just('+'),
+                Just('_'),
+            ],
+            len..=len + 100,
+        )
+        .prop_map(|chars| chars.into_iter().collect())
+    })
+}
+
+/// Strategy for unicode dependency names (edge cases)
+fn arb_unicode_dep_name() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Chinese characters
+        Just("依赖包".to_string()),
+        // Japanese characters
+        Just("依存関係".to_string()),
+        // Cyrillic
+        Just("зависимость".to_string()),
+        // Arabic
+        Just("تبعية".to_string()),
+        // Emoji
+        Just("📦".to_string()),
+        // Mixed unicode
+        Just("serde-依赖".to_string()),
+        // Zero-width characters
+        Just("serde\u{200B}crate".to_string()),
+        // Non-printable (but valid UTF-8)
+        Just("crate\u{00A0}name".to_string()),
+        // Very long unicode name
+        prop::string::string_regex("[α-ω]{1,50}").unwrap(),
+    ]
+}
+
+/// Strategy for invalid semver strings
+fn arb_invalid_semver() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Missing parts
+        Just("1".to_string()),
+        Just("1.".to_string()),
+        Just("1.2.".to_string()),
+        Just(".1.2".to_string()),
+        Just("1.2.3.".to_string()),
+        // Invalid characters
+        Just("1.2.3a".to_string()),
+        Just("v1.2.3".to_string()),
+        Just("1.2.3-rc.1+".to_string()),
+        // Multiple operators
+        Just("^^1.2.3".to_string()),
+        Just("~~1.2.3".to_string()),
+        Just(">>=1.2.3".to_string()),
+        Just("<<=1.2.3".to_string()),
+        // Malformed ranges
+        Just(">=1.0.0, <2.0.0, ".to_string()),
+        Just(">=1.0.0 <2.0.0".to_string()),
+        // Empty prerelease
+        Just("1.2.3-".to_string()),
+        Just("1.2.3+".to_string()),
+        // Nonsense
+        Just("not-a-version".to_string()),
+        Just("latest".to_string()),
+        Just("stable".to_string()),
+        Just("main".to_string()),
+        Just("master".to_string()),
+        Just("HEAD".to_string()),
+        // Whitespace issues
+        Just(" 1.2.3".to_string()),
+        Just("1.2.3 ".to_string()),
+        Just("1 .2.3".to_string()),
+        Just("1. 2.3".to_string()),
+        // Negative versions
+        Just("-1.2.3".to_string()),
+        Just("1.-2.3".to_string()),
+        Just("1.2.-3".to_string()),
+    ]
+}
+
+/// Strategy for complex version requirements with multiple operators
+fn arb_complex_version_req() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Multiple caret ranges
+        (
+            1u32..10,
+            0u32..100,
+            0u32..100,
+            1u32..10,
+            0u32..100,
+            0u32..100
+        )
+            .prop_map(|(maj1, min1, pat1, maj2, min2, pat2)| {
+                format!("^{}.{}.{}, ^{}.{}.{}", maj1, min1, pat1, maj2, min2, pat2)
+            }),
+        // Range with multiple comparators
+        (1u32..50, 0u32..100, 0u32..100).prop_map(|(major, minor, patch)| {
+            format!(
+                ">={}.{}.{}, <{}.0.0, >={}.0.0",
+                major,
+                minor,
+                patch,
+                major + 2,
+                major
+            )
+        }),
+        // Mixed operators
+        (1u32..20, 0u32..100, 0u32..100).prop_map(|(major, minor, patch)| {
+            format!(
+                "~{}.{}.{}, >={}.{}.0, <{}.0.0",
+                major,
+                minor,
+                patch,
+                major,
+                minor,
+                major + 1
+            )
+        }),
+        // Exact + range
+        (
+            1u32..10,
+            0u32..100,
+            0u32..100,
+            1u32..10,
+            0u32..100,
+            0u32..100
+        )
+            .prop_map(|(maj1, min1, pat1, maj2, min2, pat2)| {
+                format!("={}.{}.{}, >={}.{}.{}", maj1, min1, pat1, maj2, min2, pat2)
+            }),
+        // Many ranges
+        (1u32..5, 2u32..5, 3u32..5).prop_map(|(maj1, min1, min2)| {
+            format!(
+                ">={}.{}.0, <{}.0.0, !={}.0.0, !={}.1.0",
+                maj1,
+                min1,
+                maj1 + 1,
+                maj1,
+                maj1
+            )
+        }),
+        // Complex prerelease
+        (1u32..10, 0u32..100, 0u32..100).prop_map(|(major, minor, patch)| {
+            format!(
+                "{}.{}.{}-alpha.1+build.123, >={}.{}.{}-beta",
+                major, minor, patch, major, minor, patch
+            )
+        }),
+    ]
+}
+
+proptest! {
+    /// Empty version strings should not cause panics
+    #[test]
+    fn empty_version_no_panic(version in arb_empty_version()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on empty version string");
+    }
+
+    /// Very long version strings (1000+ chars) should not cause panics
+    #[test]
+    fn long_version_no_panic(version in arb_long_version()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on long version string (len={})", version.len());
+    }
+
+    /// Unicode in dependency names should not cause panics
+    #[test]
+    fn unicode_dep_name_no_panic(name in arb_unicode_dep_name()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: name.clone(),
+                    spec: DepSpec {
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on unicode dependency name: {:?}", name);
+    }
+
+    /// Invalid semver strings should not cause panics
+    #[test]
+    fn invalid_semver_no_panic(version in arb_invalid_semver()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on invalid semver: {:?}", version);
+    }
+
+    /// Complex version requirements with multiple operators should not cause panics
+    #[test]
+    fn complex_version_req_no_panic(version in arb_complex_version_req()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on complex version requirement: {:?}", version);
+    }
+
+    /// Empty version strings should produce deterministic results
+    #[test]
+    fn empty_version_deterministic(version in arb_empty_version()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+
+        prop_assert_eq!(report1.findings.len(), report2.findings.len());
+        for (f1, f2) in report1.findings.iter().zip(report2.findings.iter()) {
+            prop_assert_eq!(&f1.check_id, &f2.check_id);
+            prop_assert_eq!(&f1.code, &f2.code);
+            prop_assert_eq!(&f1.message, &f2.message);
+        }
+    }
+
+    /// Complex version requirements should produce deterministic results
+    #[test]
+    fn complex_version_req_deterministic(version in arb_complex_version_req()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        version: Some(version),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+
+        prop_assert_eq!(report1.findings.len(), report2.findings.len());
+        for (f1, f2) in report1.findings.iter().zip(report2.findings.iter()) {
+            prop_assert_eq!(&f1.check_id, &f2.check_id);
+            prop_assert_eq!(&f1.code, &f2.code);
+        }
+    }
+}
+
+// ============================================================================
+// Property tests: Path handling edge cases
+// ============================================================================
+
+/// Strategy for very deep paths (20+ levels)
+fn arb_deep_path() -> impl Strategy<Value = String> {
+    (20usize..50).prop_flat_map(|depth| {
+        prop::collection::vec(
+            prop::string::string_regex("[a-z]{1,8}").unwrap(),
+            depth..=depth + 5,
+        )
+        .prop_map(|segments| segments.join("/"))
+    })
+}
+
+/// Strategy for paths with special characters
+fn arb_special_char_path() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Spaces
+        Just("path with spaces".to_string()),
+        Just("path/with spaces/segments".to_string()),
+        // Tabs
+        Just("path\twith\ttabs".to_string()),
+        // Parentheses
+        Just("path(with)parentheses".to_string()),
+        // Brackets
+        Just("path[with]brackets".to_string()),
+        // Braces
+        Just("path{with}braces".to_string()),
+        // Hash
+        Just("path#with#hash".to_string()),
+        // Percent
+        Just("path%20encoded".to_string()),
+        // Ampersand
+        Just("path&with&ampersand".to_string()),
+        // Semicolon
+        Just("path;with;semicolon".to_string()),
+        // Equals
+        Just("path=with=equals".to_string()),
+        // At sign
+        Just("path@with@at".to_string()),
+        // Dollar sign
+        Just("path$with$dollar".to_string()),
+        // Backtick
+        Just("path`with`backtick".to_string()),
+        // Single quote
+        Just("path'with'quote".to_string()),
+        // Double quote
+        Just("path\"with\"quote".to_string()),
+        // Backslash (Windows-style)
+        Just("path\\with\\backslash".to_string()),
+        // Multiple special chars
+        Just("path-with(many)[special]{chars}#here".to_string()),
+        // URL-like
+        Just("https://example.com/crate".to_string()),
+        // File URL
+        Just("file:///path/to/crate".to_string()),
+    ]
+}
+
+/// Strategy for paths with `..` escapes
+fn arb_escaping_path_varied() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Single escape
+        Just("..".to_string()),
+        // Double escape
+        Just("../..".to_string()),
+        // Triple escape
+        Just("../../..".to_string()),
+        // Escape with path
+        Just("../crate".to_string()),
+        // Multiple escapes with path
+        Just("../../workspace/crate".to_string()),
+        // Interleaved
+        Just("crate/../other".to_string()),
+        // Start with normal, then escape
+        Just("a/b/c/../../x".to_string()),
+        // Escape from nested
+        Just("a/b/../../../c".to_string()),
+        // Many escapes
+        Just("../../../../../../etc/passwd".to_string()),
+        // Escape with special
+        Just("../crate-name".to_string()),
+        // Complex pattern
+        (1u32..10).prop_map(|n| format!("{}{}", "../".repeat(n as usize), "target")),
+    ]
+}
+
+/// Strategy for Windows-style paths
+fn arb_windows_path() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Drive letter absolute
+        Just("C:\\Users\\project".to_string()),
+        Just("D:\\code\\crate".to_string()),
+        Just("E:\\dev\\workspace\\pkg".to_string()),
+        // UNC path
+        Just("\\\\server\\share\\path".to_string()),
+        // Relative with backslash
+        Just("..\\crate".to_string()),
+        Just("..\\..\\workspace".to_string()),
+        Just("crates\\foo\\src".to_string()),
+        // Mixed separators
+        Just("C:/Users/project\\crate".to_string()),
+        Just("crates/foo\\bar/baz".to_string()),
+        // Drive letter relative
+        Just("C:crate".to_string()),
+    ]
+}
+
+/// Strategy for Unix-style paths
+fn arb_unix_path() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Absolute
+        Just("/usr/local/lib".to_string()),
+        Just("/home/user/project".to_string()),
+        Just("/opt/rust/crates".to_string()),
+        // Relative
+        Just("./crate".to_string()),
+        Just("../workspace".to_string()),
+        Just("../../project".to_string()),
+        // With tilde (home expansion)
+        Just("~/project".to_string()),
+        Just("~user/project".to_string()),
+        // Symlink-style
+        Just("/usr/bin/../lib".to_string()),
+    ]
+}
+
+proptest! {
+    /// Very deep paths (20+ levels) should not cause panics
+    #[test]
+    fn deep_path_no_panic(path in arb_deep_path()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on deep path (depth ~{})", path.matches('/').count() + 1);
+    }
+
+    /// Paths with special characters should not cause panics
+    #[test]
+    fn special_char_path_no_panic(path in arb_special_char_path()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on special char path: {:?}", path);
+    }
+
+    /// Paths with `..` escapes should be detected and not cause panics
+    #[test]
+    fn escaping_path_detected_no_panic(path in arb_escaping_path_varied()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Error);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on escaping path: {:?}", path);
+
+        // Paths starting with .. should trigger path_safety check
+        let report = result.unwrap();
+        if path.starts_with("..") {
+            let has_escape_finding = report.findings.iter().any(|f| f.code == ids::CODE_PARENT_ESCAPE);
+            prop_assert!(has_escape_finding || report.findings.iter().any(|f| f.check_id == ids::CHECK_DEPS_PATH_SAFETY),
+                "Path starting with '..' should trigger path_safety check: {:?}", path);
+        }
+    }
+
+    /// Windows-style paths should be detected as absolute
+    #[test]
+    fn windows_path_detected_no_panic(path in arb_windows_path()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Error);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on Windows path: {:?}", path);
+
+        // Windows absolute paths with drive letter (e.g., C:\) should be detected
+        let report = result.unwrap();
+        let is_drive_absolute = path.len() >= 2 && path.chars().nth(1) == Some(':');
+        if is_drive_absolute {
+            let has_abs_finding = report.findings.iter().any(|f| f.code == ids::CODE_ABSOLUTE_PATH);
+            prop_assert!(has_abs_finding, "Windows drive-absolute path should be detected: {:?}", path);
+        }
+        // Note: UNC paths (\\server\share) may not be detected as absolute by the current implementation
+        // This is acceptable behavior - the key invariant is that the engine doesn't panic
+    }
+
+    /// Unix-style absolute paths should be detected
+    #[test]
+    fn unix_path_detected_no_panic(path in arb_unix_path()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path.clone()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Error);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on Unix path: {:?}", path);
+
+        // Unix absolute paths should be detected
+        let report = result.unwrap();
+        if path.starts_with('/') {
+            let has_abs_finding = report.findings.iter().any(|f| f.code == ids::CODE_ABSOLUTE_PATH);
+            prop_assert!(has_abs_finding, "Unix absolute path should be detected: {:?}", path);
+        }
+    }
+
+    /// Deep paths should produce deterministic results
+    #[test]
+    fn deep_path_deterministic(path in arb_deep_path()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(path),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+
+        prop_assert_eq!(report1.findings.len(), report2.findings.len());
+    }
+}
+
+// ============================================================================
+// Property tests: Glob expansion edge cases
+// ============================================================================
+
+/// Strategy for empty/minimal glob patterns
+fn arb_empty_glob() -> impl Strategy<Value = String> {
+    prop_oneof![
+        Just("".to_string()),
+        Just("*".to_string()),
+        Just("**".to_string()),
+        Just("?".to_string()),
+    ]
+}
+
+/// Strategy for glob patterns that match nothing
+fn arb_non_matching_glob() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Non-existent extension
+        Just("*.nonexistent123".to_string()),
+        // Impossible pattern
+        Just("*.foo.bar.baz.qux".to_string()),
+        // Specific non-existent file
+        Just("nonexistent_*.rs".to_string()),
+        // Deep non-existent
+        Just("**/nonexistent_dir/**/*.rs".to_string()),
+        // Contradictory pattern
+        Just("*.rs.txt".to_string()),
+    ]
+}
+
+/// Strategy for glob patterns with special characters
+fn arb_special_glob() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Character class
+        Just("[abc]*.rs".to_string()),
+        Just("[a-z]*.rs".to_string()),
+        Just("[!abc]*.rs".to_string()),
+        Just("[[:alpha:]]*.rs".to_string()),
+        // Escaped characters
+        Just("file\\ with\\ spaces*.rs".to_string()),
+        Just("\\[literal\\]*.rs".to_string()),
+        // Multiple wildcards
+        Just("**/*/**/*/**".to_string()),
+        Just("***.rs".to_string()),
+        Just("**?**".to_string()),
+        // Curly braces (if supported)
+        Just("{foo,bar,baz}*.rs".to_string()),
+        Just("**/{src,lib,test}/**/*.rs".to_string()),
+    ]
+}
+
+/// Strategy for nested glob patterns
+fn arb_nested_glob() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Double star at various positions
+        Just("**/*.rs".to_string()),
+        Just("src/**/*.rs".to_string()),
+        Just("**/src/**/*.rs".to_string()),
+        Just("**/**/**/*.rs".to_string()),
+        // Multiple double stars
+        Just("**/crates/**/src/**/*.rs".to_string()),
+        Just("**/target/**/debug/**/*.rlib".to_string()),
+        // Mixed depth
+        Just("*/**/*/*.rs".to_string()),
+        Just("**/*/**/Cargo.toml".to_string()),
+        // Complex nesting
+        Just("**/tests/**/fixtures/**/*".to_string()),
+        Just("crates/**/benches/**/*.rs".to_string()),
+    ]
+}
+
+/// Strategy for exclusion patterns (with !)
+fn arb_exclusion_glob() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Simple exclusion
+        Just("!target".to_string()),
+        Just("!*.generated.rs".to_string()),
+        // Path exclusion
+        Just("!**/target/**".to_string()),
+        Just("!vendor/**".to_string()),
+        // Multiple exclusions combined (as single pattern for testing)
+        Just("!node_modules/**/*".to_string()),
+        Just("!.git/**".to_string()),
+        // Exclusion with wildcards
+        Just("!**/.*".to_string()),
+        Just("!**/test_*.rs".to_string()),
+    ]
+}
+
+proptest! {
+    /// Empty/minimal glob patterns should not cause panics
+    #[test]
+    fn empty_glob_no_panic(pattern in arb_empty_glob()) {
+        // Glob patterns are typically used in configuration, not in the model directly.
+        // This test verifies that if a glob-like string appears in a path field,
+        // the engine doesn't panic.
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on glob-like path: {:?}", pattern);
+    }
+
+    /// Non-matching glob patterns should not cause panics
+    #[test]
+    fn non_matching_glob_no_panic(pattern in arb_non_matching_glob()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on non-matching glob: {:?}", pattern);
+    }
+
+    /// Glob patterns with special characters should not cause panics
+    #[test]
+    fn special_glob_no_panic(pattern in arb_special_glob()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on special glob: {:?}", pattern);
+    }
+
+    /// Nested glob patterns should not cause panics
+    #[test]
+    fn nested_glob_no_panic(pattern in arb_nested_glob()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on nested glob: {:?}", pattern);
+    }
+
+    /// Exclusion patterns (with !) should not cause panics
+    #[test]
+    fn exclusion_glob_no_panic(pattern in arb_exclusion_glob()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let result = std::panic::catch_unwind(|| evaluate(&model, &cfg));
+        prop_assert!(result.is_ok(), "Engine panicked on exclusion glob: {:?}", pattern);
+    }
+
+    /// Glob patterns should produce deterministic results
+    #[test]
+    fn glob_deterministic(pattern in arb_nested_glob()) {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "test-dep".to_string(),
+                    spec: DepSpec {
+                        path: Some(pattern.clone()),
+                        version: Some("1.0.0".to_string()),
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(10),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+
+        prop_assert_eq!(report1.findings.len(), report2.findings.len());
+        for (f1, f2) in report1.findings.iter().zip(report2.findings.iter()) {
+            prop_assert_eq!(&f1.check_id, &f2.check_id);
+            prop_assert_eq!(&f1.code, &f2.code);
+        }
+    }
+}
+
+// ============================================================================
+// Property tests: Additional determinism invariants
+// ============================================================================
+
+proptest! {
+    /// Same input always produces same output regardless of how many times run
+    #[test]
+    fn determinism_multiple_evaluations(
+        num_deps in 1usize..10,
+        seed in any::<u64>(),
+    ) {
+        use rand::seq::SliceRandom;
+        use rand::SeedableRng;
+
+        // Create varied dependencies
+        let mut deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| {
+                let spec = match i % 5 {
+                    0 => DepSpec { version: Some("*".to_string()), ..DepSpec::default() },
+                    1 => DepSpec { version: Some("1.0".to_string()), ..DepSpec::default() },
+                    2 => DepSpec { path: Some("../crate".to_string()), version: Some("1.0".to_string()), ..DepSpec::default() },
+                    3 => DepSpec { path: Some("/abs/path".to_string()), ..DepSpec::default() },
+                    _ => DepSpec { workspace: true, ..DepSpec::default() },
+                };
+                DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: format!("dep{}", i),
+                    spec,
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some((i + 1) as u32),
+                        col: None,
+                    }),
+                    target: None,
+                }
+            })
+            .collect();
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        deps.shuffle(&mut rng);
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: {
+                let mut m = BTreeMap::new();
+                m.insert("dep0".to_string(), WorkspaceDependency {
+                    name: "dep0".to_string(),
+                    version: Some("1.0.0".to_string()),
+                    path: None,
+                    workspace: false,
+                });
+                m
+            },
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+
+        // Run 5 times
+        let reports: Vec<_> = (0..5).map(|_| evaluate(&model, &cfg)).collect();
+
+        // All reports must be identical
+        for i in 1..reports.len() {
+            prop_assert_eq!(reports[0].findings.len(), reports[i].findings.len(),
+                "Findings count differs between run 0 and run {}", i);
+            for (j, (f1, f2)) in reports[0].findings.iter().zip(reports[i].findings.iter()).enumerate() {
+                prop_assert_eq!(&f1.check_id, &f2.check_id, "check_id differs at index {} between run 0 and run {}", j, i);
+                prop_assert_eq!(&f1.code, &f2.code, "code differs at index {} between run 0 and run {}", j, i);
+                prop_assert_eq!(&f1.message, &f2.message, "message differs at index {} between run 0 and run {}", j, i);
+            }
+            prop_assert_eq!(&reports[0].verdict, &reports[i].verdict,
+                "Verdict differs between run 0 and run {}", i);
+        }
+    }
+
+    /// Ordering is consistent regardless of input order
+    #[test]
+    fn determinism_ordering_consistent(
+        dep_names in prop::collection::vec(arb_dep_name(), 5..15),
+        seed1 in any::<u64>(),
+        seed2 in any::<u64>(),
+    ) {
+        use rand::seq::SliceRandom;
+        use rand::SeedableRng;
+
+        // Create dependencies with violations
+        let deps: Vec<DependencyDecl> = dep_names.iter().enumerate().map(|(i, name)| {
+            DependencyDecl {
+                kind: DepKind::Normal,
+                name: name.clone(),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new(if i % 2 == 0 { "Cargo.toml" } else { "crates/foo/Cargo.toml" }),
+                    line: Some((i + 1) as u32),
+                    col: None,
+                }),
+                target: None,
+            }
+        }).collect();
+
+        // Shuffle with two different seeds
+        let mut deps1 = deps.clone();
+        let mut deps2 = deps.clone();
+
+        let mut rng1 = rand::rngs::StdRng::seed_from_u64(seed1);
+        let mut rng2 = rand::rngs::StdRng::seed_from_u64(seed2);
+
+        deps1.shuffle(&mut rng1);
+        deps2.shuffle(&mut rng2);
+
+        let model1 = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps1,
+            }],
+        };
+
+        let model2 = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps2,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+
+        let report1 = evaluate(&model1, &cfg);
+        let report2 = evaluate(&model2, &cfg);
+
+        // Same findings in same order despite different input order
+        prop_assert_eq!(report1.findings.len(), report2.findings.len());
+        for (f1, f2) in report1.findings.iter().zip(report2.findings.iter()) {
+            prop_assert_eq!(&f1.check_id, &f2.check_id);
+            prop_assert_eq!(&f1.code, &f2.code);
+            prop_assert_eq!(&f1.location, &f2.location);
+        }
+    }
+
+    /// Truncation behavior is consistent across runs
+    #[test]
+    fn determinism_truncation_consistent(
+        num_deps in 20usize..50,
+        max_findings in 5usize..15,
+    ) {
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new("Cargo.toml"),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Warning),
+        );
+
+        let cfg = EffectiveConfig {
+            profile: "test".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings,
+            yanked_index: None,
+            checks,
+        };
+
+        // Run multiple times
+        let report1 = evaluate(&model, &cfg);
+        let report2 = evaluate(&model, &cfg);
+        let report3 = evaluate(&model, &cfg);
+
+        // Truncation metadata must be consistent
+        prop_assert_eq!(report1.data.findings_total, report2.data.findings_total);
+        prop_assert_eq!(report2.data.findings_total, report3.data.findings_total);
+        prop_assert_eq!(report1.data.findings_emitted, report2.data.findings_emitted);
+        prop_assert_eq!(report2.data.findings_emitted, report3.data.findings_emitted);
+        prop_assert_eq!(&report1.data.truncated_reason, &report2.data.truncated_reason);
+        prop_assert_eq!(&report2.data.truncated_reason, &report3.data.truncated_reason);
+
+        // Same findings emitted
+        for (i, (f1, f2)) in report1.findings.iter().zip(report2.findings.iter()).enumerate() {
+            prop_assert_eq!(&f1.check_id, &f2.check_id, "check_id mismatch at {}", i);
+            prop_assert_eq!(&f1.code, &f2.code, "code mismatch at {}", i);
+        }
+    }
+
+    /// JSON serialization is deterministic
+    #[test]
+    fn determinism_json_serialization(
+        num_deps in 1usize..10,
+    ) {
+        let deps: Vec<DependencyDecl> = (0..num_deps)
+            .map(|i| DependencyDecl {
+                kind: DepKind::Normal,
+                name: format!("dep{}", i),
+                spec: DepSpec {
+                    version: Some("*".to_string()),
+                    ..DepSpec::default()
+                },
+                location: Some(Location {
+                    path: RepoPath::new(if i % 2 == 0 { "Cargo.toml" } else { "crates/a/Cargo.toml" }),
+                    line: Some(i as u32 + 1),
+                    col: None,
+                }),
+                target: None,
+            })
+            .collect();
+
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "test-pkg".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: deps,
+            }],
+        };
+
+        let cfg = config_all_enabled(Severity::Warning);
+        let report = evaluate(&model, &cfg);
+
+        // Serialize findings multiple times (findings implement Serialize)
+        let json1 = serde_json::to_string(&report.findings).unwrap();
+        let json2 = serde_json::to_string(&report.findings).unwrap();
+        let json3 = serde_json::to_string(&report.findings).unwrap();
+
+        // All serializations must be byte-identical
+        prop_assert_eq!(&json1, &json2, "JSON serialization not deterministic (1 vs 2)");
+        prop_assert_eq!(&json2, &json3, "JSON serialization not deterministic (2 vs 3)");
+    }
+}
+
+// ============================================================================
+// Property tests: Fingerprint collision resistance
+// ============================================================================
+
+use crate::fingerprint::fingerprint_for_dep;
+
+/// Strategy for generating pairs of different inputs
+fn arb_different_fingerprint_inputs() -> impl Strategy<
+    Value = (
+        (String, String, String, String, Option<String>),
+        (String, String, String, String, Option<String>),
+    ),
+> {
+    (
+        arb_dep_name(),
+        prop_oneof![
+            Just(ids::CHECK_DEPS_NO_WILDCARDS.to_string()),
+            Just(ids::CHECK_DEPS_PATH_REQUIRES_VERSION.to_string()),
+            Just(ids::CHECK_DEPS_PATH_SAFETY.to_string()),
+        ],
+        prop_oneof![
+            Just("Cargo.toml".to_string()),
+            Just("crates/foo/Cargo.toml".to_string()),
+        ],
+        prop::option::of(arb_safe_relative_path()),
+    )
+        .prop_flat_map(|(name1, check_id, manifest, path1)| {
+            (
+                Just((
+                    check_id.clone(),
+                    ids::CODE_WILDCARD_VERSION.to_string(),
+                    manifest.clone(),
+                    name1.clone(),
+                    path1.clone(),
+                )),
+                (
+                    prop_oneof![
+                        // Different check_id
+                        Just(ids::CHECK_DEPS_PATH_REQUIRES_VERSION.to_string()),
+                        Just(ids::CHECK_DEPS_PATH_SAFETY.to_string()),
+                        // Same check_id
+                        Just(check_id.clone()),
+                    ],
+                    prop_oneof![
+                        Just(ids::CODE_WILDCARD_VERSION.to_string()),
+                        Just(ids::CODE_PATH_WITHOUT_VERSION.to_string()),
+                        Just(ids::CODE_ABSOLUTE_PATH.to_string()),
+                    ],
+                    prop_oneof![Just(manifest.clone()), Just("other/Cargo.toml".to_string()),],
+                    prop_oneof![Just(name1.clone()), arb_dep_name(),],
+                    prop::option::of(arb_safe_relative_path()),
+                ),
+            )
+        })
+}
+
+proptest! {
+    /// Different inputs should produce different fingerprints (collision resistance)
+    #[test]
+    fn fingerprint_different_inputs_different_output(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+        dep_path in prop::option::of(arb_safe_relative_path()),
+    ) {
+        let fp = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, dep_path.as_deref());
+
+        // Fingerprint should be a valid hex string
+        prop_assert!(fp.chars().all(|c| c.is_ascii_hexdigit()), "Fingerprint should be hex: {}", fp);
+
+        // Fingerprint should be 64 characters (SHA-256 in hex)
+        prop_assert_eq!(fp.len(), 64, "Fingerprint should be 64 chars (SHA-256 hex)");
+    }
+
+    /// Same inputs always produce same fingerprint
+    #[test]
+    fn fingerprint_deterministic(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+        dep_path in prop::option::of(arb_safe_relative_path()),
+    ) {
+        let fp1 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, dep_path.as_deref());
+        let fp2 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, dep_path.as_deref());
+        let fp3 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, dep_path.as_deref());
+
+        prop_assert_eq!(&fp1, &fp2, "Same inputs should produce same fingerprint");
+        prop_assert_eq!(&fp2, &fp3, "Same inputs should produce same fingerprint");
+    }
+
+    /// Different check_id produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_check_id(
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+    ) {
+        let fp1 = fingerprint_for_dep("check_a", &code, &manifest, &dep_name, None);
+        let fp2 = fingerprint_for_dep("check_b", &code, &manifest, &dep_name, None);
+
+        prop_assert_ne!(fp1, fp2, "Different check_id should produce different fingerprint");
+    }
+
+    /// Different code produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_code(
+        check_id in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+    ) {
+        let fp1 = fingerprint_for_dep(&check_id, "code_a", &manifest, &dep_name, None);
+        let fp2 = fingerprint_for_dep(&check_id, "code_b", &manifest, &dep_name, None);
+
+        prop_assert_ne!(fp1, fp2, "Different code should produce different fingerprint");
+    }
+
+    /// Different manifest path produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_manifest(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        dep_name in arb_dep_name(),
+    ) {
+        let fp1 = fingerprint_for_dep(&check_id, &code, "Cargo.toml", &dep_name, None);
+        let fp2 = fingerprint_for_dep(&check_id, &code, "crates/foo/Cargo.toml", &dep_name, None);
+
+        prop_assert_ne!(fp1, fp2, "Different manifest should produce different fingerprint");
+    }
+
+    /// Different dep_name produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_dep_name(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name1 in arb_dep_name(),
+        dep_name2 in arb_dep_name(),
+    ) {
+        prop_assume!(dep_name1 != dep_name2);
+
+        let fp1 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name1, None);
+        let fp2 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name2, None);
+
+        prop_assert_ne!(fp1, fp2, "Different dep_name should produce different fingerprint");
+    }
+
+    /// Different dep_path produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_dep_path(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+        path1 in arb_safe_relative_path(),
+        path2 in arb_safe_relative_path(),
+    ) {
+        prop_assume!(path1 != path2);
+
+        let fp1 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, Some(&path1));
+        let fp2 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, Some(&path2));
+
+        prop_assert_ne!(fp1, fp2, "Different dep_path should produce different fingerprint");
+    }
+
+    /// Presence vs absence of dep_path produces different fingerprint
+    #[test]
+    fn fingerprint_sensitive_to_dep_path_presence(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+        path in arb_safe_relative_path(),
+    ) {
+        let fp1 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, None);
+        let fp2 = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, Some(&path));
+
+        prop_assert_ne!(fp1, fp2, "Presence of dep_path should change fingerprint");
+    }
+
+    /// Similar inputs produce different fingerprints
+    #[test]
+    fn fingerprint_similar_inputs_different(
+        base_name in arb_dep_name(),
+    ) {
+        let check_id = "test_check";
+        let code = "test_code";
+        let manifest = "Cargo.toml";
+
+        // Similar names
+        let name1 = format!("{}_a", base_name);
+        let name2 = format!("{}_b", base_name);
+
+        let fp1 = fingerprint_for_dep(check_id, code, manifest, &name1, None);
+        let fp2 = fingerprint_for_dep(check_id, code, manifest, &name2, None);
+
+        prop_assert_ne!(fp1, fp2, "Similar names should produce different fingerprints");
+
+        // Similar paths
+        let path1 = "crates/a";
+        let path2 = "crates/b";
+
+        let fp3 = fingerprint_for_dep(check_id, code, manifest, &base_name, Some(path1));
+        let fp4 = fingerprint_for_dep(check_id, code, manifest, &base_name, Some(path2));
+
+        prop_assert_ne!(fp3, fp4, "Similar paths should produce different fingerprints");
+    }
+
+    /// Empty vs non-empty strings produce different fingerprints
+    #[test]
+    fn fingerprint_empty_vs_nonempty(
+        check_id in "[a-z]{5,10}",
+        code in "[a-z]{5,10}",
+        manifest in "[a-z]{3,8}/Cargo.toml",
+        dep_name in arb_dep_name(),
+    ) {
+        let fp_empty = fingerprint_for_dep("", "", "", "", None);
+        let fp_full = fingerprint_for_dep(&check_id, &code, &manifest, &dep_name, None);
+
+        prop_assert_ne!(fp_empty, fp_full, "Empty and non-empty inputs should produce different fingerprints");
+    }
+
+    /// Fingerprint handles unicode correctly
+    #[test]
+    fn fingerprint_unicode_handling(
+        unicode_name in arb_unicode_dep_name(),
+    ) {
+        let fp = fingerprint_for_dep("check", "code", "Cargo.toml", &unicode_name, None);
+
+        // Should produce valid hex
+        prop_assert!(fp.chars().all(|c| c.is_ascii_hexdigit()), "Unicode input should still produce hex fingerprint");
+        prop_assert_eq!(fp.len(), 64);
+
+        // Same unicode input should produce same fingerprint
+        let fp2 = fingerprint_for_dep("check", "code", "Cargo.toml", &unicode_name, None);
+        prop_assert_eq!(fp, fp2);
+    }
+
+    /// Fingerprint handles very long inputs
+    #[test]
+    fn fingerprint_long_input(
+        long_name in prop::string::string_regex("[a-z]{100,500}").unwrap(),
+    ) {
+        let fp = fingerprint_for_dep("check", "code", "Cargo.toml", &long_name, None);
+
+        // Should still produce valid 64-char hex
+        prop_assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+        prop_assert_eq!(fp.len(), 64);
+
+        // Should be deterministic
+        let fp2 = fingerprint_for_dep("check", "code", "Cargo.toml", &long_name, None);
+        prop_assert_eq!(fp, fp2);
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;

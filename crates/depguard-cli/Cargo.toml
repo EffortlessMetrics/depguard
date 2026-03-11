@@ -87,7 +87,7 @@ futures.workspace = true
 jsonschema.workspace = true
 walkdir.workspace = true
 time.workspace = true
-depguard-test-util = { version = "0.1.0", path = "../depguard-test-util" }
+depguard-test-util = { version = "0.1.0", path = "../depguard-test-util", features = ["crypto-fixtures"] }
 depguard-check-catalog = { version = "0.1.0", path = "../depguard-check-catalog" }
 
 [[test]]

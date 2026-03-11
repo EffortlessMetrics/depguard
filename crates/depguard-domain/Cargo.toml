@@ -14,6 +14,8 @@ readme = "README.md"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
 depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
 depguard-domain-checks = { version = "0.1.0", path = "../depguard-domain-checks", default-features = false }
 

@@ -10,6 +10,7 @@ The test-util crate provides:
 - JSON normalization for golden file comparison
 - Timestamp and version placeholder replacement
 - Cross-crate test support utilities
+- Optional deterministic crypto fixtures for tests via `uselesskey`
 
 ## Key Features
 
@@ -35,6 +36,17 @@ This crate normalizes these fields to stable placeholder values.
 /// 2. **Recursive** — Timestamp keys and `duration_ms` are normalized at
 ///    any depth.
 pub fn normalize_nondeterministic(value: Value) -> Value;
+```
+
+With the `crypto-fixtures` feature enabled, the crate also exposes a repository-scoped
+`uselesskey` integration:
+
+```rust
+#[cfg(feature = "crypto-fixtures")]
+pub fn crypto_fixture_seed(scope: &str) -> uselesskey::Seed;
+
+#[cfg(feature = "crypto-fixtures")]
+pub fn crypto_fixture_factory(scope: &str) -> uselesskey::Factory;
 ```
 
 ## Usage Example
@@ -66,6 +78,32 @@ assert_eq!(
 );
 ```
 
+## Crypto Fixture Usage
+
+Enable the feature from a test crate:
+
+```toml
+[dev-dependencies]
+depguard-test-util = { path = "../depguard-test-util", features = ["crypto-fixtures"] }
+```
+
+Then generate deterministic runtime PEM and certificate fixtures without committing
+secret-shaped blobs:
+
+```rust
+use depguard_test_util::{
+    crypto_fixture_factory,
+    uselesskey::{ChainSpec, RsaFactoryExt, RsaSpec, X509FactoryExt},
+};
+
+let factory = crypto_fixture_factory(concat!(module_path!(), "::tls_test"));
+let signing = factory.rsa("signing", RsaSpec::rs256());
+let chain = factory.x509_chain("server", ChainSpec::new("localhost"));
+
+assert!(signing.private_key_pkcs8_pem().contains("BEGIN PRIVATE KEY"));
+assert!(chain.leaf_cert_pem().contains("BEGIN CERTIFICATE"));
+```
+
 ## What It Normalizes
 
 | Field | Replacement | Scope |
@@ -83,6 +121,7 @@ This crate exists as a separate crate (rather than a `#[cfg(test)]` module in `d
 ## Design Constraints
 
 - **Minimal dependencies**: Only `serde_json`
+- **Feature-gated extras**: Crypto fixture support is opt-in so `xtask` keeps the minimal default dependency set
 - **Stable placeholder values**: Must not change between versions
 - **Envelope-aware**: Only normalizes `tool.version` for actual report envelopes
 
@@ -91,6 +130,7 @@ This crate exists as a separate crate (rather than a `#[cfg(test)]` module in `d
 | Crate | Purpose |
 |-------|---------|
 | `serde_json` | JSON value manipulation |
+| `uselesskey` | Optional deterministic runtime PEM/key/certificate fixtures for tests |
 
 ## Related Crates
 

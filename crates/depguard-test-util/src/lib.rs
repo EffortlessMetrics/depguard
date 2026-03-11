@@ -6,6 +6,9 @@
 
 use serde_json::Value;
 
+#[cfg(feature = "crypto-fixtures")]
+pub use uselesskey;
+
 /// Normalize non-deterministic JSON fields for golden-file comparison.
 ///
 /// Two concerns are handled separately:
@@ -42,6 +45,25 @@ pub fn normalize_nondeterministic(mut value: Value) -> Value {
     // Recursive: timestamps and duration at any depth
     normalize_timestamps_recursive(&mut value);
     value
+}
+
+/// Build a deterministic `uselesskey` seed scoped to this repository's tests.
+#[cfg(feature = "crypto-fixtures")]
+pub fn crypto_fixture_seed(scope: &str) -> uselesskey::Seed {
+    let scope = scope.trim();
+    assert!(!scope.is_empty(), "crypto fixture scope must not be empty");
+
+    uselesskey::Seed::from_env_value(&format!("depguard::{scope}"))
+        .expect("depguard crypto fixture seed should always be derivable")
+}
+
+/// Create a deterministic `uselesskey` factory for a test scope.
+///
+/// Use a stable, descriptive scope such as `concat!(module_path!(), "::test_name")`
+/// so separate tests do not accidentally share fixture material.
+#[cfg(feature = "crypto-fixtures")]
+pub fn crypto_fixture_factory(scope: &str) -> uselesskey::Factory {
+    uselesskey::Factory::deterministic(crypto_fixture_seed(scope))
 }
 
 fn normalize_timestamps_recursive(value: &mut Value) {
@@ -199,5 +221,16 @@ mod tests {
         let non_object = Value::String("plain".to_string());
         let normalized = normalize_nondeterministic(non_object.clone());
         assert_eq!(normalized, non_object);
+    }
+
+    #[cfg(feature = "crypto-fixtures")]
+    #[test]
+    fn crypto_fixture_factory_scopes_are_stable() {
+        let first = crypto_fixture_seed("depguard_test_util::stable");
+        let second = crypto_fixture_seed("depguard_test_util::stable");
+        let other = crypto_fixture_seed("depguard_test_util::other");
+
+        assert_eq!(first, second);
+        assert_ne!(first, other);
     }
 }
