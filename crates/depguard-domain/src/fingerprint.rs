@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 /// - manifest_path (repo-relative)
 /// - dependency name
 /// - dependency path (if present)
+#[allow(dead_code)]
 pub fn fingerprint_for_dep(
     check_id: &str,
     code: &str,

@@ -1968,7 +1968,7 @@ fn arb_complex_version_req() -> impl Strategy<Value = String> {
                 format!("={}.{}.{}, >={}.{}.{}", maj1, min1, pat1, maj2, min2, pat2)
             }),
         // Many ranges
-        (1u32..5, 2u32..5, 3u32..5).prop_map(|(maj1, min1, min2)| {
+        (1u32..5, 2u32..5, 3u32..5).prop_map(|(maj1, min1, _min2)| {
             format!(
                 ">={}.{}.0, <{}.0.0, !={}.0.0, !={}.1.0",
                 maj1,
@@ -3226,6 +3226,7 @@ proptest! {
 use crate::fingerprint::fingerprint_for_dep;
 
 /// Strategy for generating pairs of different inputs
+#[allow(dead_code, clippy::type_complexity)]
 fn arb_different_fingerprint_inputs() -> impl Strategy<
     Value = (
         (String, String, String, String, Option<String>),
