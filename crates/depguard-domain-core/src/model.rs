@@ -26,7 +26,7 @@ pub struct ManifestModel {
     pub path: RepoPath,
     pub package: Option<PackageMeta>,
     pub dependencies: Vec<DependencyDecl>,
-    /// Features defined in [features] table, mapped to their dependencies.
+    /// Features defined in `[features]` table, mapped to their dependencies.
     pub features: BTreeMap<String, Vec<String>>,
 }
 
@@ -59,7 +59,7 @@ pub struct DepSpec {
     pub version: Option<String>,
     pub path: Option<String>,
     pub workspace: bool,
-    /// Git repository URL (e.g., "https://github.com/...")
+    /// Git repository URL (e.g., <https://github.com/...>)
     pub git: Option<String>,
     /// Git branch reference
     pub branch: Option<String>,

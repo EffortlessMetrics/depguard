@@ -149,7 +149,7 @@ enum Commands {
 
         /// Base URL for the yanked-version API (advanced/testing).
         ///
-        /// Defaults to https://crates.io.
+        /// Defaults to <https://crates.io>.
         #[arg(long)]
         yanked_api_base_url: Option<String>,
 
@@ -237,7 +237,7 @@ enum Commands {
         yanked_live: bool,
         /// Base URL for the yanked-version API (advanced/testing).
         ///
-        /// Defaults to https://crates.io.
+        /// Defaults to <https://crates.io>.
         #[arg(long)]
         yanked_api_base_url: Option<String>,
         /// Enable incremental mode by caching parsed manifests between runs.
