@@ -10,6 +10,7 @@ keywords.workspace = true
 authors.workspace = true
 
 description = "Central check catalog metadata and compile-time feature availability"
+publish = false
 
 [dependencies]
 depguard-types = { version = "0.1.0", path = "../depguard-types" }

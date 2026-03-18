@@ -10,6 +10,7 @@ keywords.workspace = true
 authors.workspace = true
 description = "Pure Cargo manifest parser for depguard domain models"
 readme = "README.md"
+publish = false
 
 [dependencies]
 anyhow.workspace = true
