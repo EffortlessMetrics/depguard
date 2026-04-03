@@ -1814,6 +1814,7 @@ fn given_git_repo_with_history(world: &mut DepguardWorld) {
     git_ok(&work_dir, &["init"]);
     git_ok(&work_dir, &["config", "user.email", "test@test.com"]);
     git_ok(&work_dir, &["config", "user.name", "Test User"]);
+    git_ok(&work_dir, &["config", "commit.gpgsign", "false"]);
 
     // Create a workspace with changed/unchanged crates
     let root = r#"[workspace]

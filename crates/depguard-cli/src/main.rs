@@ -521,7 +521,7 @@ fn cmd_explain(identifier: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use std::any::Any;
-    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::panic::{AssertUnwindSafe, catch_unwind};
     use tempfile::TempDir;
 
     #[test]
@@ -748,8 +748,7 @@ edition = "2021"
         let tmp = TempDir::new().expect("temp dir");
         let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
 
-        std::fs::write(root.join("depguard.toml"), "scope = \"diff\"")
-            .expect("write config");
+        std::fs::write(root.join("depguard.toml"), "scope = \"diff\"").expect("write config");
 
         let cli = cli_for_root(&root);
         let report_out = root.join("out").join("report.json");
