@@ -3106,7 +3106,9 @@ version = "0.1.0"
         let _cwd = CurrentDirGuard::set(tmp.path());
 
         let root = project_root();
-        assert_eq!(root, tmp.path().to_path_buf());
+        let actual = fs::canonicalize(root).expect("canonical project root");
+        let expected = fs::canonicalize(tmp.path()).expect("canonical temp dir");
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -3799,12 +3801,11 @@ version = "0.1.0"
 
     #[test]
     fn run_with_args_release_check_without_git() {
-        // release-check will fail without git/cargo, but should be recognized
+        // release-check may succeed in local dev environments, but should always be recognized.
         let args = ["xtask".to_string(), "release-check".to_string()];
         let result = run_with_args(&args);
-        // Command should be recognized (even if it fails)
-        let err = result.unwrap_err();
-        // Should not be "unknown command"
-        assert!(!err.to_string().contains("unknown xtask command"));
+        if let Err(err) = result {
+            assert!(!err.to_string().contains("unknown xtask command"));
+        }
     }
 }

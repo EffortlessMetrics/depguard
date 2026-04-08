@@ -78,14 +78,19 @@ jobs:
 
       - name: Add job summary
         if: always()
+        shell: bash
         run: |
           if [ -f artifacts/depguard/comment.md ]; then
-            echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            cat artifacts/depguard/comment.md >> $GITHUB_STEP_SUMMARY
+            {
+              echo "## Depguard Report"
+              echo
+              cat artifacts/depguard/comment.md
+            } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
-            echo "No report generated." >> $GITHUB_STEP_SUMMARY
+            {
+              echo "## Depguard Report"
+              echo "No report generated."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Comment on PR
