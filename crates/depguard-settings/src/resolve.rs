@@ -27,6 +27,9 @@ pub fn resolve_config(
         .or(cfg.profile.clone())
         .unwrap_or_else(|| "strict".to_string());
 
+    // Validate profile
+    validate_profile(&profile)?;
+
     let mut effective = presets::preset(&profile);
 
     // Scope
@@ -36,6 +39,11 @@ pub fn resolve_config(
 
     // max findings
     if let Some(mf) = overrides.max_findings.or(cfg.max_findings) {
+        if mf == 0 {
+            return Err(anyhow::Error::new(ValidationError::invalid_max_findings(
+                mf,
+            )));
+        }
         effective.max_findings = mf as usize;
     }
 
@@ -57,6 +65,12 @@ pub fn resolve_config(
             entry.allow = cc.allow.clone();
         }
         if let Some(ignore_publish_false) = cc.ignore_publish_false {
+            // ignore_publish_false is only valid for deps.path_requires_version
+            if check_id != "deps.path_requires_version" {
+                return Err(anyhow::Error::new(
+                    ValidationError::ignore_publish_false_not_supported(check_id),
+                ));
+            }
             entry.ignore_publish_false = ignore_publish_false;
         }
     }
@@ -85,6 +99,13 @@ fn validate_allowlist(check_id: &str, patterns: &[String]) -> anyhow::Result<()>
         })?;
     }
     Ok(())
+}
+
+fn validate_profile(profile: &str) -> anyhow::Result<()> {
+    match profile {
+        "strict" | "warn" | "team" | "compat" | "oss" => Ok(()),
+        other => Err(anyhow::Error::new(ValidationError::unknown_profile(other))),
+    }
 }
 
 fn parse_scope(v: &str) -> anyhow::Result<Scope> {

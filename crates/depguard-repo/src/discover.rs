@@ -65,7 +65,7 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
         .and_then(|i| i.as_array())
         .map(|a| {
             a.iter()
-                .filter_map(|v| v.as_str().map(parse_member_pattern))
+                .filter_map(|v| v.as_str().and_then(parse_member_pattern))
                 .collect()
         })
         .unwrap_or_default();
@@ -76,7 +76,12 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
         .and_then(|i| i.as_array())
         .map(|a| {
             a.iter()
-                .filter_map(|v| v.as_str().map(normalize_path))
+                .filter_map(|v| {
+                    v.as_str()
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .map(normalize_path)
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -118,6 +123,13 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
             continue;
         }
 
+        // Skip virtual workspaces (Cargo behavior)
+        // Virtual workspaces have [workspace] but no [package] and represent workspace boundaries
+        // Package workspaces (with both [package] and [workspace]) are included as members
+        if is_nested_workspace(&abs) {
+            continue;
+        }
+
         // Match both the file path and its parent directory against globs.
         let dir_rel = Utf8Path::new(&rel)
             .parent()
@@ -146,19 +158,60 @@ pub fn discover_manifests(repo_root: &Utf8Path) -> anyhow::Result<Vec<RepoPath>>
 /// Parse a member pattern, detecting exclusion prefix.
 ///
 /// Cargo supports patterns starting with `!` to exclude previously matched paths.
-fn parse_member_pattern(s: &str) -> MemberPattern {
+///
+/// # Cargo Edge Cases Handled
+///
+/// - **Parent directory references**: Patterns containing `../` are rejected
+/// - **Absolute paths**: Absolute paths are rejected
+/// - **Empty patterns**: Empty patterns after trimming are ignored
+fn parse_member_pattern(s: &str) -> Option<MemberPattern> {
     let trimmed = s.trim();
-    if let Some(stripped) = trimmed.strip_prefix('!') {
-        MemberPattern {
-            pattern: normalize_path(stripped.trim_start()),
-            is_exclusion: true,
-        }
+
+    // Reject empty patterns
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Handle exclusion prefix
+    let (pattern_str, is_exclusion) = if let Some(stripped) = trimmed.strip_prefix('!') {
+        (stripped.trim_start(), true)
     } else {
-        MemberPattern {
-            pattern: normalize_path(trimmed),
-            is_exclusion: false,
+        (trimmed, false)
+    };
+
+    // Reject empty pattern after stripping exclusion prefix
+    if pattern_str.is_empty() {
+        return None;
+    }
+
+    // Reject absolute paths (Cargo behavior)
+    // Unix: starts with /
+    // Windows: starts with /, \, or drive letter (e.g., C:\)
+    if pattern_str.starts_with('/') || pattern_str.starts_with('\\') {
+        return None;
+    }
+
+    #[cfg(windows)]
+    {
+        // Check for Windows drive letter paths (e.g., C:\, D:/)
+        if pattern_str.len() >= 2 && pattern_str.as_bytes()[1] == b':' {
+            let first_char = pattern_str.chars().next().unwrap();
+            if first_char.is_ascii_alphabetic() {
+                return None;
+            }
         }
     }
+
+    // Reject parent directory references (Cargo behavior)
+    // Patterns like "../other-crate" or "crates/../../other" are not allowed
+    if pattern_str.contains("../") || pattern_str.contains("..\\") {
+        return None;
+    }
+
+    Some(MemberPattern {
+        pattern: normalize_path(pattern_str),
+        is_exclusion,
+    })
 }
 
 /// Normalize a path by removing leading `./` or `.\` prefix.
@@ -184,6 +237,10 @@ fn build_globset(patterns: &[String]) -> anyhow::Result<globset::GlobSet> {
         }
         // Cargo workspace globs are relative paths.
         // The globset crate handles `**` (globstar) patterns correctly.
+        // Validate that patterns don't contain parent directory references
+        if p.contains("../") || p.contains("..\\") {
+            continue;
+        }
         b.add(Glob::new(p)?);
     }
     Ok(b.build()?)
@@ -191,6 +248,31 @@ fn build_globset(patterns: &[String]) -> anyhow::Result<globset::GlobSet> {
 
 fn pathbuf_to_utf8(path: PathBuf) -> Option<Utf8PathBuf> {
     Utf8PathBuf::from_path_buf(path).ok()
+}
+
+/// Check if a Cargo.toml file defines a nested virtual workspace.
+///
+/// Cargo only includes members from the root workspace, not from nested workspaces.
+/// However, a "package workspace" (a manifest with both [package] and [workspace])
+/// is still included as a member. Only virtual workspaces (with [workspace] but no [package])
+/// are excluded.
+///
+/// Returns true if this is a virtual workspace (has [workspace] but no [package]).
+fn is_nested_workspace(path: &Utf8Path) -> bool {
+    match std::fs::read_to_string(path) {
+        Ok(content) => {
+            // Parse the TOML and check for workspace section
+            if let Ok(doc) = content.parse::<DocumentMut>() {
+                let has_workspace = doc.get("workspace").is_some();
+                let has_package = doc.get("package").is_some();
+                // Virtual workspace: has [workspace] but no [package]
+                has_workspace && !has_package
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    }
 }
 
 #[cfg(test)]
@@ -622,23 +704,56 @@ version = "0.1.0"
 
     #[test]
     fn parse_member_pattern_handles_exclusion() {
-        let pattern = parse_member_pattern("!crates/excluded");
+        let pattern = parse_member_pattern("!crates/excluded").unwrap();
         assert!(pattern.is_exclusion);
         assert_eq!(pattern.pattern, "crates/excluded");
     }
 
     #[test]
     fn parse_member_pattern_handles_inclusion() {
-        let pattern = parse_member_pattern("crates/*");
+        let pattern = parse_member_pattern("crates/*").unwrap();
         assert!(!pattern.is_exclusion);
         assert_eq!(pattern.pattern, "crates/*");
     }
 
     #[test]
     fn parse_member_pattern_handles_whitespace() {
-        let pattern = parse_member_pattern("  !  crates/excluded  ");
+        let pattern = parse_member_pattern("  !  crates/excluded  ").unwrap();
         assert!(pattern.is_exclusion);
         assert_eq!(pattern.pattern, "crates/excluded");
+    }
+
+    #[test]
+    fn parse_member_pattern_rejects_empty_patterns() {
+        assert!(parse_member_pattern("").is_none());
+        assert!(parse_member_pattern("   ").is_none());
+        assert!(parse_member_pattern("!").is_none());
+        assert!(parse_member_pattern("  !  ").is_none());
+    }
+
+    #[test]
+    fn parse_member_pattern_rejects_parent_directory_references() {
+        // Cargo does not allow parent directory references in workspace members
+        assert!(parse_member_pattern("../other-crate").is_none());
+        assert!(parse_member_pattern("..\\other-crate").is_none());
+        assert!(parse_member_pattern("!../excluded").is_none());
+        assert!(parse_member_pattern("crates/../../other").is_none());
+        assert!(parse_member_pattern("crates/..\\other").is_none());
+    }
+
+    #[test]
+    fn parse_member_pattern_rejects_absolute_paths() {
+        // Cargo does not allow absolute paths in workspace members
+        assert!(parse_member_pattern("/absolute/path").is_none());
+        assert!(parse_member_pattern("\\absolute\\path").is_none());
+        assert!(parse_member_pattern("!/absolute/excluded").is_none());
+
+        #[cfg(windows)]
+        {
+            assert!(parse_member_pattern("C:\\absolute\\path").is_none());
+            assert!(parse_member_pattern("D:/absolute/path").is_none());
+            assert!(parse_member_pattern("e:\\test").is_none());
+        }
     }
 
     #[test]
@@ -647,5 +762,257 @@ version = "0.1.0"
         assert_eq!(normalize_path(".\\crates\\a"), "crates\\a");
         assert_eq!(normalize_path("crates/a"), "crates/a");
         assert_eq!(normalize_path("  ./crates/a  "), "crates/a");
+    }
+
+    // =========================================================================
+    // Cargo Edge Case Tests
+    // =========================================================================
+
+    /// Test that parent directory references in members are rejected.
+    /// Cargo does not allow workspace members to reference directories outside
+    /// the workspace root.
+    #[test]
+    fn discover_rejects_parent_directory_references() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["../other-crate", "crates/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should only include root and valid members, not parent directory reference
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
+    }
+
+    /// Test that absolute paths in members are rejected.
+    /// Cargo only allows relative paths in workspace members.
+    #[test]
+    fn discover_rejects_absolute_paths() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["/absolute/path", "crates/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should only include root and valid members, not absolute path
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
+    }
+
+    /// Test that parent directory references in exclude are rejected.
+    #[test]
+    fn discover_rejects_parent_directory_in_exclude() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*"]
+exclude = ["../other-crate", "crates/excluded"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+        write_file(
+            &root.join("crates/excluded/Cargo.toml"),
+            r#"[package]
+name = "excluded"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should exclude crates/excluded but parent directory reference is ignored
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
+    }
+
+    /// Test that virtual workspaces (workspace without package) are handled correctly.
+    #[test]
+    fn discover_virtual_workspace() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Virtual workspace still includes root Cargo.toml
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
+    }
+
+    /// Test that virtual workspaces are excluded from member discovery.
+    /// Virtual workspaces have [workspace] but no [package] section and represent workspace boundaries.
+    #[test]
+    fn discover_virtual_workspace_is_excluded() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*"]
+"#,
+        );
+        // Virtual workspace - has [workspace] but no [package], should be excluded
+        write_file(
+            &root.join("crates/virtual/Cargo.toml"),
+            r#"[workspace]
+members = ["nested/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/virtual/nested/b/Cargo.toml"),
+            r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should include root and crates/virtual/nested/b (matches glob pattern)
+        // But NOT crates/virtual (virtual workspace is excluded)
+        assert!(paths.contains(&"Cargo.toml"));
+        assert!(!paths.contains(&"crates/virtual/Cargo.toml"));
+        // Note: crates/virtual/nested/b is included because it matches the glob pattern "crates/*"
+        // This matches Cargo's behavior - virtual workspaces are excluded, but their members
+        // can still be matched by parent workspace patterns
+        assert!(paths.contains(&"crates/virtual/nested/b/Cargo.toml"));
+    }
+
+    /// Test that package workspaces are included as regular members.
+    /// Package workspaces have both [package] and [workspace] sections.
+    #[test]
+    fn discover_package_workspace_is_included() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*"]
+"#,
+        );
+        // Package workspace - has both [package] and [workspace], should be included
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+
+[workspace]
+members = ["nested/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/nested/b/Cargo.toml"),
+            r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should include root, crates/a (package workspace), and crates/a/nested/b
+        // Package workspaces are included as regular members
+        assert!(paths.contains(&"Cargo.toml"));
+        assert!(paths.contains(&"crates/a/Cargo.toml"));
+        assert!(paths.contains(&"crates/a/nested/b/Cargo.toml"));
+    }
+
+    /// Test that patterns with embedded parent references are rejected.
+    #[test]
+    fn discover_rejects_embedded_parent_references() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/../../other", "crates/*"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should only include root and valid members
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
+    }
+
+    /// Test that exclusion patterns with parent references are rejected.
+    #[test]
+    fn discover_rejects_exclusion_with_parent_references() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/*", "!crates/../../other"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let manifests = discover_manifests(&root).expect("discover");
+        let paths: Vec<&str> = manifests.iter().map(|p| p.as_str()).collect();
+        // Should include all members, invalid exclusion is ignored
+        assert_eq!(paths, vec!["Cargo.toml", "crates/a/Cargo.toml"]);
     }
 }

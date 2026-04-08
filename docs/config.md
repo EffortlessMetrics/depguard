@@ -1,259 +1,51 @@
-# Configuration (`depguard.toml`)
+# depguard Configuration
 
-> **Navigation**: [Quick Start](quickstart.md) | Configuration | [Checks](checks.md) | [CI Integration](ci-integration.md) | [Architecture](architecture.md) | [Troubleshooting](troubleshooting.md)
+## Problem
+Unclear precedence between CLI flags, config files, and profiles creates surprising policy behavior.
 
-The config file is optional. If it doesn't exist, Depguard runs with the default profile (`strict`).
+## Resolution order
+1. CLI overrides
+2. `depguard.toml`
+3. Profile defaults (`strict` / `warn` / `compat`)
 
-## Full example
+## Key settings
 
+- `profile`: `strict | warn | compat`
+- `scope`: `repo | diff`
+- `fail_on`: `error | warning`
+- `baseline`: path to baseline JSON file
+- `max_findings`: integer limit
+
+## Per-check section
 ```toml
-# Schema identifier (optional, for editor support)
-schema = "depguard.config.v1"
-
-# Profile preset: "strict" (default), "warn", or "compat"
-profile = "strict"
-
-# Scope: "repo" (all manifests) or "diff" (changed manifests only)
-scope = "repo"
-
-# When to fail: "error" (default) or "warning"
-fail_on = "error"
-
-# Maximum findings to report (0 = unlimited)
-max_findings = 100
-
-# Optional baseline file for suppressing known findings
-baseline = ".depguard-baseline.json"
-
-# Per-check configuration
 [checks."deps.no_wildcards"]
 enabled = true
 severity = "error"
-allow = []
-
-[checks."deps.path_requires_version"]
-enabled = true
-severity = "error"
-allow = ["internal-*"]  # Glob patterns (case-sensitive)
-ignore_publish_false = true
-
-[checks."deps.path_safety"]
-enabled = true
-severity = "error"
-allow = []
-
-[checks."deps.workspace_inheritance"]
-enabled = true  # default is disabled
-severity = "warning"
-allow = ["legacy-*"]
-
-[checks."deps.yanked_versions"]
-enabled = true  # default is disabled
-severity = "error"
+allow = ["vendor-*"]
 ```
 
-## Profiles
+## Scopes and base refs
+- Use `--scope diff` for PR-only checks.
+- For restricted runners, avoid git and pass `--diff-file`.
 
-Profiles provide opinionated defaults. Override individual settings as needed.
+## Why profiles exist
+Profiles encode migration-safe defaults and make repository policy explicit while allowing local overrides.
 
-Aliases:
-- `team` → `warn`
-- `oss` → `compat`
+## Valid values summary
 
-| Profile | Description |
-|---------|-------------|
-| `strict` | All checks enabled at `error` severity. Fails on any error. **(Default)** |
-| `warn` | All checks enabled at `warning` severity. Fails on warnings and errors. |
-| `compat` | Lenient defaults for gradual adoption. All checks at `warning`. |
+### `fail_on`
+- `error` (default)
+- `warning`
+- `never`
 
-### Profile defaults
+### `scope`
+- `repo`: full workspace scan
+- `diff`: changed manifests only
 
-| Setting | `strict` | `warn` | `compat` |
-|---------|----------|--------|----------|
-| `fail_on` | `error` | `warning` | `error` |
-| `no_wildcards` severity | `error` | `warning` | `warning` |
-| `path_requires_version` severity | `error` | `warning` | `warning` |
-| `path_safety` severity | `error` | `warning` | `warning` |
-| `workspace_inheritance` | `disabled` | `disabled` | `disabled` |
-| `yanked_versions` | `disabled` | `disabled` | `disabled` |
+## Good defaults
+- Start with `profile = "warn"` for adoption.
+- Switch to `strict` after baseline and suppression cleanup.
 
-## Scope
-
-| Value | Behavior |
-|-------|----------|
-| `repo` | Scan all manifests in the workspace |
-| `diff` | Scan only manifests changed between git refs (`--base`/`--head`) or from a precomputed list (`--diff-file`) |
-
-Diff scope always includes the root manifest (for `[workspace.dependencies]`).
-
-## Baseline
-
-Use a baseline file during migration to suppress known findings and fail only on new ones.
-
-```bash
-depguard baseline --output .depguard-baseline.json
-depguard check --baseline .depguard-baseline.json
-```
-
-You can also set this in `depguard.toml`:
-
-```toml
-baseline = ".depguard-baseline.json"
-```
-
-CLI `--baseline` overrides the config value.
-
-## Inline suppressions
-
-For dependency-level exceptions, you can suppress specific findings in `Cargo.toml`:
-
-```toml
-[dependencies]
-serde = "*" # depguard: allow(no_wildcards)
-tokio = "*" # depguard: allow(deps.no_wildcards, wildcard_version)
-```
-
-This is useful for local, explicit exceptions without broadening global allowlists.
-
-## fail_on
-
-Controls when the tool exits with failure code (2):
-
-| Value | Fails when |
-|-------|------------|
-| `error` | Any finding has severity `error` |
-| `warning` | Any finding has severity `warning` or `error` |
-
-## Per-check configuration
-
-Each check can be configured independently:
-
-```toml
-[checks."<check_id>"]
-enabled = true|false     # Enable/disable the check
-severity = "info|warning|error"  # Override severity (warning/warn accepted)
-allow = ["pattern", ...]  # Allowlist (glob patterns; case-sensitive)
-ignore_publish_false = true|false  # deps.path_requires_version only
-```
-
-`deps.yanked_versions` also requires an index source at runtime:
-
-```bash
-depguard check --yanked-index yanked-index.txt
-```
-
-Optional live lookup mode can query crates.io directly:
-
-```bash
-depguard check --yanked-live
-```
-
-### Check IDs
-
-| Check ID | Purpose |
-|----------|---------|
-| `deps.no_wildcards` | Detect wildcard versions |
-| `deps.path_requires_version` | Require version with path deps |
-| `deps.path_safety` | Prevent absolute paths and escapes |
-| `deps.workspace_inheritance` | Enforce workspace = true |
-| `deps.git_requires_version` | Require version with git deps |
-| `deps.dev_only_in_normal` | Flag dev-only crates in normal dependencies |
-| `deps.default_features_explicit` | Require explicit default-features in inline specs |
-| `deps.no_multiple_versions` | Detect multiple versions of a crate across workspace |
-| `deps.optional_unused` | Flag optional deps not referenced in features |
-| `deps.yanked_versions` | Flag exact pinned versions listed in a yanked index |
-
-Unknown check IDs are allowed for forward compatibility.
-
-### Allowlist semantics
-
-The `allow` list is check-specific:
-
-Allowlists are **glob patterns** (case-sensitive).
-
-- **`deps.path_requires_version`**: Crate name patterns that don't need a version
-- **`deps.workspace_inheritance`**: Crate name patterns allowed to override workspace deps
-- **`deps.path_safety`**: Path patterns allowed despite safety concerns
-
-## CLI overrides
-
-CLI flags take precedence over config file values:
-
-```bash
-depguard check \
-  --profile warn \
-  --scope diff \
-  --max-findings 50 \
-  --diff-file changed-files.txt
-```
-
-| Flag | Purpose |
-|------|---------|
-| `--profile <NAME>` | Override profile preset |
-| `--scope <SCOPE>` | Override scope (`repo` or `diff`) |
-| `--max-findings <N>` | Override max findings limit |
-| `--baseline <PATH>` | Baseline file for suppressing known findings |
-| `--yanked-index <PATH>` | Offline yanked-version index file (used by `deps.yanked_versions`) |
-| `--yanked-live` | Enable live crates.io lookup for `deps.yanked_versions` |
-| `--yanked-api-base-url <URL>` | Override yanked lookup API base URL (advanced/testing) |
-| `--incremental` | Cache parsed manifests across runs |
-| `--cache-dir <PATH>` | Directory for incremental cache data (default: `.depguard-cache`) |
-| `--base <REF>` | Git base ref for diff scope (when not using `--diff-file`) |
-| `--head <REF>` | Git head ref for diff scope (when not using `--diff-file`) |
-| `--diff-file <PATH>` | Read changed files from file (`-` for stdin); supports newline lists, JSON arrays, and GitHub Actions output format |
-| `--report-version <v1|v2|sensor-v1>` | Report schema version to emit (default: `v2`) |
-| `--out-dir <PATH>` | Base directory for generated artifacts (default: `artifacts/depguard`) |
-| `--report-out <PATH>` | JSON report output path |
-| `--markdown-out <PATH>` | Markdown output path (with `--write-markdown`) |
-| `--junit-out <PATH>` | JUnit XML output path (with `--write-junit`) |
-| `--jsonl-out <PATH>` | JSON Lines output path (with `--write-jsonl`) |
-| `--config <PATH>` | Path to config file (default: `depguard.toml`) |
-| `--repo-root <PATH>` | Repository root (default: current directory) |
-
-## Resolution precedence
-
-Configuration is resolved in order (highest priority first):
-
-1. **CLI flags** — Always win
-2. **Config file** — `depguard.toml` values
-3. **Profile preset** — Default values for the selected profile
-
-Example:
-```toml
-# depguard.toml
-profile = "strict"
-max_findings = 200
-
-[checks."deps.no_wildcards"]
-severity = "warning"
-```
-
-```bash
-depguard check --max-findings 50
-```
-
-Result:
-- Profile: `strict` (from config)
-- Max findings: `50` (CLI override wins)
-- `no_wildcards` severity: `warning` (config override of strict default)
-
-## Environment
-
-Depguard does not read environment variables for configuration. All settings come from the config file or CLI flags.
-
-## Schema validation
-
-The config file can include a schema identifier for editor support:
-
-```toml
-schema = "depguard.config.v1"
-```
-
-JSON schema available at: `schemas/depguard.config.v1.json`
-
-## See also
-
-- [Quick Start](quickstart.md) — Get started with depguard
-- [Checks Catalog](checks.md) — All checks and their options
-- [CI Integration](ci-integration.md) — CI pipeline setup
-- [Troubleshooting](troubleshooting.md) — Common issues and solutions
+## Validation behavior
+- Bad config and unknown IDs are surfaced as explicit errors.
+- Invalid values fail fast with actionable diagnostics.

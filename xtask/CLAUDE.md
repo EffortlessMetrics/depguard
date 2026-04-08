@@ -13,6 +13,7 @@ Commands:
   emit-schemas      Generate JSON schemas to schemas/ directory
   validate-schemas  Check schemas/ against generated output
   print-schema-ids  Print known schema IDs
+  release-package   Build and package release artifacts for all platforms
 ```
 
 ## Schema Generation

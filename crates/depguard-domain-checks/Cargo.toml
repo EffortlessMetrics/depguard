@@ -23,6 +23,7 @@ globset.workspace = true
 
 [dev-dependencies]
 depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
+proptest = "1.4"
 
 [features]
 default = [

@@ -1,47 +1,37 @@
-# Output Contract
+# depguard Output Contract
 
-> **Navigation**: [Quick Start](quickstart.md) | [Configuration](config.md) | [Checks](checks.md) | [CI Integration](ci-integration.md) | [Architecture](architecture.md) | [Troubleshooting](troubleshooting.md)
+## Problem
+Without a clear output contract, consumers cannot reliably parse, compare, or persist depguard results.
 
-Overview of depguard's output surfaces, their stability guarantees, and how they relate to the cockpit ecosystem.
+## Canonical artifacts
+- `depguard.report.v1.json` and `depguard.report.v2.json` in `schemas/`.
+- Legacy envelope compatibility is retained where documented.
 
-## Two-speed model
+## Report shape (minimum)
+- `schema` — schema identifier.
+- `tool` — invoker metadata.
+- `run` — execution metadata.
+- `verdict` — status + counts.
+- `findings` — ordered finding events.
 
-Depguard outputs fall into two stability tiers:
+## Finding fields (high-level)
+- `severity`, `check_id`, `code`, `location`, `message`, optional `help/url`, optional `data`.
+- `location` includes path/line for actionable edits.
 
-| Surface | Path | Schema | Stability |
-|---|---|---|---|
-| Cockpit report | `artifacts/depguard/report.json` | `sensor.report.v1` | Stable |
-| PR comment | `artifacts/depguard/comment.md` | Markdown | Stable (cockpit comment ABI) |
-| Extras (future) | `artifacts/depguard/extras/**` | Various | Fast-evolving, opt-in |
+## Ordering contract
+`severity -> path -> line -> check_id -> code -> message`
 
-**Stable** surfaces follow the cockpit contract: breaking changes require a new schema version. **Fast-evolving** surfaces may change shape between minor releases and must be opted into explicitly.
+## Determinism requirements
+- Canonical paths.
+- Stable ordering.
+- Explicit capping (`max_findings`) and truncation indicators.
 
-## What consumers can rely on
+## Consumption guidance
+- Use `depguard md` for human review.
+- Use `depguard sarif` for GitHub code scanning and third-party integrations.
+- Use `depguard jsonl` for log pipelines.
 
-- The envelope shape (`schema`, `tool`, `run`, `verdict`, `findings`, `data`) is governed by the sensor report schema.
-- Finding `check_id` and `code` values are stable identifiers. See `contracts/docs/identity-and-codes.md`.
-- Finding `data` payloads follow the shapes documented in `contracts/docs/finding-payload.md`. The `fix_action` tokens are stable and safe for actuator dispatch.
-- Exit codes: 0 = pass, 2 = policy failure, 1 = tool error (cockpit mode: 0 = receipt written, 1 = failed).
-- Deterministic ordering: findings sorted by severity, path, line, check_id, code, message.
-
-## What may change
-
-- **New check_ids and codes** — Additive; existing IDs are never renamed or removed.
-- **New keys in `data`** — Additive; consumers must tolerate unknown keys.
-- **New extras artifacts** — Opt-in only; never required for core workflow.
-- **`fix_hint` text** — Human-readable; may be reworded between releases.
-- **Internal v2 schema details** — The `depguard.report.v2` schema is an internal format. Cockpit consumers should use the `sensor.report.v1` envelope.
-
-## Upgrade policy
-
-- Major envelope changes (removing fields, renaming keys, changing semantics) require a new schema version.
-- Additive changes (new keys, new check_ids, new fix_action tokens) are non-breaking.
-- Deprecation follows the alias-only rule: old identifiers map to new ones; nothing is deleted.
-
-## Reference
-
-- Artifact layout: `contracts/docs/artifact-layout.md`
-- Finding payloads: `contracts/docs/finding-payload.md`
-- Identity and codes: `contracts/docs/identity-and-codes.md`
-- Cockpit comment ABI: `contracts/docs/cockpit-comment-abi.md`
-- Capabilities and missingness: `contracts/docs/capabilities-and-missingness.md`
+## Related docs
+- `docs/architecture.md`
+- `docs/checks.md`
+- `docs/quickstart.md`

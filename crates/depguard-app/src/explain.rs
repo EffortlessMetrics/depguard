@@ -65,7 +65,16 @@ pub fn format_not_found(
 ) -> String {
     let mut out = String::new();
 
-    out.push_str(&format!("Unknown check_id or code: {}\n\n", identifier));
+    out.push_str(&format!("Unknown check_id or code: '{}'\n\n", identifier));
+    out.push_str(
+        "The identifier you provided does not match any known check ID or error code.\n\n",
+    );
+    out.push_str("To find the correct identifier:\n");
+    out.push_str("  1. Check the report file for the 'check_id' or 'code' field\n");
+    out.push_str(
+        "  2. Run 'depguard explain' without arguments to see all available identifiers\n",
+    );
+    out.push_str("  3. Review the documentation at docs/checks.md for a complete list\n\n");
     out.push_str("Available check_ids:\n");
     for id in check_ids {
         out.push_str(&format!("  - {}\n", id));
@@ -74,6 +83,8 @@ pub fn format_not_found(
     for code in codes {
         out.push_str(&format!("  - {}\n", code));
     }
+    out.push_str("\nTo get detailed information about a specific check, run:\n");
+    out.push_str(&format!("  depguard explain <check_id|code>\n"));
 
     out
 }
@@ -116,12 +127,13 @@ mod tests {
     #[test]
     fn format_not_found_output() {
         let formatted = format_not_found("missing", &["check.one", "check.two"], &["code.one"]);
-        assert!(formatted.contains("Unknown check_id or code: missing"));
+        assert!(formatted.contains("Unknown check_id or code: 'missing'"));
         assert!(formatted.contains("Available check_ids:"));
         assert!(formatted.contains("check.one"));
         assert!(formatted.contains("check.two"));
         assert!(formatted.contains("Available codes:"));
         assert!(formatted.contains("code.one"));
+        assert!(formatted.contains("To find the correct identifier"));
     }
 
     fn unwrap_found(output: ExplainOutput) -> Explanation {
