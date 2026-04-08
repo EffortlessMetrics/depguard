@@ -1,131 +1,96 @@
 # depguard
 
-**Repo-truth dependency manifest hygiene sensor for Rust workspaces**
+## Problem
+Maintaining dependency hygiene in Rust workspaces is often solved by ad-hoc scripts and hand-rolled checks that are hard to version, hard to audit, and hard to reuse in CI.
 
-Depguard inspects `Cargo.toml` manifests and evaluates them against explicit policies, emitting versioned reports suitable for CI pipelines, PR comments, and audit trails.
+depguard centralizes this work as a deterministic, offline policy engine with stable, machine-readable receipts.
 
-## Features
+## When to use depguard
+- You need the same dependency rules in local dev, CI, and audit pipelines.
+- You want deterministic outputs for golden-file tests or enforcement gates.
+- You want policy behavior that is easy to explain, trace, and upgrade without surprises.
 
-- **Offline & fast** — No network access, no cargo builds, no metadata resolution
-- **Deterministic** — Same inputs produce byte-identical outputs; CI diffs stay clean
-- **Schema-first** — Versioned JSON schemas define the contract; tooling can rely on stable output
-- **CI-native** — GitHub Actions annotations, Markdown PR comments, configurable exit codes
-- **Gradual adoption** — Profiles (`strict`/`warn`/`compat`) and diff-scope let you roll out incrementally
-- **Autofix ready** — Generates `buildfix.plan.v1` and supports conservative safe in-place fixes
+## How it works (system summary)
+1. `depguard-cli` collects manifests and runtime inputs.
+2. `depguard-repo` and `depguard-repo-parser` build an in-memory workspace model.
+3. `depguard-settings` resolves configuration and effective policy.
+4. `depguard` exposes the public Rust evaluation facade backed by `depguard-domain`.
+5. `depguard-app` orchestrates outputs.
+6. `depguard-render` emits Markdown, annotations, SARIF, JUnit, JSONL, and report JSON.
 
-## Installation
-
-```bash
-# From source
-cargo install --path crates/depguard-cli
-
-# Or build locally
-cargo build --release
-
-# Cargo subcommand is also available
-cargo depguard --help
-```
+This architecture keeps the domain model pure and deterministic, while adapters own I/O.
 
 ## Quick start
 
+### Install
 ```bash
-# Analyze all manifests in the workspace
+cargo install --path crates/depguard-cli
+# Optional: as Cargo subcommand
+cargo install --path crates/depguard-cli --bin cargo-depguard
+```
+
+### Run a first scan
+```bash
 depguard check
+```
 
-# Analyze only manifests changed since main (great for PRs)
+### Common CI pattern
+```bash
 depguard check --scope diff --base origin/main --head HEAD
+```
 
-# Or use a precomputed changed-files list (no git required at runtime)
-depguard check --scope diff --diff-file changed-files.txt
-
-# Run yanked-version policy with an offline index
-depguard check --yanked-index yanked-index.txt
-
-# Generate baseline for existing violations
-depguard baseline --output .depguard-baseline.json
-
-# Suppress baseline findings during migration
-depguard check --baseline .depguard-baseline.json
-
-# Generate a buildfix plan from findings (machine-readable)
-depguard fix --report artifacts/depguard/report.json
-
-# Apply only conservative safe fixes in-place
-depguard fix --report artifacts/depguard/report.json --apply
-
-# Generate a Markdown report from existing JSON
+### Render existing reports
+```bash
 depguard md --report artifacts/depguard/report.json
 
-# Generate SARIF from existing JSON
+depguard annotations --report artifacts/depguard/report.json
+
 depguard sarif --report artifacts/depguard/report.json
-
-# Generate JUnit XML from existing JSON
-depguard junit --report artifacts/depguard/report.json
-
-# Generate JSON Lines stream from existing JSON
-depguard jsonl --report artifacts/depguard/report.json
-
-# Get help for a specific check or code
-depguard explain deps.no_wildcards
 ```
 
-**Example output:**
+## Reference (commands by intent)
 
-```
-$ depguard check
-Scanning workspace: /path/to/my-project
-Found 5 manifests
+### Policy execution
+- `depguard check` — analyze manifests and write a receipt
+- `depguard baseline` — generate baseline suppressions
+- `depguard explain <check_id|code>` — show remediation guidance
 
-X 2 findings (1 error, 1 warning)
+### Output conversion
+- `depguard md --report <path>` — Markdown comment block
+- `depguard annotations --report <path>` — GitHub annotations
+- `depguard sarif --report <path>` — SARIF JSON
+- `depguard junit --report <path>` — JUnit XML
+- `depguard jsonl --report <path>` — JSONL stream
 
-Report written to artifacts/depguard/report.json
-```
+### Fixing
+- `depguard fix --report <path>` — generate conservative fix plan
+- `depguard fix --report <path> --apply` — apply safe fixes
 
-By default, reports are written to `artifacts/depguard/report.json`. Use `--out-dir` to change artifact layout, and `--write-markdown`, `--write-junit`, or `--write-jsonl` to emit additional files during `check`.
+### Runner options
+- `cargo depguard` — Cargo subcommand wrapper
+- `--scope repo|diff` — scan all manifests or changed scope only
+- `--diff-file <path>` — avoid requiring Git in restricted runners
+- `--out-dir`, `--report-version`, `--baseline` for output and policy behavior
 
-`depguard fix` writes `artifacts/buildfix/plan.json` by default and applies only high-confidence safe fixes when `--apply` is provided.
+## Inputs and outputs
+By default, `check` writes:
+- `artifacts/depguard/report.json`
 
-For one-off dependency exceptions, use inline suppressions:
+Optional outputs can be enabled in the same invocation (`--write-markdown`, `--write-junit`, `--write-jsonl`, etc.).
+
+## Exit codes
+- `0` — pass (no policy failure)
+- `2` — policy failure (checks above threshold)
+- `1` — tool/runtime error
+
+## Configuration sketch
+Create a `depguard.toml` in repo root:
 
 ```toml
-[dependencies]
-serde = "*" # depguard: allow(no_wildcards)
-```
-
-See [docs/quickstart.md](docs/quickstart.md) for a complete getting-started guide.
-
-## Example output
-
-```json
-{
-  "schema": "depguard.report.v2",
-  "tool": { "name": "depguard", "version": "0.1.0" },
-  "run": { "started_at": "...", "ended_at": "...", "duration_ms": 12 },
-  "verdict": { "status": "fail", "counts": { "info": 0, "warn": 0, "error": 1 }, "reasons": [] },
-  "findings": [
-    {
-      "severity": "error",
-      "check_id": "deps.no_wildcards",
-      "code": "wildcard_version",
-      "message": "Wildcard version '*' is not allowed",
-      "location": { "path": "crates/foo/Cargo.toml", "line": 12 }
-    }
-  ]
-}
-```
-
-To emit the legacy v1 schema, use `depguard check --report-version v1`.
-
-## Configuration
-
-Create `depguard.toml` in your repo root (optional—defaults to `strict` profile):
-
-```toml
-profile = "strict"        # strict | warn | compat
-scope = "repo"            # repo | diff
-fail_on = "error"         # error | warning
+profile = "strict"
+scope = "repo"
+fail_on = "error"
 max_findings = 100
-baseline = ".depguard-baseline.json"  # Optional gradual-adoption baseline
 
 [checks."deps.no_wildcards"]
 enabled = true
@@ -133,147 +98,28 @@ severity = "error"
 
 [checks."deps.path_requires_version"]
 enabled = true
-allow = ["internal-*"]  # Glob patterns; case-sensitive
-ignore_publish_false = true
-
-[checks."deps.yanked_versions"]
-enabled = true
-severity = "error"
 ```
 
-See [docs/config.md](docs/config.md) for the full configuration reference.
+See [docs/config.md](docs/config.md) for the full schema and all settings.
 
-## Checks
+## Non-goals
+- Performing crate resolution or network-dependent checks.
+- Replacing `cargo` build tooling.
+- Enforcing one-size-fits-all policy defaults.
 
-| Check ID | Description |
-|----------|-------------|
-| `deps.no_wildcards` | Detect wildcard versions (`*`, `1.*`) |
-| `deps.path_requires_version` | Require version alongside path dependencies |
-| `deps.path_safety` | Prevent absolute paths and workspace escapes |
-| `deps.git_requires_version` | Require version alongside git dependencies (disabled by default) |
-| `deps.workspace_inheritance` | Enforce `workspace = true` for shared deps (disabled by default) |
-| `deps.dev_only_in_normal` | Flag dev-only crates in normal dependencies (disabled by default) |
-| `deps.default_features_explicit` | Require explicit `default-features` setting (disabled by default) |
-| `deps.no_multiple_versions` | Detect duplicate deps with different versions (disabled by default) |
-| `deps.optional_unused` | Flag optional deps not referenced in features (disabled by default) |
-| `deps.yanked_versions` | Flag exact pinned versions listed in an offline yanked index (disabled by default) |
+## Documentation map
+- [docs/quickstart.md](docs/quickstart.md) — practical onboarding
+- [docs/config.md](docs/config.md) — configuration contract
+- [docs/checks.md](docs/checks.md) — check behavior and remediation
+- [docs/architecture.md](docs/architecture.md) — deeper design
+- [docs/testing.md](docs/testing.md) — test strategy
+- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution flow
 
-See [docs/checks.md](docs/checks.md) for detailed documentation, examples, and remediation guidance.
-
-## CI integration
-
-### GitHub Actions
-
-```yaml
-name: Depguard
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-
-jobs:
-  depguard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Required for diff scope
-
-      - name: Install Rust
-        uses: dtolnay/rust-action@stable
-
-      - name: Install depguard
-        run: cargo install --path crates/depguard-cli
-
-      - name: Run depguard
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            depguard check --scope diff --base origin/${{ github.base_ref }}
-          else
-            depguard check
-          fi
-
-      - name: Add summary
-        if: always()
-        run: |
-          echo "## Depguard Report" >> $GITHUB_STEP_SUMMARY
-          depguard md --report artifacts/depguard/report.json >> $GITHUB_STEP_SUMMARY
-```
-
-**Key points:**
-- Use `--scope diff` in PRs to only check changed manifests
-- Use `--diff-file` when CI already computed changed files (for example via `tj-actions/changed-files`)
-- Exit code `2` means policy failure; `1` means tool error; `0` means pass
-- Use `depguard annotations` to generate inline PR annotations
-
-See [docs/ci-integration.md](docs/ci-integration.md) for GitLab CI, CircleCI, Azure Pipelines, and Jenkins examples.
-
-## Pre-commit hook
-
-An example hook is included at `.githooks/pre-commit`.
-
-```bash
-git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit
-```
-
-The hook runs depguard on staged files in diff scope and writes a report to `artifacts/depguard/report.json`.
-
-## Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Pass — no policy violations |
-| `1` | Tool error — invalid config, missing files, git issues |
-| `2` | Policy failure — findings exceed `fail_on` threshold |
-
-## Architecture
-
-Depguard uses hexagonal (ports & adapters) architecture with a pure evaluation core:
-
-```
-crates/
-  depguard-types              # Stable DTOs, schema IDs, finding codes
-  depguard-yanked             # Offline yanked index parsing/lookup
-  depguard-settings           # Config parsing, profile presets
-  depguard-domain-core        # Core domain types and traits
-  depguard-domain-checks      # Check implementations (pure, no I/O)
-  depguard-check-catalog      # Check metadata and explanations
-  depguard-inline-suppressions # Inline comment suppression parser
-  depguard-repo-parser        # TOML parsing and manifest models
-  depguard-repo               # Workspace discovery, diff-scope
-  depguard-render             # Markdown, SARIF, JUnit, annotations renderers
-  depguard-app                # Use case orchestration
-  depguard-cli                # CLI binary (clap wiring)
-  depguard-test-util          # Shared fixture/report normalization helpers
-xtask/                        # Dev tooling (schema emission, fixtures)
-schemas/                      # Versioned JSON schemas
-contracts/                    # External contracts and fixtures
-```
-
-See [docs/architecture.md](docs/architecture.md) for the full design.
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Quick Start](docs/quickstart.md) | Get up and running in 5 minutes |
-| [Configuration](docs/config.md) | Full config file reference |
-| [Checks Catalog](docs/checks.md) | All checks with examples and remediation |
-| [CI Integration](docs/ci-integration.md) | GitHub Actions, GitLab CI setup |
-| [Architecture](docs/architecture.md) | System design and data flow |
-| [Testing](docs/testing.md) | Test strategy and commands |
-| [Contributing](CONTRIBUTING.md) | How to contribute |
-
-## Design principles
-
-- **Domain has no I/O** — `depguard-domain` takes an in-memory model and returns findings
-- **Adapters are swappable** — Filesystem/git operations isolated in `depguard-repo`
-- **DTOs are stable** — Receipt types versioned with schema IDs
-- **Deterministic output** — Sorting and capping rules are explicit
+## Workspace design constraints
+- Domain crates have no filesystem/network side effects
+- Output is byte-stable for same inputs
+- Check IDs and finding codes are stable contracts
+- Schema evolution occurs via explicit versioned schema IDs
 
 ## License
-
 [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
-

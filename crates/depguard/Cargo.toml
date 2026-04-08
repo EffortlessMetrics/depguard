@@ -1,0 +1,28 @@
+[package]
+name = "depguard"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Public facade over depguard domain evaluation types and engine"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+readme = "README.md"
+
+[dependencies]
+depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
+
+[features]
+default = ["depguard-domain/default"]
+check-no-wildcards = ["depguard-domain/check-no-wildcards"]
+check-path-requires-version = ["depguard-domain/check-path-requires-version"]
+check-path-safety = ["depguard-domain/check-path-safety"]
+check-workspace-inheritance = ["depguard-domain/check-workspace-inheritance"]
+check-git-requires-version = ["depguard-domain/check-git-requires-version"]
+check-dev-only-in-normal = ["depguard-domain/check-dev-only-in-normal"]
+check-default-features-explicit = ["depguard-domain/check-default-features-explicit"]
+check-no-multiple-versions = ["depguard-domain/check-no-multiple-versions"]
+check-optional-unused = ["depguard-domain/check-optional-unused"]
+check-yanked-versions = ["depguard-domain/check-yanked-versions"]

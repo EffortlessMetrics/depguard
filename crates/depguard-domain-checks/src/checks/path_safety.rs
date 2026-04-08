@@ -113,7 +113,7 @@ fn is_absolute_path(p: &str) -> bool {
     false
 }
 
-fn manifest_dir_depth(manifest_path: &str) -> i32 {
+pub(crate) fn manifest_dir_depth(manifest_path: &str) -> i32 {
     // repo-relative path like `crates/foo/Cargo.toml`
     // Returns number of directory segments (not including the filename)
     // For root-level `Cargo.toml`, returns 0
@@ -130,7 +130,7 @@ fn manifest_dir_depth(manifest_path: &str) -> i32 {
         .count() as i32
 }
 
-fn escapes_repo_root(start_depth: i32, rel_path: &str) -> bool {
+pub(crate) fn escapes_repo_root(start_depth: i32, rel_path: &str) -> bool {
     let mut depth = start_depth;
     for seg in rel_path.split('/') {
         match seg {

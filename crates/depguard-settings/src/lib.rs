@@ -403,4 +403,96 @@ mod tests {
         assert!(err_msg.contains("unknown fail_on"));
         assert!(err_msg.contains("hint:") || err_msg.contains("expected"));
     }
+
+    #[test]
+    fn invalid_profile_returns_error() {
+        let cfg = DepguardConfigV1 {
+            profile: Some("invalid_profile".to_string()),
+            ..Default::default()
+        };
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("profile:"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("unknown profile"),
+            "error message should contain 'unknown profile': {err_msg}"
+        );
+    }
+
+    #[test]
+    fn invalid_max_findings_zero_returns_error() {
+        let cfg = DepguardConfigV1 {
+            max_findings: Some(0),
+            ..Default::default()
+        };
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("max_findings:"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("at least 1"),
+            "error message should contain 'at least 1': {err_msg}"
+        );
+    }
+
+    #[test]
+    fn ignore_publish_false_on_unsupported_check_returns_error() {
+        let toml = r#"
+            [checks."deps.no_wildcards"]
+            ignore_publish_false = true
+        "#;
+        let cfg = parse_config_toml(toml).unwrap();
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("checks.deps.no_wildcards.ignore_publish_false"),
+            "error message should contain key path: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("not supported"),
+            "error message should contain 'not supported': {err_msg}"
+        );
+    }
+
+    #[test]
+    fn ignore_publish_false_on_supported_check_works() {
+        let toml = r#"
+            [checks."deps.path_requires_version"]
+            ignore_publish_false = true
+        "#;
+        let cfg = parse_config_toml(toml).unwrap();
+        let result = resolve_config(cfg, Overrides::default());
+        assert!(result.is_ok());
+        let resolved = result.unwrap();
+        let check = resolved
+            .effective
+            .checks
+            .get("deps.path_requires_version")
+            .expect("check should exist");
+        assert!(check.ignore_publish_false);
+    }
+
+    #[test]
+    fn valid_profile_aliases_work() {
+        for profile in ["strict", "warn", "team", "compat", "oss"] {
+            let cfg = DepguardConfigV1 {
+                profile: Some(profile.to_string()),
+                ..Default::default()
+            };
+            let result = resolve_config(cfg, Overrides::default());
+            assert!(
+                result.is_ok(),
+                "profile '{profile}' should be valid: {:?}",
+                result.err()
+            );
+        }
+    }
 }

@@ -145,14 +145,29 @@ pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixAppl
     for (manifest, fixes) in by_manifest {
         let manifest_path = match normalize_manifest_path(repo_root, &manifest) {
             Ok(p) => p,
-            Err(_) => {
+            Err(e) => {
+                // Log the error but continue processing other files
+                eprintln!(
+                    "depguard: fix: Failed to normalize manifest path '{}': {}. Skipping {} fix(es) for this manifest.",
+                    manifest,
+                    e,
+                    fixes.len()
+                );
                 result.failed += fixes.len() as u32;
                 continue;
             }
         };
         let text = match std::fs::read_to_string(&manifest_path) {
             Ok(text) => text,
-            Err(_) => {
+            Err(e) => {
+                eprintln!(
+                    "depguard: fix: Failed to read manifest file '{}': {}. Skipping {} fix(es). \
+                    Ensure the file exists and is readable. Check file permissions and path: '{}'",
+                    manifest,
+                    e,
+                    fixes.len(),
+                    manifest_path
+                );
                 result.failed += fixes.len() as u32;
                 continue;
             }
@@ -160,7 +175,16 @@ pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixAppl
 
         let mut doc = match text.parse::<DocumentMut>() {
             Ok(doc) => doc,
-            Err(_) => {
+            Err(e) => {
+                eprintln!(
+                    "depguard: fix: Failed to parse manifest file '{}' as TOML: {}. Skipping {} fix(es). \
+                    The file may have invalid TOML syntax. Common issues: missing quotes, unescaped special characters, \
+                    or malformed section headers. Run 'cargo check' or validate with a TOML linter. Path: '{}'",
+                    manifest,
+                    e,
+                    fixes.len(),
+                    manifest_path
+                );
                 result.failed += fixes.len() as u32;
                 continue;
             }
@@ -181,7 +205,15 @@ pub fn apply_safe_fixes(repo_root: &Utf8Path, report: &ReportVariant) -> FixAppl
             continue;
         }
 
-        if std::fs::write(&manifest_path, doc.to_string()).is_err() {
+        if let Err(e) = std::fs::write(&manifest_path, doc.to_string()) {
+            eprintln!(
+                "depguard: fix: Failed to write updated manifest file '{}': {}. Skipping {} fix(es). \
+                Ensure you have write permissions for the file. The file may be read-only or in use by another process. Path: '{}'",
+                manifest,
+                e,
+                fixes.len(),
+                manifest_path
+            );
             result.failed += fixes.len() as u32;
             continue;
         }

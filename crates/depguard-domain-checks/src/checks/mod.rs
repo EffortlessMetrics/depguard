@@ -70,3 +70,6 @@ pub fn run_all(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Find
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod proptest;

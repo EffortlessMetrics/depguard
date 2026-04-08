@@ -10,7 +10,6 @@ homepage.workspace = true
 keywords.workspace = true
 authors.workspace = true
 readme = "README.md"
-publish = false
 
 [dependencies]
 anyhow.workspace = true

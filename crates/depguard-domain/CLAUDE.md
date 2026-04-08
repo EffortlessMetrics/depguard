@@ -2,7 +2,7 @@
 
 ## Purpose
 
-**Facade crate** for the domain layer. Re-exports model/policy types from `depguard-domain-core`, delegates check execution to `depguard-domain-checks`, and owns the evaluation engine that wraps findings into a `DomainReport`.
+Internal engine crate for the domain layer. Re-exports model/policy types from `depguard-domain-core`, delegates check execution to `depguard-domain-checks`, and owns the evaluation engine that wraps findings into a `DomainReport`.
 
 ## Critical Constraint
 
@@ -23,10 +23,11 @@
 
 | Crate | Responsibility |
 |-------|----------------|
+| `depguard` | Public facade and stable import surface |
 | `depguard-domain-core` | `WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec`, `CheckPolicy`, `EffectiveConfig`, `Scope`, `FailOn` |
 | `depguard-domain-checks` | All 10 check implementations, `run_all()`, check utilities |
 | `depguard-check-catalog` | Check metadata, feature gates, profile defaults |
-| `depguard-domain` (this crate) | Engine + orchestration + re-exports |
+| `depguard-domain` (this crate) | Engine + orchestration + re-exports used by `depguard` |
 
 ## Public API
 
@@ -91,13 +92,15 @@ cargo mutants --package depguard-domain  # Mutation testing
 
 ## Architecture Notes
 
-The domain layer is split into three crates to:
+The domain layer is split into four crates to:
 1. Allow `depguard-settings` to depend only on core types (not checks)
 2. Allow check implementations to be feature-gated independently
-3. Keep the facade crate (`depguard-domain`) as a simple orchestrator
+3. Keep `depguard-domain` as the simple engine/orchestrator
+4. Keep `depguard` as the public facade crate
 
 ```
 depguard-settings → depguard-domain-core (model/policy only)
 depguard-domain-checks → depguard-domain-core + depguard-check-catalog
 depguard-domain → depguard-domain-core + depguard-domain-checks
+depguard → depguard-domain
 ```

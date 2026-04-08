@@ -1,26 +1,33 @@
-# Requirements (operational)
+# depguard Requirements
 
-## Must-haves
+## Problem
+Teams need a clear list of assumptions before adopting depguard in policy-as-code workflows.
 
-- Work on:
-  - single-crate repos
-  - Cargo workspaces, including globbed members
-- Support two scopes:
-  - `repo`: full scan
-  - `diff`: scan only changed manifests (plus root for workspace deps)
-- Emit a versioned, machine-readable report (receipt/envelope + findings).
-- Produce CI-friendly surfaces:
-  - Markdown summary
-  - GitHub Actions annotations
-- Deterministic output (stable ordering).
+## Runtime requirements
+- Rust toolchain for local install/build.
+- Read access to repository manifests.
+- Optional Git for `--scope diff` unless `--diff-file` is used.
 
-## Non-goals (v1)
+## Behavioral requirements
+- Offline operation (no runtime network dependencies).
+- No cargo build invocation.
+- Deterministic outputs for identical inputs.
 
-- Full cargo build graph evaluation (no `cargo metadata` dependency graph enforcement).
-- Enforcing feature unification or lockfile policy.
-- Solving “supply chain” beyond what can be inferred from manifests.
+## Output requirements
+- Machine-readable report for CI.
+- Stable schema IDs and finding contracts.
+- Strictly ordered findings.
 
-## Usability constraints
+## Repository expectations
+- Repository manifests in standard `Cargo.toml` format.
+- Optional `depguard.toml` for custom policy.
 
-- Fast enough for PR checks: avoid spawning `cargo` unless explicitly asked.
-- Fail closed on parsing errors only when configured; otherwise emit a tool/runtime finding.
+## Non-requirements
+- Full dependency graph resolution.
+- Automatic fixes without `--apply`.
+- Network-based yanked checks.
+
+## Adoption checklist
+- Verify check IDs and severities in a pilot run.
+- Add baseline file if existing violations should be gated.
+- Keep CI path roots consistent with local runs.

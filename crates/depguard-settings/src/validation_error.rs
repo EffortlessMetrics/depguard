@@ -120,6 +120,48 @@ impl ValidationError {
         )
         .with_suggestion("run 'depguard explain' to see available checks")
     }
+
+    /// Create a validation error for an invalid max_findings value.
+    pub fn invalid_max_findings(value: u32) -> Self {
+        Self::new(
+            "max_findings",
+            format!("invalid max_findings: {value} must be at least 1"),
+        )
+        .with_suggestion("set max_findings to a positive integer, or remove to use default (200)")
+    }
+
+    /// Create a validation error for ignore_publish_false on an unsupported check.
+    pub fn ignore_publish_false_not_supported(check_id: &str) -> Self {
+        Self::new(
+            format!("checks.{check_id}.ignore_publish_false"),
+            format!("ignore_publish_false is not supported for check '{check_id}'"),
+        )
+        .with_suggestion("this option is only valid for 'deps.path_requires_version' check")
+    }
+
+    /// Create a validation error for an invalid boolean value.
+    pub fn invalid_boolean(key_path: &str, value: &str) -> Self {
+        Self::new(key_path, format!("invalid boolean value: '{value}'"))
+            .with_suggestion("expected 'true' or 'false'")
+    }
+
+    /// Create a validation error for an invalid integer value.
+    pub fn invalid_integer(key_path: &str, value: &str) -> Self {
+        Self::new(key_path, format!("invalid integer value: '{value}'"))
+            .with_suggestion("expected a valid integer")
+    }
+
+    /// Create a validation error for a missing required field.
+    pub fn missing_required_field(key_path: &str) -> Self {
+        Self::new(key_path, format!("required field '{key_path}' is missing"))
+    }
+
+    /// Create a validation error for an invalid enum value with custom expected values.
+    pub fn invalid_enum_value(key_path: &str, value: &str, expected: &[&str]) -> Self {
+        let expected_str = expected.join("', '");
+        Self::new(key_path, format!("invalid value '{value}'"))
+            .with_suggestion(format!("expected one of: '{expected_str}'"))
+    }
 }
 
 impl fmt::Display for ValidationError {
@@ -353,5 +395,60 @@ mod tests {
 
         errors1.extend(errors2);
         assert_eq!(errors1.len(), 2);
+    }
+
+    #[test]
+    fn invalid_max_findings_factory() {
+        let err = ValidationError::invalid_max_findings(0);
+        assert_eq!(err.key_path(), "max_findings");
+        assert!(err.message().contains("0"));
+        assert!(err.message().contains("at least 1"));
+        assert!(err.suggestion().is_some());
+    }
+
+    #[test]
+    fn ignore_publish_false_not_supported_factory() {
+        let err = ValidationError::ignore_publish_false_not_supported("deps.no_wildcards");
+        assert_eq!(
+            err.key_path(),
+            "checks.deps.no_wildcards.ignore_publish_false"
+        );
+        assert!(err.message().contains("not supported"));
+        assert!(err.message().contains("deps.no_wildcards"));
+        assert!(err.suggestion().is_some());
+    }
+
+    #[test]
+    fn invalid_boolean_factory() {
+        let err = ValidationError::invalid_boolean("checks.some_check.enabled", "yes");
+        assert_eq!(err.key_path(), "checks.some_check.enabled");
+        assert!(err.message().contains("yes"));
+        assert!(err.message().contains("boolean"));
+        assert_eq!(err.suggestion(), Some("expected 'true' or 'false'"));
+    }
+
+    #[test]
+    fn invalid_integer_factory() {
+        let err = ValidationError::invalid_integer("max_findings", "abc");
+        assert_eq!(err.key_path(), "max_findings");
+        assert!(err.message().contains("abc"));
+        assert!(err.message().contains("integer"));
+        assert_eq!(err.suggestion(), Some("expected a valid integer"));
+    }
+
+    #[test]
+    fn missing_required_field_factory() {
+        let err = ValidationError::missing_required_field("profile");
+        assert_eq!(err.key_path(), "profile");
+        assert!(err.message().contains("required"));
+        assert!(err.message().contains("profile"));
+    }
+
+    #[test]
+    fn invalid_enum_value_factory() {
+        let err = ValidationError::invalid_enum_value("scope", "invalid", &["repo", "diff"]);
+        assert_eq!(err.key_path(), "scope");
+        assert!(err.message().contains("invalid"));
+        assert_eq!(err.suggestion(), Some("expected one of: 'repo', 'diff'"));
     }
 }

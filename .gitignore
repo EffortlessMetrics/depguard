@@ -1,7 +1,10 @@
 /target
+**/target/
 **/*.rs.bk
 .DS_Store
 artifacts/
+clippy_output.txt
+mutants.out/
 
 # Fuzzing
 fuzz/target/

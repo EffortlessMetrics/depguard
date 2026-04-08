@@ -2,7 +2,7 @@
 
 use anyhow::Context;
 use camino::Utf8Path;
-use depguard_domain::policy::Scope as DomainScope;
+use depguard::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
 use depguard_types::{
@@ -51,19 +51,42 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
     let cfg = if input.config_text.trim().is_empty() {
         depguard_settings::DepguardConfigV1::default()
     } else {
+        let config_path = input.repo_root.join("depguard.toml");
         depguard_settings::parse_config_toml(input.config_text).context(format!(
-            "Failed to parse depguard configuration. Check that the config file at '{}' contains valid TOML syntax. \
-             Common issues: missing quotes around strings, unescaped special characters, or malformed section headers.",
-            input.repo_root.join("depguard.toml")
+            "Failed to parse depguard configuration file '{}'. \
+             The config file contains invalid TOML syntax. \
+             \n\nCommon issues to check: \
+             \n  - Missing quotes around string values (e.g., profile = strict should be profile = \"strict\") \
+             \n  - Unescaped special characters in strings (e.g., use \\n for newline) \
+             \n  - Malformed section headers (e.g., [[rules]] should be [rules]) \
+             \n  - Trailing commas or missing commas between items \
+             \n  - Invalid boolean values (use true/false, not True/False) \
+             \n\nValid configuration keys include: \
+             \n  - profile (string): \"strict\", \"moderate\", or \"permissive\" \
+             \n  - scope (string): \"repo\" or \"diff\" \
+             \n  - fail_on (string): \"error\" or \"warning\" \
+             \n  - [[rules]]: Array of rule configurations with check_id, code, and suppress fields \
+             \n\nTo see all available options, run: depguard explain <check_id>",
+            config_path
         ))?
     };
 
     let mut resolved =
         depguard_settings::resolve_config(cfg, input.overrides.clone()).context(format!(
             "Failed to resolve depguard configuration for repository at '{}'. \
-             This may indicate conflicting settings between the config file and CLI overrides. \
-             Review your depguard.toml settings and any command-line options.",
-            input.repo_root
+             \n\nThis error indicates a problem with configuration validation or conflicting settings. \
+             \n\nCommon causes: \
+             \n  - Invalid profile value (must be \"strict\", \"moderate\", or \"permissive\") \
+             \n  - Invalid scope value (must be \"repo\" or \"diff\") \
+             \n  - Invalid fail_on value (must be \"error\" or \"warning\") \
+             \n  - Conflicting settings between depguard.toml and CLI overrides \
+             \n  - Invalid check_id or code in [[rules]] suppressions \
+             \n\nTo debug: \
+             \n  1. Check your depguard.toml file at '{}/depguard.toml' \
+             \n  2. Verify CLI overrides match expected types \
+             \n  3. Run 'depguard explain <check_id>' to see valid check IDs \
+             \n  4. Review the configuration documentation at docs/config.md",
+            input.repo_root, input.repo_root
         ))?;
     resolved.effective.yanked_index = input.yanked_index.clone();
 
@@ -97,8 +120,8 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
         input.repo_root
     ))?;
 
-    let domain_report = depguard_domain::evaluate(&model, &resolved.effective);
-    let depguard_domain::report::DomainReport {
+    let domain_report = depguard::evaluate(&model, &resolved.effective);
+    let depguard::report::DomainReport {
         verdict: domain_verdict,
         findings: domain_findings,
         data: domain_data,

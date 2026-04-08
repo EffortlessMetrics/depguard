@@ -1,6 +1,6 @@
 [package]
 name = "depguard-app"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -13,7 +13,7 @@ readme = "README.md"
 
 [dependencies]
 depguard-types = { version = "0.1.0", path = "../depguard-types" }
-depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
+depguard = { version = "0.1.0", path = "../depguard", default-features = false }
 depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
 depguard-settings = { version = "0.1.0", path = "../depguard-settings", default-features = false }
 depguard-render = { version = "0.1.0", path = "../depguard-render" }
@@ -26,45 +26,45 @@ time.workspace = true
 toml_edit.workspace = true
 
 [features]
-default = ["depguard-domain/default", "depguard-settings/default"]
+default = ["depguard/default", "depguard-settings/default"]
 check-no-wildcards = [
-    "depguard-domain/check-no-wildcards",
+    "depguard/check-no-wildcards",
     "depguard-settings/check-no-wildcards",
 ]
 check-path-requires-version = [
-    "depguard-domain/check-path-requires-version",
+    "depguard/check-path-requires-version",
     "depguard-settings/check-path-requires-version",
 ]
 check-path-safety = [
-    "depguard-domain/check-path-safety",
+    "depguard/check-path-safety",
     "depguard-settings/check-path-safety",
 ]
 check-workspace-inheritance = [
-    "depguard-domain/check-workspace-inheritance",
+    "depguard/check-workspace-inheritance",
     "depguard-settings/check-workspace-inheritance",
 ]
 check-git-requires-version = [
-    "depguard-domain/check-git-requires-version",
+    "depguard/check-git-requires-version",
     "depguard-settings/check-git-requires-version",
 ]
 check-dev-only-in-normal = [
-    "depguard-domain/check-dev-only-in-normal",
+    "depguard/check-dev-only-in-normal",
     "depguard-settings/check-dev-only-in-normal",
 ]
 check-default-features-explicit = [
-    "depguard-domain/check-default-features-explicit",
+    "depguard/check-default-features-explicit",
     "depguard-settings/check-default-features-explicit",
 ]
 check-no-multiple-versions = [
-    "depguard-domain/check-no-multiple-versions",
+    "depguard/check-no-multiple-versions",
     "depguard-settings/check-no-multiple-versions",
 ]
 check-optional-unused = [
-    "depguard-domain/check-optional-unused",
+    "depguard/check-optional-unused",
     "depguard-settings/check-optional-unused",
 ]
 check-yanked-versions = [
-    "depguard-domain/check-yanked-versions",
+    "depguard/check-yanked-versions",
     "depguard-settings/check-yanked-versions",
 ]
 

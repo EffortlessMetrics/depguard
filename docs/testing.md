@@ -1,180 +1,39 @@
 # Testing
 
-> **Navigation**: [Architecture](architecture.md) | [Design](design.md) | [Microcrates](microcrates.md) | Testing | [Contributing](../CONTRIBUTING.md)
+## Problem
+Policy tooling regresses quietly when fixtures, ordering, and edge cases are not continuously covered.
 
-The testing strategy is layered with different "optics" for different concerns.
+## Test strategy
 
-## Test commands
+- Golden fixtures (`tests/fixtures/`) with deterministic receipts.
+- Integration tests for command paths and scope behavior.
+- Unit tests for parsing, config resolution, and check algorithms.
+- Property tests for shape and ordering invariants.
+- Conformance checks against schema contracts.
+- Optional fuzzing for manifest parser resilience.
+
+## Recommended commands
 
 ```bash
-# All tests
 cargo test
-
-# By scope
-cargo test --lib                    # Unit tests only
-cargo test --test '*'               # Integration tests only
-cargo test -p depguard-domain       # Single crate
-
-# Linting
-cargo fmt --check
-cargo clippy --all-targets --all-features
-
-# Mutation testing (configured crates)
-cargo mutants                                    # All configured crates
-cargo mutants --package depguard-domain          # Single crate
-
-# Fuzzing (requires nightly)
+cargo test --lib
+cargo test --test '*'
 cargo +nightly fuzz run fuzz_toml_parser
 ```
 
-## Unit tests (fast)
+## Determinism requirements
+- Outputs must be byte-stable under identical input.
+- Non-deterministic fields should be normalized in fixture assertions.
 
-Live next to code in each crate:
+## CI coverage expectation
+- New checks require fixture updates and explainability assertions.
+- Renderer changes should include all output formats.
+- Schema-emitting changes require fixture re-generation.
 
-| Crate | Focus |
-|-------|-------|
-| `depguard-types` | Serde roundtrip, explanation coverage |
-| `depguard-domain` | Check behavior under small, explicit inputs |
-| `depguard-settings` | Config parse, merge precedence, validation |
-| `depguard-repo` | Manifest parsing, workspace discovery |
-| `depguard-render` | Renderer formatting |
+## Reviewing failures
+- Re-run the specific suite first (e.g., domain, then app, then integration).
+- Confirm no output contract was unintentionally altered.
+- Keep fixture diffs minimal and explain why they exist in PR notes.
 
-Example locations:
-- `crates/depguard-domain/src/checks/no_wildcards.rs` → `#[cfg(test)] mod tests`
-- `crates/depguard-settings/src/resolve.rs` → `#[cfg(test)] mod tests`
-
-## Property tests (broad)
-
-Use `proptest` for invariants in `depguard-domain`:
-
-- Domain evaluation is deterministic (same input → same output)
-- No panics on arbitrary manifest structures
-- Findings ordering is stable under re-evaluation
-- Truncation preserves ordering invariants
-
-Location: `crates/depguard-domain/src/engine.rs` tests module
-
-## Golden fixtures (byte-stable)
-
-Canonical fixtures live in `tests/fixtures/`:
-
-| File | Purpose |
-|------|---------|
-| `expected.report.json` | Expected JSON report output |
-| `expected.comment.md` | Expected Markdown comment |
-| `expected.annotations.txt` | Expected GitHub Actions annotations |
-
-Regenerate by running depguard on each fixture and updating the `expected.*` files.
-
-These tests catch unintentional output drift.
-
-## BDD scenarios (integration)
-
-Feature files in `tests/features/`:
-
-```gherkin
-Feature: Wildcard detection
-  Scenario: Detects * in version
-    Given a workspace with a dependency version "*"
-    When depguard runs
-    Then the report contains a finding with code "wildcard_version"
-```
-
-Wiring: Either `cucumber` crate or explicit table-driven scenario tests in `tests/`.
-
-Location: `tests/features/depguard.feature`
-
-## Integration tests
-
-End-to-end tests using real CLI invocations:
-
-Location: `crates/depguard-cli/tests/`
-
-These tests:
-- Run the actual binary
-- Use fixture workspaces
-- Verify exit codes, JSON output, Markdown output
-
-## Fuzzing (parser hardening)
-
-TOML parsing is the highest risk surface. Fuzz targets ensure no panics.
-
-Location: `fuzz/` directory (when present)
-
-Targets:
-- `fuzz_toml_parser` — arbitrary TOML input to manifest parser
-- `fuzz_glob_expansion` — arbitrary glob patterns
-
-The `depguard-repo` crate exposes `fuzz` module APIs that return `Option` instead of `Result` and are guaranteed not to panic.
-
-## Mutation testing (test quality)
-
-Use `cargo-mutants` to ensure tests fail when behavior changes. Mutation testing
-helps validate that tests actually catch bugs by injecting small faults into the
-code and verifying the tests detect them.
-
-### Running mutation tests
-
-```bash
-# Run on all configured crates
-cargo mutants
-
-# Target specific crates
-cargo mutants --package depguard-domain
-cargo mutants --package depguard-domain-checks
-cargo mutants --package depguard-settings
-
-# Run with specific options
-cargo mutants --package depguard-domain --list  # List available mutants
-cargo mutants --package depguard-domain --no-shuffle  # Deterministic order
-```
-
-### Configured crates
-
-The following crates are configured for mutation testing in `mutants.toml`:
-
-| Crate | Focus | Rationale |
-|-------|-------|-----------|
-| `depguard-domain` | Policy evaluation, core logic | Pure business logic, no I/O |
-| `depguard-domain-checks` | Individual check implementations | Rule logic, determinism |
-| `depguard-settings` | Configuration parsing, validation | Parse/merge behavior |
-
-### Exclusions
-
-The following are excluded from mutation testing:
-- `**/*_test*.rs` - Test files themselves
-- `**/tests/**` - Integration test directories
-- `**/proptest*.rs` - Property test modules
-- `**/test_support.rs` - Test helper utilities
-
-### Discipline
-
-- Run mutants on `depguard-domain` first (core logic)
-- `depguard-domain-checks` contains check implementations - ensure each check has tests
-- `depguard-settings` validates config parsing - cover edge cases
-- Exclude renderers if they produce noisy diffs until stabilized
-- Target: <5% surviving mutants in domain crates
-
-## Schema validation
-
-CI validates that emitted reports conform to JSON schemas:
-
-The CLI integration tests validate reports against:
-- `schemas/depguard.report.v1.json`
-- `schemas/depguard.report.v2.json`
-
-## Test data locations
-
-| Path | Contents |
-|------|----------|
-| `tests/fixtures/` | Golden output files |
-| `tests/features/` | BDD feature files |
-| `crates/*/tests/` | Per-crate integration tests |
-| `examples/` | Example config files |
-
-## See also
-
-- [Contributing](../CONTRIBUTING.md) — How to contribute and run tests
-- [Design Notes](design.md) — Pure domain and determinism
-- [Architecture](architecture.md) — Crate responsibilities
-- [Implementation Plan](implementation-plan.md) — Test requirements by phase
+## Helpful rule
+If a test update changes ordering without policy change, treat it as a release-impacting risk.

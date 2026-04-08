@@ -1,6 +1,6 @@
 [package]
 name = "depguard-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -26,8 +26,8 @@ clap.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true
 
-depguard-app = { version = "0.1.0", path = "../depguard-app", default-features = false }
-depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
+depguard-app = { version = "0.1.1", path = "../depguard-app", default-features = false }
+depguard = { version = "0.1.0", path = "../depguard", default-features = false }
 depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
 depguard-render = { version = "0.1.0", path = "../depguard-render" }
 depguard-settings = { version = "0.1.0", path = "../depguard-settings", default-features = false }

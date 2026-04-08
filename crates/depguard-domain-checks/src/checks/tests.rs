@@ -1189,3 +1189,300 @@ fn handles_empty_workspace_dependencies() {
         "Empty workspace dependencies should not cause findings"
     );
 }
+
+/// Test that run_all actually executes checks and produces findings
+#[test]
+fn run_all_executes_checks_and_produces_findings() {
+    let deps = vec![
+        dep_decl(
+            "bad_wildcard",
+            DepKind::Normal,
+            DepSpec {
+                version: Some("*".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+        dep_decl(
+            "absolute_path",
+            DepKind::Normal,
+            DepSpec {
+                path: Some("/absolute/path".to_string()),
+                ..DepSpec::default()
+            },
+            None,
+        ),
+    ];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    // Enable both checks
+    let mut cfg =
+        crate::test_support::config_with_check(ids::CHECK_DEPS_NO_WILDCARDS, Severity::Warning);
+    cfg.checks.insert(
+        ids::CHECK_DEPS_PATH_SAFETY.to_string(),
+        crate::policy::CheckPolicy::enabled(Severity::Warning),
+    );
+
+    let mut out = Vec::new();
+    super::run_all(&model, &cfg, &mut out);
+
+    // Should have findings from both checks
+    assert!(
+        out.len() >= 2,
+        "run_all should produce findings from multiple checks"
+    );
+
+    // Verify we have findings from both checks
+    let has_wildcard_finding = out.iter().any(|f| f.code == ids::CODE_WILDCARD_VERSION);
+    let has_absolute_path_finding = out.iter().any(|f| f.code == ids::CODE_ABSOLUTE_PATH);
+
+    assert!(has_wildcard_finding, "Should have wildcard version finding");
+    assert!(
+        has_absolute_path_finding,
+        "Should have absolute path finding"
+    );
+}
+
+/// Test that run_all respects check availability (skip disabled checks)
+#[test]
+fn run_all_respects_check_availability() {
+    let deps = vec![dep_decl(
+        "bad_wildcard",
+        DepKind::Normal,
+        DepSpec {
+            version: Some("*".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    // Configure only one check (path_safety) but not no_wildcards
+    let cfg =
+        crate::test_support::config_with_check(ids::CHECK_DEPS_PATH_SAFETY, Severity::Warning);
+
+    let mut out = Vec::new();
+    super::run_all(&model, &cfg, &mut out);
+
+    // Should not have wildcard findings since that check is not configured
+    let has_wildcard_finding = out.iter().any(|f| f.code == ids::CODE_WILDCARD_VERSION);
+    assert!(
+        !has_wildcard_finding,
+        "Should not have wildcard finding when check is not configured"
+    );
+}
+
+/// Test manifest_dir_depth helper function directly
+#[test]
+fn manifest_dir_depth_calculates_correctly() {
+    // Root level Cargo.toml
+    assert_eq!(path_safety::manifest_dir_depth("Cargo.toml"), 0);
+    assert_eq!(path_safety::manifest_dir_depth("/Cargo.toml"), 0);
+
+    // One level deep
+    assert_eq!(path_safety::manifest_dir_depth("crates/Cargo.toml"), 1);
+    assert_eq!(path_safety::manifest_dir_depth("/crates/Cargo.toml"), 1);
+
+    // Two levels deep
+    assert_eq!(path_safety::manifest_dir_depth("crates/foo/Cargo.toml"), 2);
+    assert_eq!(path_safety::manifest_dir_depth("/crates/foo/Cargo.toml"), 2);
+
+    // Three levels deep
+    assert_eq!(path_safety::manifest_dir_depth("a/b/c/Cargo.toml"), 3);
+
+    // Handles empty segments (e.g., from leading/trailing slashes)
+    assert_eq!(path_safety::manifest_dir_depth("///Cargo.toml"), 0);
+    assert_eq!(path_safety::manifest_dir_depth("a///b///Cargo.toml"), 2);
+}
+
+/// Test escapes_repo_root helper function directly
+#[test]
+fn escapes_repo_root_detects_parent_escapes() {
+    // Starting from root (depth 0)
+    assert!(
+        path_safety::escapes_repo_root(0, ".."),
+        "Should escape from root with .."
+    );
+    assert!(
+        path_safety::escapes_repo_root(0, "../.."),
+        "Should escape from root with multiple .."
+    );
+    assert!(
+        !path_safety::escapes_repo_root(0, "."),
+        "Should not escape with ."
+    );
+    assert!(
+        !path_safety::escapes_repo_root(0, "foo"),
+        "Should not escape with normal path"
+    );
+
+    // Starting from depth 1
+    assert!(
+        !path_safety::escapes_repo_root(1, ".."),
+        "Should not escape from depth 1 with single .."
+    );
+    assert!(
+        path_safety::escapes_repo_root(1, "../.."),
+        "Should escape from depth 1 with two .."
+    );
+    assert!(
+        !path_safety::escapes_repo_root(1, "foo"),
+        "Should not escape with normal path"
+    );
+
+    // Starting from depth 2
+    assert!(
+        !path_safety::escapes_repo_root(2, ".."),
+        "Should not escape from depth 2 with single .."
+    );
+    assert!(
+        !path_safety::escapes_repo_root(2, "../.."),
+        "Should not escape from depth 2 with two .."
+    );
+    assert!(
+        path_safety::escapes_repo_root(2, "../../.."),
+        "Should escape from depth 2 with three .."
+    );
+
+    // Mixed paths
+    assert!(
+        !path_safety::escapes_repo_root(2, "foo/../bar"),
+        "Should not escape with balanced .."
+    );
+    assert!(
+        !path_safety::escapes_repo_root(2, "foo/../../bar"),
+        "Should not escape with balanced .. (foo + .. + .. + bar = 0 net change)"
+    );
+    assert!(
+        !path_safety::escapes_repo_root(2, "foo/../../../bar"),
+        "Should not escape with balanced .. (foo + .. + .. + .. + bar = -1 net change, but depth stays >= 0)"
+    );
+    assert!(
+        path_safety::escapes_repo_root(2, "foo/../../../../bar"),
+        "Should escape with unbalanced .. (foo + .. + .. + .. + .. + bar = -2 net change)"
+    );
+
+    // Edge cases
+    assert!(
+        !path_safety::escapes_repo_root(5, ""),
+        "Empty path should not escape"
+    );
+    assert!(
+        !path_safety::escapes_repo_root(5, "."),
+        "Single dot should not escape"
+    );
+    assert!(
+        !path_safety::escapes_repo_root(5, "./././"),
+        "Multiple dots should not escape"
+    );
+}
+
+/// Test path_requires_version with workspace dependencies
+#[test]
+fn path_requires_version_allows_workspace_dependencies() {
+    let deps = vec![dep_decl(
+        "workspace_dep",
+        DepKind::Normal,
+        DepSpec {
+            path: Some("local/dep".to_string()),
+            workspace: true,
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_PATH_REQUIRES_VERSION, Severity::Warning);
+
+    let mut out = Vec::new();
+    path_requires_version::run(&model, &cfg, &mut out);
+
+    // Workspace dependencies should not trigger findings
+    assert!(
+        out.is_empty(),
+        "Workspace dependencies should not require version"
+    );
+}
+
+/// Test path_requires_version with path + version combination
+#[test]
+fn path_requires_version_allows_path_with_version() {
+    let deps = vec![dep_decl(
+        "path_with_version",
+        DepKind::Normal,
+        DepSpec {
+            path: Some("local/dep".to_string()),
+            version: Some("1.0.0".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", true, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    let cfg = config_with_check(ids::CHECK_DEPS_PATH_REQUIRES_VERSION, Severity::Warning);
+
+    let mut out = Vec::new();
+    path_requires_version::run(&model, &cfg, &mut out);
+
+    // Path with version should not trigger findings
+    assert!(
+        out.is_empty(),
+        "Path dependencies with version should be allowed"
+    );
+}
+
+/// Test path_requires_version respects ignore_publish_false policy
+#[test]
+fn path_requires_version_respects_ignore_publish_false() {
+    let deps = vec![dep_decl(
+        "path_dep",
+        DepKind::Normal,
+        DepSpec {
+            path: Some("local/dep".to_string()),
+            ..DepSpec::default()
+        },
+        None,
+    )];
+
+    let manifest = manifest("Cargo.toml", false, deps, BTreeMap::new());
+    let model = model(vec![manifest], BTreeMap::new());
+
+    // With ignore_publish_false = true, should flag the finding
+    let cfg_enforce = config_with_check_allow(
+        ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
+        Severity::Warning,
+        Vec::new(),
+        true, // ignore_publish_false = true
+    );
+
+    let mut out = Vec::new();
+    path_requires_version::run(&model, &cfg_enforce, &mut out);
+    assert_eq!(
+        out.len(),
+        1,
+        "Should flag path dep when ignore_publish_false is true"
+    );
+
+    // With ignore_publish_false = false, should skip the finding
+    let cfg_skip = config_with_check_allow(
+        ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
+        Severity::Warning,
+        Vec::new(),
+        false, // ignore_publish_false = false
+    );
+
+    out.clear();
+    path_requires_version::run(&model, &cfg_skip, &mut out);
+    assert!(
+        out.is_empty(),
+        "Should skip path dep when ignore_publish_false is false and manifest is not publishable"
+    );
+}

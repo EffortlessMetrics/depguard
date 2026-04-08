@@ -1,169 +1,24 @@
 # depguard-domain-core
 
-Core model and policy primitives for depguard domain logic.
+## Problem
+Domain-level checks share core models (dependency graph nodes, severities, and location primitives), but ad-hoc duplicates create incompatibilities.
 
-This crate defines the fundamental types shared by the domain layer and its adapters. It provides the data structures that represent a Cargo workspace and the policy configuration for evaluating it.
+## What this crate does
+`depguard-domain-core` defines the pure primitives used by domain checks and adapters. Think of it as the structural backbone behind policy evaluation.
 
-## Purpose
+## Core responsibilities
+- Define domain-level entities and contracts shared across policy layers
+- Keep type semantics stable across check boundaries
+- Provide canonical comparisons and ordering helpers
 
-The domain-core crate provides:
-- **Workspace model types**: In-memory representation of Cargo manifests
-- **Policy types**: Configuration for check behavior and severity
-- **Shared abstractions**: Types used by both domain and infrastructure layers
+## How to use
+- Depend on this crate when you need primitive domain types without pulling full check implementations.
+- Use it as the baseline for domain feature-gated behavior and shared models.
 
-This crate has minimal dependencies and remains completely pure—no I/O, no side effects.
+## Why not put this elsewhere
+This crate isolates frequently reused, low-level domain logic so check and application crates can stay composable and test-friendly.
 
-## Key Features
-
-### Workspace Model
-
-The workspace model represents a Cargo workspace in memory:
-
-```rust
-pub struct WorkspaceModel {
-    pub root_path: RepoPath,
-    pub manifests: Vec<ManifestModel>,
-    pub workspace_dependencies: BTreeMap<String, WorkspaceDependency>,
-}
-
-pub struct ManifestModel {
-    pub path: RepoPath,
-    pub package: Option<PackageMeta>,
-    pub dependencies: Vec<DependencyDecl>,
-    pub features: BTreeMap<String, Vec<String>>,
-}
-
-pub struct DependencyDecl {
-    pub name: String,
-    pub kind: DepKind,
-    pub spec: DepSpec,
-    pub location: Location,
-    pub inline_suppressions: Vec<String>,
-}
-```
-
-### Policy Types
-
-Policy configuration controls check behavior:
-
-```rust
-pub struct PolicyConfig {
-    pub checks: BTreeMap<String, CheckPolicy>,
-    pub fail_on: FailOn,
-    pub scope: Scope,
-}
-
-pub struct CheckPolicy {
-    pub enabled: bool,
-    pub severity: Severity,
-    pub allow: Vec<String>,
-}
-
-pub enum FailOn {
-    Warning,
-    Error,
-    Never,
-}
-
-pub enum Scope {
-    Repo,
-    Diff,
-}
-```
-
-### Dependency Specification
-
-Rich representation of dependency specs:
-
-```rust
-pub struct DepSpec {
-    pub version: Option<String>,
-    pub path: Option<String>,
-    pub git: Option<String>,
-    pub branch: Option<String>,
-    pub tag: Option<String>,
-    pub rev: Option<String>,
-    pub registry: Option<String>,
-    pub default_features: Option<bool>,
-    pub features: Vec<String>,
-    pub optional: Option<bool>,
-    pub workspace: Option<bool>,
-}
-
-pub enum DepKind {
-    Normal,
-    Dev,
-    Build,
-}
-```
-
-## Public API
-
-```rust
-// Model types
-pub mod model {
-    pub struct WorkspaceModel { /* ... */ }
-    pub struct ManifestModel { /* ... */ }
-    pub struct DependencyDecl { /* ... */ }
-    pub struct DepSpec { /* ... */ }
-    pub enum DepKind { /* ... */ }
-    pub struct PackageMeta { /* ... */ }
-    pub struct WorkspaceDependency { /* ... */ }
-}
-
-// Policy types
-pub mod policy {
-    pub struct PolicyConfig { /* ... */ }
-    pub struct CheckPolicy { /* ... */ }
-    pub enum FailOn { /* ... */ }
-    pub enum Scope { /* ... */ }
-}
-```
-
-## Usage Example
-
-```rust
-use depguard_domain_core::model::{WorkspaceModel, ManifestModel, DependencyDecl, DepKind, DepSpec};
-use depguard_domain_core::policy::{PolicyConfig, CheckPolicy, FailOn, Scope};
-use depguard_types::Severity;
-
-// Build a policy configuration
-let mut policy = PolicyConfig::default();
-policy.checks.insert(
-    "deps.no_wildcards".to_string(),
-    CheckPolicy {
-        enabled: true,
-        severity: Severity::Error,
-        allow: vec![],
-    },
-);
-
-// Build a workspace model (typically done by depguard-repo)
-let model = WorkspaceModel {
-    root_path: RepoPath::new("Cargo.toml"),
-    manifests: vec![/* ... */],
-    workspace_dependencies: BTreeMap::new(),
-};
-```
-
-## Dependencies
-
-| Crate | Purpose |
-|-------|---------|
-| `depguard-types` | Shared types, IDs, severity |
-| `depguard-yanked` | Yanked version index type |
-| `serde` | Serialization support |
-
-## Design Constraints
-
-- **No I/O**: Pure data structures only
-- **Minimal dependencies**: Only essential crates
-- **Serializable**: All types support `serde`
-- **Stable API**: Types are used across layers
-
-## Related Crates
-
-- [`depguard-domain`](../depguard-domain/) - Main domain entry point
-- [`depguard-domain-checks`](../depguard-domain-checks/) - Check implementations
-- [`depguard-repo`](../depguard-repo/) - Model construction from filesystem
-- [`depguard-types`](../depguard-types/) - Shared types
+## Related crates
+- `depguard-domain` (policy orchestration)
+- `depguard-domain-checks` (concrete checks)
+- `depguard-types` (report payloads and public schema)
