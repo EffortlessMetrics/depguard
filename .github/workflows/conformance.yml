@@ -6,8 +6,7 @@ on:
     paths:
       - 'schemas/**'
       - 'contracts/**'
-      - 'crates/depguard-types/**'
-      - 'crates/depguard-settings/**'
+      - 'crates/**'
       - 'tests/fixtures/**'
       - '.github/workflows/conformance.yml'
   pull_request:
@@ -15,8 +14,7 @@ on:
     paths:
       - 'schemas/**'
       - 'contracts/**'
-      - 'crates/depguard-types/**'
-      - 'crates/depguard-settings/**'
+      - 'crates/**'
       - 'tests/fixtures/**'
       - '.github/workflows/conformance.yml'
 
@@ -28,7 +26,7 @@ jobs:
     name: Schema Conformance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Validate schemas match generated output
@@ -40,7 +38,7 @@ jobs:
     name: Contract Fixture Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Validate contract fixtures against sensor.report.v1 schema
@@ -50,7 +48,7 @@ jobs:
     name: Sensor V1 Conformance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build depguard
@@ -62,7 +60,7 @@ jobs:
     name: Explain Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Validate all check IDs and codes have explanations
@@ -72,7 +70,7 @@ jobs:
     name: Fixture Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run conformance tests
@@ -82,7 +80,7 @@ jobs:
     name: Report Format Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
@@ -90,31 +88,49 @@ jobs:
         run: cargo build --release -p depguard-cli
 
       - name: Test v1 report format
+        shell: bash
         run: |
-          ./target/release/depguard check \
+          set +e
+          ./target/release/depguard --repo-root tests/fixtures/wildcards check \
             --report-version v1 \
-            --report-out /tmp/report-v1.json \
-            tests/fixtures/wildcards
+            --report-out /tmp/report-v1.json
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            exit "$code"
+          fi
+          test -f /tmp/report-v1.json
           # Verify v1 schema
           jq -e '.schema_id == "depguard.report.v1" or .schema == "depguard.report.v1"' /tmp/report-v1.json
 
       - name: Test v2 report format
+        shell: bash
         run: |
-          ./target/release/depguard check \
+          set +e
+          ./target/release/depguard --repo-root tests/fixtures/wildcards check \
             --report-version v2 \
-            --report-out /tmp/report-v2.json \
-            tests/fixtures/wildcards
+            --report-out /tmp/report-v2.json
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            exit "$code"
+          fi
+          test -f /tmp/report-v2.json
           # Verify v2 schema and structure
           jq -e '.schema == "depguard.report.v2"' /tmp/report-v2.json
           jq -e '.verdict.status' /tmp/report-v2.json
           jq -e '.run.started_at' /tmp/report-v2.json
 
       - name: Test sensor-v1 report format
+        shell: bash
         run: |
-          ./target/release/depguard check \
+          set +e
+          ./target/release/depguard --repo-root tests/fixtures/wildcards check \
             --report-version sensor-v1 \
-            --report-out /tmp/report-sensor-v1.json \
-            tests/fixtures/wildcards
+            --report-out /tmp/report-sensor-v1.json
+          code=$?
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            exit "$code"
+          fi
+          test -f /tmp/report-sensor-v1.json
           # Verify sensor.report.v1 schema and required fields
           jq -e '.schema == "sensor.report.v1"' /tmp/report-sensor-v1.json
           jq -e '.tool.name == "depguard"' /tmp/report-sensor-v1.json

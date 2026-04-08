@@ -2870,13 +2870,79 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::path::PathBuf;
-    use std::sync::Mutex;
+    use std::sync::{Mutex, MutexGuard};
     use tempfile::TempDir;
 
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
+    fn env_lock() -> MutexGuard<'static, ()> {
+        ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+    }
+
+    fn set_manifest_dir(path: Option<&Path>) {
+        if let Some(path) = path {
+            unsafe {
+                std::env::set_var("CARGO_MANIFEST_DIR", path);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("CARGO_MANIFEST_DIR");
+            }
+        }
+    }
+
+    struct ManifestDirGuard {
+        previous: Option<String>,
+    }
+
+    impl ManifestDirGuard {
+        fn preserve() -> Self {
+            Self {
+                previous: std::env::var("CARGO_MANIFEST_DIR").ok(),
+            }
+        }
+
+        fn set(path: &Path) -> Self {
+            let guard = Self::preserve();
+            set_manifest_dir(Some(path));
+            guard
+        }
+
+        fn remove() -> Self {
+            let guard = Self::preserve();
+            set_manifest_dir(None);
+            guard
+        }
+    }
+
+    impl Drop for ManifestDirGuard {
+        fn drop(&mut self) {
+            restore_manifest_dir(std::mem::take(&mut self.previous));
+        }
+    }
+
+    struct CurrentDirGuard {
+        previous: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn set(path: &Path) -> Self {
+            let previous = std::env::current_dir().expect("cwd");
+            std::env::set_current_dir(path).expect("set cwd");
+            Self { previous }
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous).expect("restore cwd");
+        }
+    }
+
     fn with_temp_root<F: FnOnce(&PathBuf)>(f: F) {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let _lock = env_lock();
         with_temp_root_unlocked(f);
     }
 
@@ -2884,23 +2950,8 @@ mod tests {
         let tmp = TempDir::new().expect("temp dir");
         let root = tmp.path().to_path_buf();
         fs::create_dir_all(root.join("xtask")).expect("create xtask dir");
-
-        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
-        unsafe {
-            std::env::set_var("CARGO_MANIFEST_DIR", root.join("xtask"));
-        }
-
+        let _manifest_dir = ManifestDirGuard::set(&root.join("xtask"));
         f(&root);
-
-        if let Some(val) = old {
-            unsafe {
-                std::env::set_var("CARGO_MANIFEST_DIR", val);
-            }
-        } else {
-            unsafe {
-                std::env::remove_var("CARGO_MANIFEST_DIR");
-            }
-        }
     }
 
     fn restore_manifest_dir(old: Option<String>) {
@@ -2959,11 +3010,10 @@ version = "0.1.0"
     fn write_dummy_depguard_bin(root: &Path) {
         let bin_dir = root.join("target").join("debug");
         fs::create_dir_all(&bin_dir).expect("create bin dir");
-        let mut bin = bin_dir.join("depguard");
         #[cfg(target_os = "windows")]
-        {
-            bin = bin.with_extension("exe");
-        }
+        let bin = bin_dir.join("depguard.exe");
+        #[cfg(not(target_os = "windows"))]
+        let bin = bin_dir.join("depguard");
         fs::write(bin, "stub").expect("write stub bin");
     }
 
@@ -3000,8 +3050,7 @@ version = "0.1.0"
 
     #[test]
     fn project_root_and_dirs_are_consistent() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
-        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
+        let _lock = env_lock();
         let tmp = TempDir::new().expect("temp dir");
         let cases = [
             PathBuf::from(env!("CARGO_MANIFEST_DIR")),
@@ -3009,9 +3058,7 @@ version = "0.1.0"
         ];
 
         for manifest_dir in cases {
-            unsafe {
-                std::env::set_var("CARGO_MANIFEST_DIR", &manifest_dir);
-            }
+            let _manifest_dir = ManifestDirGuard::set(&manifest_dir);
 
             let root = project_root();
             if manifest_dir.ends_with("xtask") {
@@ -3032,23 +3079,16 @@ version = "0.1.0"
                 root.join("contracts").join("fixtures")
             );
         }
-
-        restore_manifest_dir(old);
     }
 
     #[test]
     fn project_root_uses_manifest_dir_when_not_xtask() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let _lock = env_lock();
         let tmp = TempDir::new().expect("temp dir");
-        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
-        unsafe {
-            std::env::set_var("CARGO_MANIFEST_DIR", tmp.path());
-        }
+        let _manifest_dir = ManifestDirGuard::set(tmp.path());
 
         let root = project_root();
         assert_eq!(root, tmp.path().to_path_buf());
-
-        restore_manifest_dir(old);
     }
 
     #[test]
@@ -3060,61 +3100,46 @@ version = "0.1.0"
 
     #[test]
     fn project_root_falls_back_to_current_dir() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
+        let _lock = env_lock();
         let tmp = TempDir::new().expect("temp dir");
-        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
-        unsafe {
-            std::env::remove_var("CARGO_MANIFEST_DIR");
-        }
-        let old_cwd = std::env::current_dir().expect("cwd");
-        std::env::set_current_dir(tmp.path()).expect("set cwd");
+        let _manifest_dir = ManifestDirGuard::remove();
+        let _cwd = CurrentDirGuard::set(tmp.path());
 
         let root = project_root();
         assert_eq!(root, tmp.path().to_path_buf());
-
-        std::env::set_current_dir(old_cwd).expect("restore cwd");
-        restore_manifest_dir(old);
     }
 
     #[test]
     fn with_temp_root_restores_missing_env() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
-        let old = std::env::var("CARGO_MANIFEST_DIR").ok();
-        unsafe {
-            std::env::remove_var("CARGO_MANIFEST_DIR");
-        }
+        let _lock = env_lock();
+        let _manifest_dir = ManifestDirGuard::remove();
 
         with_temp_root_unlocked(|_root| {
             assert!(std::env::var("CARGO_MANIFEST_DIR").is_ok());
         });
 
         assert!(std::env::var("CARGO_MANIFEST_DIR").is_err());
-        restore_manifest_dir(old);
     }
 
     #[test]
     fn restore_manifest_dir_handles_some() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
-        let original = std::env::var("CARGO_MANIFEST_DIR").ok();
+        let _lock = env_lock();
+        let _manifest_dir = ManifestDirGuard::preserve();
 
         restore_manifest_dir(Some("temp-manifest".to_string()));
         assert_eq!(
             std::env::var("CARGO_MANIFEST_DIR").expect("env var"),
             "temp-manifest"
         );
-
-        restore_manifest_dir(original);
     }
 
     #[test]
     fn restore_manifest_dir_handles_none() {
-        let _lock = ENV_MUTEX.lock().expect("env mutex");
-        let original = std::env::var("CARGO_MANIFEST_DIR").ok();
+        let _lock = env_lock();
+        let _manifest_dir = ManifestDirGuard::preserve();
 
         restore_manifest_dir(None);
         assert!(std::env::var("CARGO_MANIFEST_DIR").is_err());
-
-        restore_manifest_dir(original);
     }
 
     #[test]
