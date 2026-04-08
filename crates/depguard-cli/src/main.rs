@@ -537,8 +537,8 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             let resolved = depguard_settings::resolve_config(cfg, overrides.clone())
                 .context("resolve config")?;
             let scope = match resolved.effective.scope {
-                depguard_domain::policy::Scope::Repo => "repo",
-                depguard_domain::policy::Scope::Diff => "diff",
+                depguard::policy::Scope::Repo => "repo",
+                depguard::policy::Scope::Diff => "diff",
             };
             let mut report = empty_report(report_version, scope, &resolved.effective.profile);
             write_optional_artifacts(&mut report, &opts, &paths)?;
@@ -1141,9 +1141,7 @@ fn fetch_live_yanked_index(
     Ok(index)
 }
 
-fn collect_exact_pins(
-    model: &depguard_domain::model::WorkspaceModel,
-) -> BTreeSet<(String, String)> {
+fn collect_exact_pins(model: &depguard::model::WorkspaceModel) -> BTreeSet<(String, String)> {
     let mut pins = BTreeSet::new();
     for manifest in &model.manifests {
         for dep in &manifest.dependencies {

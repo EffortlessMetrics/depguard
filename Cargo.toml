@@ -4,6 +4,7 @@ members = [
   "crates/depguard-types",
   "crates/depguard-yanked",
   "crates/depguard-settings",
+  "crates/depguard",
   "crates/depguard-domain",
   "crates/depguard-domain-core",
   "crates/depguard-domain-checks",

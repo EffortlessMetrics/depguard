@@ -13,8 +13,10 @@ A large Rust workspace gets fragile when crate responsibilities are unclear.
   - Individual check logic.
 - `depguard-check-catalog`
   - Check metadata and profile defaults.
+- `depguard`
+  - Public facade over the domain evaluation surface.
 - `depguard-domain`
-  - Domain façade and orchestration.
+  - Internal domain engine and orchestration.
 - `depguard-repo-parser`
   - Pure manifest parsing and location extraction.
 - `depguard-repo`

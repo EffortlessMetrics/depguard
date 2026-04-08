@@ -14,7 +14,7 @@ depguard centralizes this work as a deterministic, offline policy engine with st
 1. `depguard-cli` collects manifests and runtime inputs.
 2. `depguard-repo` and `depguard-repo-parser` build an in-memory workspace model.
 3. `depguard-settings` resolves configuration and effective policy.
-4. `depguard-domain` evaluates checks and produces findings.
+4. `depguard` exposes the public Rust evaluation facade backed by `depguard-domain`.
 5. `depguard-app` orchestrates outputs.
 6. `depguard-render` emits Markdown, annotations, SARIF, JUnit, JSONL, and report JSON.
 

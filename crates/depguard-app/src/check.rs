@@ -2,7 +2,7 @@
 
 use anyhow::Context;
 use camino::Utf8Path;
-use depguard_domain::policy::Scope as DomainScope;
+use depguard::policy::Scope as DomainScope;
 use depguard_repo::ScopeInput;
 use depguard_settings::{Overrides, ResolvedConfig};
 use depguard_types::{
@@ -120,8 +120,8 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
         input.repo_root
     ))?;
 
-    let domain_report = depguard_domain::evaluate(&model, &resolved.effective);
-    let depguard_domain::report::DomainReport {
+    let domain_report = depguard::evaluate(&model, &resolved.effective);
+    let depguard::report::DomainReport {
         verdict: domain_verdict,
         findings: domain_findings,
         data: domain_data,

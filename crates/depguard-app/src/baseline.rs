@@ -1,6 +1,6 @@
 use crate::report::ReportVariant;
 use anyhow::Context;
-use depguard_domain::policy::FailOn;
+use depguard::policy::FailOn;
 use depguard_types::{
     BaselineFinding, DepguardBaselineV1, Finding, FindingV2, SCHEMA_BASELINE_V1, Severity,
     SeverityV2, ToolMeta, Verdict, VerdictStatus, ids,

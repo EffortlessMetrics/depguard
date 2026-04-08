@@ -16,7 +16,7 @@ Domain checks, configuration, rendering, and reporting all need consistent orche
 ## How to use
 - Treat this crate as the application layer boundary.
 - Keep I/O and CLI concerns at outer layers (`depguard-cli`).
-- Keep domain/policy logic inside `depguard-domain`.
+- Keep domain/policy logic behind the `depguard` facade.
 
 ## Design constraints
 - Stable behavior: same inputs -> same outputs
@@ -24,7 +24,7 @@ Domain checks, configuration, rendering, and reporting all need consistent orche
 - Feature-gated checks are respected via resolved settings
 
 ## Related crates
-- `depguard-domain`
+- `depguard`
 - `depguard-settings`
 - `depguard-repo`
 - `depguard-render`

@@ -69,11 +69,11 @@ Tool/runtime errors use exit code 1.
 
 ## Feature Gates
 
-This crate propagates check feature gates to domain and settings:
+This crate propagates check feature gates to the public facade and settings:
 
 ```toml
 check-no-wildcards = [
-    "depguard-domain/check-no-wildcards",
+    "depguard/check-no-wildcards",
     "depguard-settings/check-no-wildcards",
 ]
 ```
@@ -92,7 +92,7 @@ All 10 checks have corresponding features.
 | Dependency | Purpose |
 |------------|---------|
 | `depguard-types` | DTOs, IDs, explanations |
-| `depguard-domain` | Policy evaluation engine |
+| `depguard` | Public domain facade |
 | `depguard-repo` | Workspace discovery, model building |
 | `depguard-settings` | Config parsing, profile resolution |
 | `depguard-render` | Output formatters |

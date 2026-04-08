@@ -148,7 +148,7 @@ All 10 checks have corresponding features.
 | Dependency | Purpose |
 |------------|---------|
 | `depguard-app` | Use cases |
-| `depguard-domain` | Domain types |
+| `depguard` | Public domain facade and types |
 | `depguard-repo` | Repository adapters |
 | `depguard-render` | Output formatters |
 | `depguard-settings` | Configuration |

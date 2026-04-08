@@ -17,9 +17,10 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
 2. `depguard-settings` resolves effective configuration.
 3. `depguard-repo` discovers and reads manifests.
 4. `depguard-repo-parser` parses `Cargo.toml` into in-memory models.
-5. `depguard-domain` evaluates checks and produces findings.
-6. `depguard-app` wraps results in report envelopes.
-7. `depguard-render` formats output for Markdown/JSONL/SARIF/JUnit/annotations.
+5. `depguard` exposes the public Rust evaluation surface over the internal domain engine.
+6. `depguard-domain` evaluates checks and produces findings.
+7. `depguard-app` wraps results in report envelopes.
+8. `depguard-render` formats output for Markdown/JSONL/SARIF/JUnit/annotations.
 
 ## Core boundaries
 - `depguard-domain*` never reads files and never invokes subprocesses.
@@ -33,10 +34,11 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
   - `depguard-yanked` (offline yanked lookup model)
   - `depguard-test-util` (test helpers)
 - Domain
+  - `depguard` (public facade)
   - `depguard-domain-core` (primitives)
   - `depguard-domain-checks` (pure check implementations)
   - `depguard-check-catalog` (check metadata)
-  - `depguard-domain` (policy orchestration)
+  - `depguard-domain` (engine orchestration)
 - Adapters
   - `depguard-repo-parser` (pure TOML parsing)
   - `depguard-repo` (discovery, scope resolution)
