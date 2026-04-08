@@ -1,17 +1,25 @@
-//! Repository adapters: discover workspaces, read and parse Cargo manifests.
+//! Repository adapters: discover workspaces, read manifest files, and assemble parsed models.
 //!
-//! This crate is allowed to do filesystem IO. It should not spawn external processes;
-//! diff scoping should be supplied as a list of changed paths by the caller (typically the CLI).
+//! Parsing is delegated to `depguard-repo-parser`; this crate is responsible for
+//! filesystem IO, manifest discovery, and model caching.
+//! It should not spawn external processes; diff scoping should be supplied as a list
+//! of changed paths by the caller (typically the CLI).
 
 #![forbid(unsafe_code)]
 
+mod cache;
 mod discover;
-mod parse;
 
 use anyhow::Context;
-use camino::Utf8Path;
-use depguard_domain::model::WorkspaceModel;
+use cache::{ManifestCache, ManifestStamp};
+use camino::{Utf8Path, Utf8PathBuf};
+use depguard_domain_core::model::WorkspaceModel;
+use depguard_repo_parser::{
+    parse_member_manifest as parse_member_manifest_impl,
+    parse_root_manifest as parse_root_manifest_impl,
+};
 use depguard_types::RepoPath;
+use rayon::prelude::*;
 
 pub use discover::discover_manifests;
 
@@ -26,7 +34,7 @@ pub mod fuzz {
     /// `Err(...)` otherwise. **Never panics** on any input.
     pub fn parse_root_manifest(text: &str) -> anyhow::Result<()> {
         let path = RepoPath::new("Cargo.toml");
-        let _ = parse::parse_root_manifest(&path, text)?;
+        let _ = parse_root_manifest_impl(&path, text)?;
         Ok(())
     }
 
@@ -36,27 +44,63 @@ pub mod fuzz {
     /// `Err(...)` otherwise. **Never panics** on any input.
     pub fn parse_member_manifest(text: &str) -> anyhow::Result<()> {
         let path = RepoPath::new("crates/fuzz/Cargo.toml");
-        let _ = parse::parse_member_manifest(&path, text)?;
+        let _ = parse_member_manifest_impl(&path, text)?;
         Ok(())
     }
 
     /// Expand workspace member glob patterns against a list of candidate paths.
     ///
     /// This tests the glob compilation and matching logic without filesystem access.
+    /// Supports exclusion patterns (starting with `!`) as per Cargo semantics.
     /// Returns `Ok(matched_paths)` if the pattern is valid, `Err(...)` otherwise.
     /// **Never panics** on any input.
     pub fn expand_globs(patterns: &[String], candidates: &[String]) -> anyhow::Result<Vec<String>> {
         use globset::{Glob, GlobSetBuilder};
 
-        let mut builder = GlobSetBuilder::new();
-        for p in patterns {
-            builder.add(Glob::new(p)?);
-        }
-        let set = builder.build()?;
+        // Separate inclusion and exclusion patterns
+        let (include_patterns, exclude_patterns): (Vec<_>, Vec<_>) = patterns
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .partition(|p| !p.starts_with('!'));
 
+        // Normalize inclusion patterns (strip ./ prefix)
+        let include_patterns: Vec<&str> = include_patterns
+            .into_iter()
+            .map(|p| p.strip_prefix("./").unwrap_or(p))
+            .collect();
+
+        // Normalize exclusion patterns (strip ! and ./ prefixes)
+        let exclude_patterns: Vec<&str> = exclude_patterns
+            .into_iter()
+            .map(|p| p.strip_prefix('!').unwrap_or(p).trim())
+            .map(|p| p.strip_prefix("./").unwrap_or(p))
+            .filter(|p| !p.is_empty())
+            .collect();
+
+        // Build inclusion globset
+        let mut include_builder = GlobSetBuilder::new();
+        for p in &include_patterns {
+            include_builder.add(Glob::new(p)?);
+        }
+        let include_set = include_builder.build()?;
+
+        // Build exclusion globset
+        let mut exclude_builder = GlobSetBuilder::new();
+        for p in &exclude_patterns {
+            exclude_builder.add(Glob::new(p)?);
+        }
+        let exclude_set = exclude_builder.build()?;
+
+        // Match candidates: include if matched by inclusion set and not by exclusion set
         let matched: Vec<String> = candidates
             .iter()
-            .filter(|c| set.is_match(c))
+            .filter(|c| {
+                let matches_include =
+                    include_patterns.is_empty() || include_set.is_match(c.as_str());
+                let matches_exclude = exclude_set.is_match(c.as_str());
+                matches_include && !matches_exclude
+            })
             .cloned()
             .collect();
 
@@ -78,35 +122,45 @@ pub fn build_workspace_model(
     repo_root: &Utf8Path,
     scope: ScopeInput,
 ) -> anyhow::Result<WorkspaceModel> {
+    build_workspace_model_with_cache(repo_root, scope, None)
+}
+
+/// Build the in-memory workspace model and optionally cache parsed manifests.
+///
+/// When `cache_dir` is set, parsed manifests are persisted and reused when file
+/// metadata `(size, modified timestamp)` is unchanged.
+pub fn build_workspace_model_with_cache(
+    repo_root: &Utf8Path,
+    scope: ScopeInput,
+    cache_dir: Option<&Utf8Path>,
+) -> anyhow::Result<WorkspaceModel> {
     let manifests = discover::discover_manifests(repo_root).context("discover manifests")?;
-
-    // Always parse the root manifest for `[workspace.dependencies]`.
     let root_manifest = RepoPath::new("Cargo.toml");
+    let in_scope = manifests_in_scope(&manifests, &root_manifest, scope);
+
+    let mut cache = cache_dir
+        .map(|dir| ManifestCache::load(repo_root, dir))
+        .transpose()?;
+
+    // Always parse (or restore) the root manifest for `[workspace.dependencies]`.
     let root_abs = repo_root.join(root_manifest.as_str());
-    let root_text =
-        std::fs::read_to_string(&root_abs).with_context(|| format!("read {}", root_abs))?;
-    let (root_ws_deps, root_model) =
-        parse::parse_root_manifest(&root_manifest, &root_text).context("parse root manifest")?;
+    let root_stamp = cache_stamp_for(&root_abs)?;
 
-    let in_scope = match scope {
-        ScopeInput::Repo => manifests.clone(),
-        ScopeInput::Diff { changed_files } => {
-            let mut s = Vec::new();
-            // Root is always included (cheap and needed for workspace deps checks).
-            s.push(root_manifest.clone());
-
-            let changed: std::collections::BTreeSet<_> = changed_files
-                .into_iter()
-                .map(|p| p.as_str().to_string())
-                .collect();
-
-            for m in manifests {
-                if changed.contains(m.as_str()) && !s.iter().any(|x| x.as_str() == m.as_str()) {
-                    s.push(m);
-                }
-            }
-            s
+    let (root_ws_deps, root_model) = if let Some(store) = cache.as_mut() {
+        if let Some(cached) = store.root_if_fresh(&root_manifest, root_stamp) {
+            cached
+        } else {
+            let root_text =
+                std::fs::read_to_string(&root_abs).with_context(|| format!("read {}", root_abs))?;
+            let (deps, model) = parse_root_manifest_impl(&root_manifest, &root_text)
+                .context("parse root manifest")?;
+            store.store_root(&root_manifest, root_stamp, &deps, &model);
+            (deps, model)
         }
+    } else {
+        let root_text =
+            std::fs::read_to_string(&root_abs).with_context(|| format!("read {}", root_abs))?;
+        parse_root_manifest_impl(&root_manifest, &root_text).context("parse root manifest")?
     };
 
     let mut model = WorkspaceModel {
@@ -119,15 +173,78 @@ pub fn build_workspace_model(
     model.manifests.push(root_model);
 
     // Parse all other manifests in scope (excluding root, which we already parsed).
-    for manifest_path in in_scope.into_iter().filter(|p| p.as_str() != "Cargo.toml") {
-        let abs = repo_root.join(manifest_path.as_str());
-        let text = std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
-        let m = parse::parse_member_manifest(&manifest_path, &text)
-            .with_context(|| format!("parse {}", manifest_path.as_str()))?;
-        model.manifests.push(m);
+    // This is parallel for large workspaces but deterministic because `par_iter` on Vec
+    // preserves index order in `collect`.
+    let mut member_paths: Vec<RepoPath> = in_scope
+        .into_iter()
+        .filter(|p| p.as_str() != "Cargo.toml")
+        .collect();
+    member_paths.sort();
+
+    if let Some(store) = cache.as_mut() {
+        for manifest_path in &member_paths {
+            let abs = repo_root.join(manifest_path.as_str());
+            let stamp = cache_stamp_for(&abs)?;
+            if let Some(cached) = store.member_if_fresh(manifest_path, stamp) {
+                model.manifests.push(cached);
+                continue;
+            }
+
+            let text = std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
+            let parsed = parse_member_manifest_impl(manifest_path, &text)
+                .with_context(|| format!("parse {}", manifest_path.as_str()))?;
+            store.store_member(manifest_path, stamp, &parsed);
+            model.manifests.push(parsed);
+        }
+        store.save_if_dirty()?;
+    } else {
+        let parsed_members: Vec<anyhow::Result<_>> = member_paths
+            .par_iter()
+            .map(|manifest_path| {
+                let abs = repo_root.join(manifest_path.as_str());
+                let text =
+                    std::fs::read_to_string(&abs).with_context(|| format!("read {}", abs))?;
+                parse_member_manifest_impl(manifest_path, &text)
+                    .with_context(|| format!("parse {}", manifest_path.as_str()))
+            })
+            .collect();
+
+        for parsed in parsed_members {
+            model.manifests.push(parsed?);
+        }
     }
 
     Ok(model)
+}
+
+fn manifests_in_scope(
+    manifests: &[RepoPath],
+    root_manifest: &RepoPath,
+    scope: ScopeInput,
+) -> Vec<RepoPath> {
+    match scope {
+        ScopeInput::Repo => manifests.to_vec(),
+        ScopeInput::Diff { changed_files } => {
+            let mut scoped = vec![root_manifest.clone()];
+            let changed: std::collections::BTreeSet<_> = changed_files
+                .into_iter()
+                .map(|p| p.as_str().to_string())
+                .collect();
+
+            for manifest in manifests {
+                if changed.contains(manifest.as_str())
+                    && !scoped.iter().any(|m| m.as_str() == manifest.as_str())
+                {
+                    scoped.push(manifest.clone());
+                }
+            }
+            scoped
+        }
+    }
+}
+
+fn cache_stamp_for(path: &Utf8PathBuf) -> anyhow::Result<ManifestStamp> {
+    ManifestStamp::from_path(path).with_context(|| format!("cache stamp {}", path))
 }
 
 #[cfg(test)]
@@ -244,6 +361,70 @@ version = "0.1.0"
             paths,
             vec!["Cargo.toml".to_string(), "crates/a/Cargo.toml".to_string()]
         );
+    }
+
+    #[test]
+    fn build_workspace_model_with_cache_writes_cache_file() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/a"]
+"#,
+        );
+        write_file(
+            &root.join("crates/a/Cargo.toml"),
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let cache_dir = Utf8Path::new(".depguard-cache");
+        let _ = build_workspace_model_with_cache(&root, ScopeInput::Repo, Some(cache_dir))
+            .expect("build model with cache");
+
+        let cache_file = root
+            .join(".depguard-cache")
+            .join(cache::MANIFEST_CACHE_FILENAME);
+        assert!(cache_file.exists(), "expected cache file at {}", cache_file);
+    }
+
+    #[test]
+    fn build_workspace_model_with_cache_invalidates_on_manifest_change() {
+        let tmp = TempDir::new().expect("temp dir");
+        let root = utf8_root(&tmp);
+        write_file(
+            &root.join("Cargo.toml"),
+            r#"[workspace]
+members = ["crates/a"]
+"#,
+        );
+        let member_path = root.join("crates/a/Cargo.toml");
+        write_file(
+            &member_path,
+            r#"[package]
+name = "a"
+version = "0.1.0"
+"#,
+        );
+
+        let cache_dir = Utf8Path::new(".depguard-cache");
+        let _ = build_workspace_model_with_cache(&root, ScopeInput::Repo, Some(cache_dir))
+            .expect("first build");
+
+        // Break the manifest to ensure stale cache is not reused.
+        write_file(
+            &member_path,
+            r#"[package]
+name = "a"
+version = "#,
+        );
+
+        let err = build_workspace_model_with_cache(&root, ScopeInput::Repo, Some(cache_dir))
+            .expect_err("expected parse error");
+        assert!(err.to_string().contains("parse"));
     }
 
     proptest! {

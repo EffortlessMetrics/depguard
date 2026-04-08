@@ -1,0 +1,54 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.optional_unused",
+      "code": "optional_not_in_features",
+      "message": "optional dependency 'serde' is not referenced in any feature",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 7
+      },
+      "help": "Add a feature that enables this dependency, or remove `optional = true`.",
+      "fingerprint": "0eaae9f36228cdac0ff2863997ed20974ba2de227daa5430876a5b74d540c078",
+      "data": {
+        "current_spec": {
+          "optional": true,
+          "version": "1.0"
+        },
+        "dependency": "serde",
+        "fix_action": "resolve_optional_feature",
+        "fix_hint": "Add a feature referencing this dep, or remove optional = true",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

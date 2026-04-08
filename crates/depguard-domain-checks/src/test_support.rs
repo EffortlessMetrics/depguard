@@ -68,6 +68,7 @@ pub fn config_with_check(check_id: &str, severity: Severity) -> EffectiveConfig 
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks,
     }
 }
@@ -90,6 +91,7 @@ pub fn config_with_check_allow(
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
+        yanked_index: None,
         checks,
     }
 }

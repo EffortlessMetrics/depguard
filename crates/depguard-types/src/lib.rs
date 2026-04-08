@@ -8,11 +8,19 @@
 
 #![forbid(unsafe_code)]
 
+pub mod baseline;
+pub mod buildfix;
 pub mod explain;
 pub mod ids;
 pub mod path;
 pub mod receipt;
 
+pub use baseline::{BaselineFinding, DepguardBaselineV1, SCHEMA_BASELINE_V1};
+pub use buildfix::{
+    BuildfixAction, BuildfixActionTarget, BuildfixActionType, BuildfixConfidence,
+    BuildfixFindingRef, BuildfixFixAction, BuildfixLocation, BuildfixMetadata, BuildfixPlanV1,
+    BuildfixPreconditions, BuildfixSafety, BuildfixSourceReport, SCHEMA_BUILDFIX_PLAN_V1,
+};
 pub use explain::{ExamplePair, Explanation, lookup_explanation};
 pub use path::RepoPath;
 pub use receipt::{

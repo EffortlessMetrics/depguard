@@ -19,8 +19,9 @@ cargo test -p depguard-domain       # Single crate
 cargo fmt --check
 cargo clippy --all-targets --all-features
 
-# Mutation testing (domain crate)
-cargo mutants --package depguard-domain
+# Mutation testing (configured crates)
+cargo mutants                                    # All configured crates
+cargo mutants --package depguard-domain          # Single crate
 
 # Fuzzing (requires nightly)
 cargo +nightly fuzz run fuzz_toml_parser
@@ -108,16 +109,51 @@ The `depguard-repo` crate exposes `fuzz` module APIs that return `Option` instea
 
 ## Mutation testing (test quality)
 
-Use `cargo-mutants` to ensure tests fail when behavior changes.
+Use `cargo-mutants` to ensure tests fail when behavior changes. Mutation testing
+helps validate that tests actually catch bugs by injecting small faults into the
+code and verifying the tests detect them.
+
+### Running mutation tests
 
 ```bash
+# Run on all configured crates
+cargo mutants
+
+# Target specific crates
 cargo mutants --package depguard-domain
+cargo mutants --package depguard-domain-checks
+cargo mutants --package depguard-settings
+
+# Run with specific options
+cargo mutants --package depguard-domain --list  # List available mutants
+cargo mutants --package depguard-domain --no-shuffle  # Deterministic order
 ```
 
-Discipline:
+### Configured crates
+
+The following crates are configured for mutation testing in `mutants.toml`:
+
+| Crate | Focus | Rationale |
+|-------|-------|-----------|
+| `depguard-domain` | Policy evaluation, core logic | Pure business logic, no I/O |
+| `depguard-domain-checks` | Individual check implementations | Rule logic, determinism |
+| `depguard-settings` | Configuration parsing, validation | Parse/merge behavior |
+
+### Exclusions
+
+The following are excluded from mutation testing:
+- `**/*_test*.rs` - Test files themselves
+- `**/tests/**` - Integration test directories
+- `**/proptest*.rs` - Property test modules
+- `**/test_support.rs` - Test helper utilities
+
+### Discipline
+
 - Run mutants on `depguard-domain` first (core logic)
+- `depguard-domain-checks` contains check implementations - ensure each check has tests
+- `depguard-settings` validates config parsing - cover edge cases
 - Exclude renderers if they produce noisy diffs until stabilized
-- Target: <5% surviving mutants in domain crate
+- Target: <5% surviving mutants in domain crates
 
 ## Schema validation
 

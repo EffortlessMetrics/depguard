@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "depguard pre-commit: cargo is not available on PATH" >&2
+  exit 1
+fi
+
+REPORT_OUT="${DEPGUARD_PRECOMMIT_REPORT:-artifacts/depguard/report.json}"
+
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  tmp_file="$(mktemp)"
+  trap 'rm -f "$tmp_file"' EXIT
+
+  git diff --name-only --cached >"$tmp_file"
+  if [ ! -s "$tmp_file" ]; then
+    echo "depguard pre-commit: no staged files, skipping" >&2
+    exit 0
+  fi
+
+  echo "depguard pre-commit: scanning staged manifests (diff scope)" >&2
+  cargo run -q -p depguard-cli -- check \
+    --scope diff \
+    --diff-file "$tmp_file" \
+    --report-out "$REPORT_OUT"
+else
+  echo "depguard pre-commit: no git context, scanning repository scope" >&2
+  cargo run -q -p depguard-cli -- check --scope repo --report-out "$REPORT_OUT"
+fi
+

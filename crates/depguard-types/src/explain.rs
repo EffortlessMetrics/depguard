@@ -42,6 +42,7 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT => Some(explain_default_features_explicit()),
         ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS => Some(explain_no_multiple_versions()),
         ids::CHECK_DEPS_OPTIONAL_UNUSED => Some(explain_optional_unused()),
+        ids::CHECK_DEPS_YANKED_VERSIONS => Some(explain_yanked_versions()),
         ids::CHECK_TOOL_RUNTIME => Some(explain_tool_runtime()),
 
         // Codes
@@ -55,6 +56,7 @@ pub fn lookup_explanation(identifier: &str) -> Option<Explanation> {
         ids::CODE_DEFAULT_FEATURES_IMPLICIT => Some(explain_default_features_implicit()),
         ids::CODE_DUPLICATE_DIFFERENT_VERSIONS => Some(explain_duplicate_different_versions()),
         ids::CODE_OPTIONAL_NOT_IN_FEATURES => Some(explain_optional_not_in_features()),
+        ids::CODE_VERSION_YANKED => Some(explain_version_yanked()),
         ids::CODE_RUNTIME_ERROR => Some(explain_runtime_error()),
 
         _ => None,
@@ -73,6 +75,7 @@ pub fn all_check_ids() -> &'static [&'static str] {
         ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT,
         ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS,
         ids::CHECK_DEPS_OPTIONAL_UNUSED,
+        ids::CHECK_DEPS_YANKED_VERSIONS,
         ids::CHECK_TOOL_RUNTIME,
     ]
 }
@@ -90,6 +93,7 @@ pub fn all_codes() -> &'static [&'static str] {
         ids::CODE_DEFAULT_FEATURES_IMPLICIT,
         ids::CODE_DUPLICATE_DIFFERENT_VERSIONS,
         ids::CODE_OPTIONAL_NOT_IN_FEATURES,
+        ids::CODE_VERSION_YANKED,
         ids::CODE_RUNTIME_ERROR,
     ]
 }
@@ -594,6 +598,40 @@ serialization = ["dep:serde"]"#,
 fn explain_optional_not_in_features() -> Explanation {
     let mut exp = explain_optional_unused();
     exp.title = "Optional Not in Features";
+    exp
+}
+
+fn explain_yanked_versions() -> Explanation {
+    Explanation {
+        title: "No Yanked Versions",
+        description: "\
+Detects dependencies pinned to versions listed as yanked in an offline index.
+
+Yanked versions are removed from normal resolution because they often indicate:
+- serious bugs discovered after publish
+- accidental bad releases
+- security or reliability concerns
+
+This check only flags exact pins (`=x.y.z`) when the version appears in the supplied yanked index.",
+        remediation: "\
+Upgrade to a non-yanked version and keep the dependency explicitly pinned:
+
+    serde = \"=1.0.200\"
+
+If the yanked version is intentional for a temporary reason, document it and add
+the dependency to the check allowlist.",
+        examples: ExamplePair {
+            before: r#"[dependencies]
+serde = "=1.0.189""#,
+            after: r#"[dependencies]
+serde = "=1.0.200""#,
+        },
+    }
+}
+
+fn explain_version_yanked() -> Explanation {
+    let mut exp = explain_yanked_versions();
+    exp.title = "Pinned Version Is Yanked";
     exp
 }
 

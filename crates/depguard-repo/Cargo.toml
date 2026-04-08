@@ -4,7 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish = false
+description = "Workspace discovery and Cargo.toml parsing adapters for depguard"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true
@@ -12,11 +17,14 @@ camino.workspace = true
 globset.workspace = true
 toml_edit.workspace = true
 walkdir.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
-depguard-types = { path = "../depguard-types" }
-depguard-domain = { path = "../depguard-domain" }
+depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
+depguard-repo-parser = { version = "0.1.0", path = "../depguard-repo-parser" }
 
 [dev-dependencies]
 proptest.workspace = true
-serde_json.workspace = true
 tempfile.workspace = true

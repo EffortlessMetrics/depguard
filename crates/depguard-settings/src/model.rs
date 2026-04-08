@@ -25,6 +25,10 @@ pub struct DepguardConfigV1 {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_findings: Option<u32>,
 
+    /// Optional baseline file path for suppressing known findings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<String>,
+
     /// Map of check_id -> config.
     #[serde(default)]
     pub checks: BTreeMap<String, CheckConfig>,

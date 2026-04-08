@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Pure policy evaluation engine. This is the **core business logic** layer—no I/O, no filesystem, no clap dependencies.
+**Facade crate** for the domain layer. Re-exports model/policy types from `depguard-domain-core`, delegates check execution to `depguard-domain-checks`, and owns the evaluation engine that wraps findings into a `DomainReport`.
 
 ## Critical Constraint
 
@@ -12,28 +12,41 @@ Pure policy evaluation engine. This is the **core business logic** layer—no I/
 
 | Module | Contents |
 |--------|----------|
-| `model.rs` | `WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec` |
-| `policy.rs` | `Scope`, `FailOn`, `CheckPolicy`, `EffectiveConfig` |
-| `engine.rs` | `evaluate()` orchestrator, verdict computation |
-| `checks/` | Rule implementations (one module per check) |
-| `report.rs` | `DomainReport` struct |
+| [`model.rs`] | Re-exports from `depguard-domain-core` |
+| [`policy.rs`] | Re-exports from `depguard-domain-core` |
+| [`engine.rs`] | `evaluate()` orchestrator, verdict computation |
+| [`fingerprint.rs`] | Content fingerprinting for caching |
+| [`report.rs`] | `DomainReport` struct |
+| [`proptest.rs`] | Property-based test strategies |
 
-## Checks
+## Domain Crate Split
 
-Each check lives in `checks/` and exports a `run()` function:
+| Crate | Responsibility |
+|-------|----------------|
+| `depguard-domain-core` | `WorkspaceModel`, `ManifestModel`, `DependencyDecl`, `DepSpec`, `CheckPolicy`, `EffectiveConfig`, `Scope`, `FailOn` |
+| `depguard-domain-checks` | All 10 check implementations, `run_all()`, check utilities |
+| `depguard-check-catalog` | Check metadata, feature gates, profile defaults |
+| `depguard-domain` (this crate) | Engine + orchestration + re-exports |
 
-| Check | File | Detects |
-|-------|------|---------|
-| `no_wildcards` | `checks/no_wildcards.rs` | `*` or `1.*` in version specs |
-| `path_requires_version` | `checks/path_requires_version.rs` | Path deps without version |
-| `path_safety` | `checks/path_safety.rs` | Absolute paths, parent escapes (`../`) |
-| `workspace_inheritance` | `checks/workspace_inheritance.rs` | Deps not using `workspace = true` |
+## Public API
+
+```rust
+// Re-exports from domain-core
+pub use depguard_domain_core::model::*;
+pub use depguard_domain_core::policy::*;
+
+// Evaluation engine
+pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport;
+
+// Fingerprinting
+pub fn fingerprint_model(model: &WorkspaceModel) -> String;
+```
 
 ## Evaluation Flow
 
 ```
 WorkspaceModel + EffectiveConfig
-    → checks::run_all()
+    → depguard-domain-checks::run_all()
     → sort findings deterministically
     → truncate to max_findings
     → compute verdict
@@ -42,21 +55,49 @@ WorkspaceModel + EffectiveConfig
 
 ## Deterministic Ordering
 
-Findings are sorted by: `path → line → check_id → code → message`
+Findings are sorted by: `severity → path → line → check_id → code → message`
+
+## Feature Gates
+
+This crate propagates check features to `depguard-domain-checks`:
+
+```toml
+check-no-wildcards = ["depguard-domain-checks/check-no-wildcards"]
+```
+
+All 10 checks have corresponding features.
 
 ## Dependencies
 
-- `depguard-types` — DTOs and IDs
-- `thiserror` — Error types
-- `serde_json` — Finding data payloads
+| Dependency | Purpose |
+|------------|---------|
+| `depguard-domain-core` | Model and policy types |
+| `depguard-domain-checks` | Check execution |
+| `depguard-types` | DTOs and IDs |
+| `serde` | Serialization |
+| `serde_json` | JSON handling |
 
-Dev dependencies: `proptest`, `rand` for property testing
+Dev dependencies:
+- `proptest` — Property-based testing
+- `rand` — Test utilities
 
 ## Testing
 
 ```bash
-cargo test -p depguard-domain       # Unit tests
+cargo test -p depguard-domain            # Engine + property tests
+cargo test -p depguard-domain-checks     # Check unit tests
 cargo mutants --package depguard-domain  # Mutation testing
 ```
 
-Mutation testing is required on this crate to ensure rule logic is properly asserted.
+## Architecture Notes
+
+The domain layer is split into three crates to:
+1. Allow `depguard-settings` to depend only on core types (not checks)
+2. Allow check implementations to be feature-gated independently
+3. Keep the facade crate (`depguard-domain`) as a simple orchestrator
+
+```
+depguard-settings → depguard-domain-core (model/policy only)
+depguard-domain-checks → depguard-domain-core + depguard-check-catalog
+depguard-domain → depguard-domain-core + depguard-domain-checks
+```

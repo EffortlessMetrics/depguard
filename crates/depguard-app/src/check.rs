@@ -10,6 +10,7 @@ use depguard_types::{
     RunMeta, SCHEMA_REPORT_V1, SCHEMA_REPORT_V2, SCHEMA_SENSOR_REPORT_V1, ToolMeta, ToolMetaV2,
     Verdict, VerdictCounts, VerdictStatus, VerdictV2, ids,
 };
+use depguard_yanked::YankedIndex;
 use time::OffsetDateTime;
 
 use crate::report::{ReportVariant, ReportVersion};
@@ -27,6 +28,10 @@ pub struct CheckInput<'a> {
     pub changed_files: Option<Vec<depguard_types::RepoPath>>,
     /// Report schema version to emit.
     pub report_version: ReportVersion,
+    /// Optional offline yanked-version index.
+    pub yanked_index: Option<YankedIndex>,
+    /// Optional cache directory for incremental manifest parsing.
+    pub manifest_cache_dir: Option<&'a Utf8Path>,
 }
 
 /// Output from the check use case.
@@ -46,11 +51,21 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
     let cfg = if input.config_text.trim().is_empty() {
         depguard_settings::DepguardConfigV1::default()
     } else {
-        depguard_settings::parse_config_toml(input.config_text).context("parse config")?
+        depguard_settings::parse_config_toml(input.config_text).context(format!(
+            "Failed to parse depguard configuration. Check that the config file at '{}' contains valid TOML syntax. \
+             Common issues: missing quotes around strings, unescaped special characters, or malformed section headers.",
+            input.repo_root.join("depguard.toml")
+        ))?
     };
 
-    let resolved = depguard_settings::resolve_config(cfg, input.overrides.clone())
-        .context("resolve config")?;
+    let mut resolved =
+        depguard_settings::resolve_config(cfg, input.overrides.clone()).context(format!(
+            "Failed to resolve depguard configuration for repository at '{}'. \
+             This may indicate conflicting settings between the config file and CLI overrides. \
+             Review your depguard.toml settings and any command-line options.",
+            input.repo_root
+        ))?;
+    resolved.effective.yanked_index = input.yanked_index.clone();
 
     let scope_input = match resolved.effective.scope {
         DomainScope::Repo => ScopeInput::Repo,
@@ -58,13 +73,29 @@ pub fn run_check(input: CheckInput<'_>) -> anyhow::Result<CheckOutput> {
             let changed_files = input
                 .changed_files
                 .clone()
-                .context("diff scope requires changed_files")?;
+                .context(format!(
+                    "Diff scope was configured but no changed files were provided. \
+                     When using 'scope = \"diff\"' in your depguard.toml, you must provide the list of \
+                     changed files via the --changed-files flag or DEPGUARD_CHANGED_FILES environment variable. \
+                     Repository: '{}'",
+                    input.repo_root
+                ))?;
             ScopeInput::Diff { changed_files }
         }
     };
 
-    let model = depguard_repo::build_workspace_model(input.repo_root, scope_input)
-        .context("build workspace model")?;
+    let model = depguard_repo::build_workspace_model_with_cache(
+        input.repo_root,
+        scope_input,
+        input.manifest_cache_dir,
+    )
+    .context(format!(
+        "Failed to build workspace model for repository at '{}'. \
+         This usually means a Cargo.toml file is missing, malformed, or unreadable. \
+         Ensure all manifest files have valid TOML syntax and required fields (name, version, edition). \
+         Run 'cargo metadata' to diagnose workspace structure issues.",
+        input.repo_root
+    ))?;
 
     let domain_report = depguard_domain::evaluate(&model, &resolved.effective);
     let depguard_domain::report::DomainReport {
@@ -237,6 +268,8 @@ license.workspace = true
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V1,
+            yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -278,12 +311,51 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V1,
+            yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let err = run_check(input).expect_err("expected diff scope error");
+        let err_str = err.to_string();
         assert!(
-            err.to_string()
-                .contains("diff scope requires changed_files")
+            err_str.contains("Diff scope was configured"),
+            "Error should mention diff scope. Got: {err_str}"
+        );
+        assert!(
+            err_str.contains("no changed files were provided"),
+            "Error should mention missing changed files. Got: {err_str}"
+        );
+        assert!(
+            err_str.contains("--changed-files"),
+            "Error should mention the flag. Got: {err_str}"
+        );
+    }
+
+    #[test]
+    fn invalid_config_provides_helpful_error() {
+        let tmp = tempfile::tempdir().expect("create temp dir");
+        let root = camino::Utf8Path::from_path(tmp.path()).expect("utf8 path");
+        write_manifest(root, "");
+
+        let input = CheckInput {
+            repo_root: root,
+            config_text: r#"this is not valid toml"#,
+            overrides: Overrides::default(),
+            changed_files: None,
+            report_version: ReportVersion::V1,
+            yanked_index: None,
+            manifest_cache_dir: None,
+        };
+
+        let err = run_check(input).expect_err("expected config parse error");
+        let err_str = err.to_string();
+        assert!(
+            err_str.contains("Failed to parse depguard configuration"),
+            "Error should mention config parsing. Got: {err_str}"
+        );
+        assert!(
+            err_str.contains("valid TOML syntax"),
+            "Error should mention TOML syntax. Got: {err_str}"
         );
     }
 
@@ -299,6 +371,8 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::SensorV1,
+            yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -328,6 +402,8 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: None,
             report_version: ReportVersion::V2,
+            yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");
@@ -353,6 +429,8 @@ edition = "2021"
             overrides: Overrides::default(),
             changed_files: Some(vec![depguard_types::RepoPath::new("Cargo.toml")]),
             report_version: ReportVersion::SensorV1,
+            yanked_index: None,
+            manifest_cache_dir: None,
         };
 
         let output = run_check(input).expect("run_check");

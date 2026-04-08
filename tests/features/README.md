@@ -12,6 +12,7 @@ in human-readable format.
 | `configuration.feature` | Profiles, config overrides, allowlists          |
 | `workspaces.feature`    | Workspace discovery and member handling         |
 | `diff_scope.feature`    | Git diff-scoped analysis for PRs                |
+| `roadmap.feature`       | Baseline, yanked index, outputs, and fix flows  |
 | `determinism.feature`   | Byte-stable, reproducible output guarantees     |
 | `ci_integration.feature`| GitHub Actions annotations, markdown, exit codes|
 
@@ -29,9 +30,10 @@ These files serve as:
 |----------------------------|------------------------------|
 | Core check detection       | ✓ `fixtures.rs` + fixtures   |
 | Output rendering           | ✓ `fixtures.rs`              |
-| Configuration/profiles     | ⏳ Partial                    |
-| Workspace handling         | ⏳ Partial                    |
-| Diff scope                 | ⏳ Planned                    |
+| Configuration/profiles     | ✓ `bdd.rs` steps + fixtures  |
+| Workspace handling         | ✓ `bdd.rs` steps + fixtures  |
+| Diff scope                 | ✓ git + `--diff-file` modes  |
+| Baseline/fix/extra outputs | ✓ `roadmap.feature`          |
 | Determinism validation     | ✓ `fixtures.rs` + proptest   |
 | CI integration             | ✓ `fixtures.rs`              |
 

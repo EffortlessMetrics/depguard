@@ -1,5 +1,5 @@
-use depguard_domain::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
-use depguard_types::Severity;
+use depguard_check_catalog as check_catalog;
+use depguard_domain_core::policy::{CheckPolicy, EffectiveConfig, FailOn, Scope};
 use std::collections::BTreeMap;
 
 /// Preset profiles are opinionated defaults.
@@ -20,7 +20,8 @@ fn strict_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
-        checks: default_checks(Severity::Error),
+        yanked_index: None,
+        checks: default_checks("strict"),
     }
 }
 
@@ -30,7 +31,8 @@ fn warn_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Warning,
         max_findings: 200,
-        checks: default_checks(Severity::Warning),
+        yanked_index: None,
+        checks: default_checks("warn"),
     }
 }
 
@@ -41,32 +43,21 @@ fn compat_profile() -> EffectiveConfig {
         scope: Scope::Repo,
         fail_on: FailOn::Error,
         max_findings: 200,
-        checks: default_checks(Severity::Warning),
+        yanked_index: None,
+        checks: default_checks("compat"),
     }
 }
 
-fn default_checks(default_severity: Severity) -> BTreeMap<String, CheckPolicy> {
-    use depguard_types::ids::*;
+fn default_checks(profile: &str) -> BTreeMap<String, CheckPolicy> {
     let mut m = BTreeMap::new();
 
-    m.insert(
-        CHECK_DEPS_NO_WILDCARDS.to_string(),
-        CheckPolicy::enabled(default_severity),
-    );
-    m.insert(
-        CHECK_DEPS_PATH_REQUIRES_VERSION.to_string(),
-        CheckPolicy::enabled(default_severity),
-    );
-    m.insert(
-        CHECK_DEPS_PATH_SAFETY.to_string(),
-        CheckPolicy::enabled(default_severity),
-    );
-    let mut workspace_policy = CheckPolicy::enabled(default_severity);
-    workspace_policy.enabled = false;
-    m.insert(
-        CHECK_DEPS_WORKSPACE_INHERITANCE.to_string(),
-        workspace_policy,
-    );
+    for check in check_catalog::checks_for_profile(profile) {
+        let mut policy = CheckPolicy::enabled(check.severity);
+        if !check.enabled || !check_catalog::is_check_available(check.id) {
+            policy.enabled = false;
+        }
+        m.insert(check.id.to_string(), policy);
+    }
 
     m
 }

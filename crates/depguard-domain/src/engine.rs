@@ -3,11 +3,16 @@ use crate::model::WorkspaceModel;
 use crate::policy::{EffectiveConfig, FailOn};
 use crate::report::{DomainReport, SeverityCounts};
 use depguard_types::{DepguardData, Finding, Severity, Verdict};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
+    let inline_suppressions = build_inline_suppression_index(model);
     let mut findings: Vec<Finding> = Vec::new();
 
     checks::run_all(model, cfg, &mut findings);
+    if !inline_suppressions.is_empty() {
+        findings.retain(|f| !is_inline_suppressed(f, &inline_suppressions));
+    }
 
     // Deterministic ordering before truncation.
     findings.sort_by(compare_findings);
@@ -50,6 +55,48 @@ pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
         data,
         counts,
     }
+}
+
+type SuppressionIndex = BTreeMap<(String, u32), BTreeSet<String>>;
+
+fn build_inline_suppression_index(model: &WorkspaceModel) -> SuppressionIndex {
+    let mut index: SuppressionIndex = BTreeMap::new();
+
+    for manifest in &model.manifests {
+        for dep in &manifest.dependencies {
+            if dep.spec.inline_suppressions.is_empty() {
+                continue;
+            }
+            let Some(location) = dep.location.as_ref() else {
+                continue;
+            };
+            let Some(line) = location.line else {
+                continue;
+            };
+            let key = (location.path.as_str().to_string(), line);
+            let entry = index.entry(key).or_default();
+            for token in &dep.spec.inline_suppressions {
+                entry.insert(token.clone());
+            }
+        }
+    }
+
+    index
+}
+
+fn is_inline_suppressed(finding: &Finding, suppressions: &SuppressionIndex) -> bool {
+    let Some(location) = finding.location.as_ref() else {
+        return false;
+    };
+    let Some(line) = location.line else {
+        return false;
+    };
+    let key = (location.path.as_str().to_string(), line);
+    let Some(tokens) = suppressions.get(&key) else {
+        return false;
+    };
+
+    tokens.contains(&finding.check_id) || tokens.contains(&finding.code)
 }
 
 fn compute_verdict(findings: &[Finding], fail_on: FailOn) -> Verdict {
@@ -146,6 +193,104 @@ mod tests {
             fingerprint: None,
             data: serde_json::Value::Null,
         }
+    }
+
+    #[test]
+    fn inline_suppression_by_check_id_filters_finding() {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "root".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "serde".to_string(),
+                    spec: DepSpec {
+                        version: Some("*".to_string()),
+                        inline_suppressions: vec!["deps.no_wildcards".to_string()],
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(1),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            depguard_types::ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Error),
+        );
+        let cfg = EffectiveConfig {
+            profile: "strict".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings: 200,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = evaluate(&model, &cfg);
+        assert!(report.findings.is_empty());
+        assert_eq!(report.verdict, Verdict::Pass);
+    }
+
+    #[test]
+    fn inline_suppression_by_code_filters_finding() {
+        let model = WorkspaceModel {
+            repo_root: RepoPath::new("."),
+            workspace_dependencies: BTreeMap::new(),
+            manifests: vec![ManifestModel {
+                path: RepoPath::new("Cargo.toml"),
+                package: Some(PackageMeta {
+                    name: "root".to_string(),
+                    publish: true,
+                }),
+                features: BTreeMap::new(),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "serde".to_string(),
+                    spec: DepSpec {
+                        version: Some("*".to_string()),
+                        inline_suppressions: vec!["wildcard_version".to_string()],
+                        ..DepSpec::default()
+                    },
+                    location: Some(Location {
+                        path: RepoPath::new("Cargo.toml"),
+                        line: Some(1),
+                        col: None,
+                    }),
+                    target: None,
+                }],
+            }],
+        };
+
+        let mut checks = BTreeMap::new();
+        checks.insert(
+            depguard_types::ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
+            CheckPolicy::enabled(Severity::Error),
+        );
+        let cfg = EffectiveConfig {
+            profile: "strict".to_string(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings: 200,
+            yanked_index: None,
+            checks,
+        };
+
+        let report = evaluate(&model, &cfg);
+        assert!(report.findings.is_empty());
+        assert_eq!(report.verdict, Verdict::Pass);
     }
 
     #[test]
@@ -745,6 +890,7 @@ mod tests {
             scope: Scope::Repo,
             fail_on: FailOn::Error,
             max_findings: 200,
+            yanked_index: None,
             checks,
         };
 
@@ -808,6 +954,7 @@ mod tests {
             scope: Scope::Repo,
             fail_on: FailOn::Warning,
             max_findings: 200,
+            yanked_index: None,
             checks,
         };
 

@@ -4,7 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish = false
+description = "Stable depguard protocol types, IDs, and explanation registry"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+readme = "README.md"
 
 [dependencies]
 camino.workspace = true

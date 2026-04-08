@@ -1,0 +1,24 @@
+[package]
+name = "depguard-repo-parser"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+description = "Pure Cargo manifest parser for depguard domain models"
+readme = "README.md"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+
+depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
+depguard-inline-suppressions = { version = "0.1.0", path = "../depguard-inline-suppressions" }
+depguard-types = { version = "0.1.0", path = "../depguard-types" }
+toml_edit.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,0 +1,53 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.git_requires_version",
+      "code": "git_without_version",
+      "message": "dependency 'serde' uses a git dependency without an explicit version",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 7
+      },
+      "help": "Add an explicit version alongside `git = ...`, or use `workspace = true` with a workspace dependency.",
+      "fingerprint": "eecdc7ec694475d3be2e2eb1161d40484bfe8b964f677cb7d22cfaffa8c9f938",
+      "data": {
+        "current_spec": {
+          "git": "https://github.com/serde-rs/serde.git"
+        },
+        "dependency": "serde",
+        "fix_action": "add_version_with_git",
+        "fix_hint": "Add version alongside the git dependency",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

@@ -9,6 +9,8 @@ use cucumber::{World, given, then, when};
 use depguard_test_util::normalize_nondeterministic;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use time::OffsetDateTime;
@@ -51,8 +53,66 @@ fn substitute_placeholder(world: &DepguardWorld, value: &str) -> String {
     match value {
         "abc1234" => world.git_base.clone().unwrap_or_else(|| value.to_string()),
         "def5678" => world.git_head.clone().unwrap_or_else(|| value.to_string()),
+        "__YANKED_API_URL__" => world
+            .additional_files
+            .get("yanked_api_url")
+            .cloned()
+            .unwrap_or_else(|| value.to_string()),
         _ => value.to_string(),
     }
+}
+
+fn start_mock_yanked_api(yanked_pairs: HashMap<(String, String), bool>) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock yanked API");
+    let addr = listener.local_addr().expect("mock yanked API local addr");
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else {
+                continue;
+            };
+            let mut buf = [0_u8; 4096];
+            let read = stream.read(&mut buf).unwrap_or(0);
+            if read == 0 {
+                continue;
+            }
+            let request = String::from_utf8_lossy(&buf[..read]);
+            let first_line = request.lines().next().unwrap_or_default();
+            let path = first_line.split_whitespace().nth(1).unwrap_or_default();
+            let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+
+            let response = if segments.len() == 5 && segments[0] == "api" && segments[1] == "v1" {
+                let crate_name = segments[3];
+                let version = segments[4];
+                match yanked_pairs.get(&(crate_name.to_string(), version.to_string())) {
+                    Some(yanked) => {
+                        let body = format!(r#"{{"version":{{"yanked":{yanked}}}}}"#);
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    }
+                    None => {
+                        let body = r#"{"errors":[{"detail":"not found"}]}"#;
+                        format!(
+                            "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    }
+                }
+            } else {
+                let body = r#"{"errors":[{"detail":"bad request"}]}"#;
+                format!(
+                    "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+            };
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    format!("http://{}", addr)
 }
 
 fn normalize_severity(value: &str) -> &str {
@@ -76,13 +136,32 @@ fn extract_verdict(report: &Value) -> &str {
     }
 }
 
-fn get_field_str<'a>(report: &'a Value, field: &str) -> Option<&'a str> {
+fn get_field_value<'a>(report: &'a Value, field: &str) -> Option<&'a Value> {
     let parts: Vec<&str> = field.split('.').collect();
     let mut current = report;
     for part in &parts[..parts.len().saturating_sub(1)] {
         current = current.get(*part)?;
     }
-    current.get(*parts.last().unwrap_or(&field))?.as_str()
+    current.get(*parts.last().unwrap_or(&field))
+}
+
+fn get_field_str<'a>(report: &'a Value, field: &str) -> Option<&'a str> {
+    get_field_value(report, field)?.as_str()
+}
+
+fn report_has_location_path(report: &Value, path: &str) -> bool {
+    report["findings"]
+        .as_array()
+        .map(|findings| {
+            findings.iter().any(|f| {
+                f.get("location")
+                    .and_then(|loc| loc.get("path"))
+                    .and_then(|v| v.as_str())
+                    .map(|p| p == path || p.contains(path))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// Test world that holds state between steps.
@@ -530,6 +609,63 @@ fn given_depguard_toml_with_content(world: &mut DepguardWorld, step: &cucumber::
     });
 }
 
+#[given(expr = "a yanked index file {string} with:")]
+fn given_yanked_index_file(
+    world: &mut DepguardWorld,
+    filename: String,
+    step: &cucumber::gherkin::Step,
+) {
+    let content = step
+        .docstring
+        .clone()
+        .expect("yanked index content not found");
+
+    if world.temp_dir.is_none() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        world.work_dir = Some(temp_dir.path().to_path_buf());
+        world.temp_dir = Some(temp_dir);
+    }
+
+    let work_dir = world.work_dir.as_ref().expect("work_dir should be set");
+    let path = work_dir.join(filename);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create yanked index parent dir");
+    }
+    std::fs::write(path, content).expect("Failed to write yanked index file");
+}
+
+#[given(expr = "a live yanked API that marks crate {string} version {string} as yanked")]
+fn given_live_yanked_api_for_crate(world: &mut DepguardWorld, crate_name: String, version: String) {
+    let mut pairs = HashMap::new();
+    pairs.insert((crate_name, version), true);
+    let base_url = start_mock_yanked_api(pairs);
+    world
+        .additional_files
+        .insert("yanked_api_url".to_string(), base_url);
+}
+
+#[given(expr = "a diff file {string} with:")]
+fn given_diff_file_with_content(
+    world: &mut DepguardWorld,
+    filename: String,
+    step: &cucumber::gherkin::Step,
+) {
+    let content = step.docstring.clone().expect("diff file content not found");
+
+    if world.temp_dir.is_none() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        world.work_dir = Some(temp_dir.path().to_path_buf());
+        world.temp_dir = Some(temp_dir);
+    }
+
+    let work_dir = world.work_dir.as_ref().expect("work_dir should be set");
+    let path = work_dir.join(filename);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create diff file parent dir");
+    }
+    std::fs::write(path, content).expect("Failed to write diff file");
+}
+
 #[given(expr = "a JSON report file {string} with findings")]
 fn given_json_report_with_findings(world: &mut DepguardWorld, _filename: String) {
     // First generate a report using the wildcards fixture
@@ -728,7 +864,17 @@ edition = "2021"
         "--scope",
         "--max-findings",
     ];
-    let subcommands = ["check", "md", "annotations", "explain"];
+    let subcommands = [
+        "check",
+        "baseline",
+        "md",
+        "annotations",
+        "sarif",
+        "junit",
+        "jsonl",
+        "fix",
+        "explain",
+    ];
 
     let mut global_args: Vec<String> = Vec::new();
     let mut subcommand: Option<&str> = None;
@@ -967,6 +1113,20 @@ fn then_receipt_has_no_findings(world: &mut DepguardWorld) {
     );
 }
 
+#[then(expr = "the receipt has {int} findings")]
+fn then_receipt_has_finding_count(world: &mut DepguardWorld, expected: i32) {
+    let report = world.report.as_ref().expect("No report captured");
+    let findings = report["findings"]
+        .as_array()
+        .expect("Report should have findings array");
+    let actual = findings.len() as i32;
+    assert_eq!(
+        actual, expected,
+        "Expected {} findings, got {}",
+        expected, actual
+    );
+}
+
 #[then("the receipt has a finding with:")]
 fn then_receipt_has_finding_with(world: &mut DepguardWorld, step: &cucumber::gherkin::Step) {
     let report = world.report.as_ref().expect("No report captured");
@@ -1021,13 +1181,8 @@ fn then_receipt_has_field_with_value(world: &mut DepguardWorld, field: String, v
         _ => field,
     };
 
-    // Handle nested fields like tool.name
-    let parts: Vec<&str> = field.split('.').collect();
-    let mut current = report;
-    for part in &parts[..parts.len() - 1] {
-        current = &current[*part];
-    }
-    let actual = current[parts.last().unwrap()]
+    let actual = get_field_value(report, &field)
+        .unwrap_or_else(|| panic!("Field '{}' should exist", field))
         .as_str()
         .unwrap_or_else(|| panic!("Field '{}' should be a string", field));
 
@@ -1035,6 +1190,25 @@ fn then_receipt_has_field_with_value(world: &mut DepguardWorld, field: String, v
         actual, value,
         "Expected field '{}' to be '{}', got '{}'",
         field, value, actual
+    );
+}
+
+#[then(expr = "the receipt has integer field {string} with value {int}")]
+fn then_receipt_has_integer_field_with_value(world: &mut DepguardWorld, field: String, value: i32) {
+    let report = world.report.as_ref().expect("No report captured");
+
+    let actual = get_field_value(report, &field)
+        .unwrap_or_else(|| panic!("Field '{}' should exist", field))
+        .as_i64()
+        .unwrap_or_else(|| panic!("Field '{}' should be an integer", field));
+
+    assert_eq!(
+        actual,
+        i64::from(value),
+        "Expected field '{}' to be {}, got {}",
+        field,
+        value,
+        actual
     );
 }
 
@@ -1050,15 +1224,8 @@ fn then_receipt_has_field(world: &mut DepguardWorld, field: String) {
         _ => field,
     };
 
-    // Handle nested fields like tool.name
-    let parts: Vec<&str> = field.split('.').collect();
-    let mut current = report;
-    for part in &parts[..parts.len() - 1] {
-        current = &current[*part];
-    }
-
     assert!(
-        !current[parts.last().unwrap()].is_null(),
+        get_field_value(report, &field).is_some(),
         "Expected receipt to have field '{}'",
         field
     );
@@ -2254,8 +2421,13 @@ fn then_all_cargo_toml_files_analyzed(world: &mut DepguardWorld) {
 }
 
 #[then(expr = "the new crate {string} is analyzed")]
-fn then_new_crate_analyzed(_world: &mut DepguardWorld, _path: String) {
-    // Placeholder
+fn then_new_crate_analyzed(world: &mut DepguardWorld, path: String) {
+    let report = world.report.as_ref().expect("No report captured");
+    assert!(
+        report_has_location_path(report, &path),
+        "Expected findings to reference new crate '{}'",
+        path
+    );
 }
 
 #[then("a violation is detected")]
@@ -2266,8 +2438,13 @@ fn then_violation_detected(world: &mut DepguardWorld) {
 }
 
 #[then(expr = "{string} is analyzed")]
-fn then_path_analyzed(_world: &mut DepguardWorld, _path: String) {
-    // Placeholder
+fn then_path_analyzed(world: &mut DepguardWorld, path: String) {
+    let report = world.report.as_ref().expect("No report captured");
+    assert!(
+        report_has_location_path(report, &path),
+        "Expected findings to reference '{}'",
+        path
+    );
 }
 
 // =============================================================================

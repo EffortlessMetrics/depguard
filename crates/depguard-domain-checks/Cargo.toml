@@ -1,0 +1,50 @@
+[package]
+name = "depguard-domain-checks"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Pure check implementations and helpers for depguard domain"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+readme = "../depguard-domain/README.md"
+publish = false
+
+[dependencies]
+depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
+depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-check-catalog = { version = "0.1.0", path = "../depguard-check-catalog", default-features = false }
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+globset.workspace = true
+
+[dev-dependencies]
+depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
+
+[features]
+default = [
+    "check-no-wildcards",
+    "check-path-requires-version",
+    "check-path-safety",
+    "check-workspace-inheritance",
+    "check-git-requires-version",
+    "check-dev-only-in-normal",
+    "check-default-features-explicit",
+    "check-no-multiple-versions",
+    "check-optional-unused",
+    "check-yanked-versions",
+]
+
+check-no-wildcards = ["depguard-check-catalog/check-no-wildcards"]
+check-path-requires-version = ["depguard-check-catalog/check-path-requires-version"]
+check-path-safety = ["depguard-check-catalog/check-path-safety"]
+check-workspace-inheritance = ["depguard-check-catalog/check-workspace-inheritance"]
+check-git-requires-version = ["depguard-check-catalog/check-git-requires-version"]
+check-dev-only-in-normal = ["depguard-check-catalog/check-dev-only-in-normal"]
+check-default-features-explicit = ["depguard-check-catalog/check-default-features-explicit"]
+check-no-multiple-versions = ["depguard-check-catalog/check-no-multiple-versions"]
+check-optional-unused = ["depguard-check-catalog/check-optional-unused"]
+check-yanked-versions = ["depguard-check-catalog/check-yanked-versions"]

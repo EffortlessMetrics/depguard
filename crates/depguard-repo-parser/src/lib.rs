@@ -1,7 +1,15 @@
+//! Pure manifest parsing for depguard repository models.
+//!
+//! This crate is IO-free and deterministic: all inputs are TOML source strings
+//! and file paths supplied as values.
+
+#![forbid(unsafe_code)]
+
 use anyhow::Context;
-use depguard_domain::model::{
+use depguard_domain_core::model::{
     DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceDependency,
 };
+use depguard_inline_suppressions::parse_inline_suppressions;
 use depguard_types::{Location, RepoPath};
 use std::collections::BTreeMap;
 use toml_edit::{Document, Item, Value};
@@ -140,11 +148,14 @@ fn parse_dep_table(
 
     let mut out = Vec::new();
     for (name, item) in tbl.iter() {
-        let spec = parse_spec(item);
+        let mut spec = parse_spec(item);
         // Get line number from the item's span (byte offset in source)
         let line = item
             .span()
             .map(|span| byte_offset_to_line(source, span.start));
+        if let Some(line_number) = line {
+            spec.inline_suppressions = parse_inline_suppressions(source, line_number);
+        }
         out.push(DependencyDecl {
             kind,
             name: name.to_string(),
@@ -276,6 +287,10 @@ fn parse_inline_table(t: &toml_edit::InlineTable) -> DepSpec {
     if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
         spec.optional = o;
     }
+    // Package rename: `alias = { package = "real-crate", ... }`
+    if let Some(pkg) = t.get("package").and_then(|v| v.as_str()) {
+        spec.package = Some(pkg.to_string());
+    }
     spec
 }
 
@@ -309,6 +324,10 @@ fn parse_table(t: &toml_edit::Table) -> DepSpec {
     }
     if let Some(o) = t.get("optional").and_then(|v| v.as_bool()) {
         spec.optional = o;
+    }
+    // Package rename: `[dependencies.alias] package = "real-crate"`
+    if let Some(pkg) = t.get("package").and_then(|v| v.as_str()) {
+        spec.package = Some(pkg.to_string());
     }
     spec
 }
@@ -1077,7 +1096,10 @@ publish = "unexpected"
         let manifest_path = RepoPath::new("Cargo.toml");
         let model = parse_member_manifest(&manifest_path, manifest).expect("parse manifest");
         let pkg = model.package.expect("package meta");
-        assert!(pkg.publish, "unexpected publish type should default to publishable");
+        assert!(
+            pkg.publish,
+            "unexpected publish type should default to publishable"
+        );
     }
 
     #[test]

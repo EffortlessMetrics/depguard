@@ -1,0 +1,53 @@
+{
+  "schema": "depguard.report.v2",
+  "tool": {
+    "name": "depguard",
+    "version": "__VERSION__"
+  },
+  "run": {
+    "started_at": "__TIMESTAMP__",
+    "ended_at": "__TIMESTAMP__",
+    "duration_ms": 0
+  },
+  "verdict": {
+    "status": "fail",
+    "counts": {
+      "info": 0,
+      "warn": 0,
+      "error": 1
+    },
+    "reasons": []
+  },
+  "findings": [
+    {
+      "severity": "error",
+      "check_id": "deps.dev_only_in_normal",
+      "code": "dev_dep_in_normal",
+      "message": "dependency 'proptest' is typically a dev-only crate but appears in [dependencies]",
+      "location": {
+        "path": "Cargo.toml",
+        "line": 7
+      },
+      "help": "Move this dependency to [dev-dependencies] unless it's genuinely needed in production code.",
+      "fingerprint": "20b010741b09dc8958c98886b951bbb2d03f1667915ea65cdcb2e6d4ece1b03b",
+      "data": {
+        "current_spec": {
+          "version": "1.0"
+        },
+        "dependency": "proptest",
+        "fix_action": "move_to_dev_deps",
+        "fix_hint": "Move to [dev-dependencies]",
+        "manifest": "Cargo.toml",
+        "section": "dependencies"
+      }
+    }
+  ],
+  "data": {
+    "scope": "repo",
+    "profile": "strict",
+    "manifests_scanned": 1,
+    "dependencies_scanned": 1,
+    "findings_total": 1,
+    "findings_emitted": 1
+  }
+}

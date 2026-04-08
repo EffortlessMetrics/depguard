@@ -13,6 +13,9 @@ cargo install --path crates/depguard-cli
 # Or build and use locally
 cargo build --release
 ./target/release/depguard --help
+
+# Cargo subcommand also works
+cargo depguard --help
 ```
 
 ## First run
@@ -130,6 +133,42 @@ depguard annotations --report artifacts/depguard/report.json
 
 Outputs GitHub Actions workflow commands that create inline annotations on your PR.
 
+### SARIF output
+
+```bash
+depguard sarif --report artifacts/depguard/report.json
+```
+
+Outputs SARIF v2.1.0 JSON for GitHub Advanced Security and other SARIF consumers.
+
+### JUnit XML output
+
+```bash
+depguard junit --report artifacts/depguard/report.json
+```
+
+Outputs JUnit XML suitable for legacy CI systems and test report dashboards.
+
+### JSON Lines output
+
+```bash
+depguard jsonl --report artifacts/depguard/report.json
+```
+
+Outputs newline-delimited JSON (`.jsonl`) with one finding event per line plus a summary line.
+
+### Buildfix plan and safe auto-fix
+
+```bash
+# Generate buildfix.plan.v1 from report findings
+depguard fix --report artifacts/depguard/report.json
+
+# Apply only conservative safe fixes in-place
+depguard fix --report artifacts/depguard/report.json --apply
+```
+
+By default this writes `artifacts/buildfix/plan.json`. The current safe auto-fix scope is intentionally narrow.
+
 ## Basic configuration
 
 Create `depguard.toml` in your repo root:
@@ -162,10 +201,75 @@ Only analyze manifests changed in a PR:
 depguard check --scope diff --base origin/main --head HEAD
 ```
 
+Or use a precomputed changed-files list (for CI environments without git history):
+
+```bash
+depguard check --scope diff --diff-file changed-files.txt
+```
+
 This is useful for:
 - Faster CI runs
 - Gradual adoption (only new code must comply)
 - Reducing noise on large existing codebases
+
+## Yanked-version checks
+
+Enable the check in config:
+
+```toml
+[checks."deps.yanked_versions"]
+enabled = true
+severity = "error"
+```
+
+Run with an offline yanked index:
+
+```bash
+depguard check --yanked-index yanked-index.txt
+```
+
+Or query crates.io live:
+
+```bash
+depguard check --yanked-live
+```
+
+Supported index formats include JSON maps and simple line format (`crate version` or `crate@version`).
+
+## Baseline mode
+
+Generate a baseline for existing violations, then fail only on new findings:
+
+```bash
+depguard baseline --output .depguard-baseline.json
+depguard check --baseline .depguard-baseline.json
+```
+
+You can also set `baseline = ".depguard-baseline.json"` in `depguard.toml`.
+When baseline suppression is active, suppressed findings are counted in `verdict.counts.suppressed`.
+
+## Incremental mode
+
+Cache parsed manifests between runs:
+
+```bash
+depguard check --incremental
+```
+
+By default depguard writes cache data to `.depguard-cache/` (override with `--cache-dir`).
+
+## Inline suppression comments
+
+For one-off dependency exceptions, add an inline suppression comment next to the dependency:
+
+```toml
+[dependencies]
+serde = "*" # depguard: allow(no_wildcards)
+```
+
+You can suppress by check ID or by code:
+- `# depguard: allow(deps.no_wildcards)`
+- `# depguard: allow(wildcard_version)`
 
 ## Exit codes
 
@@ -174,6 +278,17 @@ This is useful for:
 | `0` | Pass | Success |
 | `1` | Tool error | Fail (fix config/setup) |
 | `2` | Policy failure | Fail (fix code) |
+
+## Optional pre-commit hook
+
+Install the included hook:
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+```
+
+The hook runs depguard against staged files (diff scope) before commit and writes `artifacts/depguard/report.json`.
 
 ## Next steps
 

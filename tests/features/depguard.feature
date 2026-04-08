@@ -61,6 +61,52 @@ Feature: Dependency manifest hygiene (depguard)
       | code     | missing_workspace_true     |
       | severity | error                      |
 
+  Scenario: Git dependency without version is flagged
+    Given a workspace fixture "git_requires_version"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has a finding with:
+      | check_id | deps.git_requires_version |
+      | code     | git_without_version       |
+      | severity | error                     |
+
+  Scenario: Multiple versions of one crate are flagged
+    Given a workspace fixture "no_multiple_versions"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has a finding with:
+      | check_id | deps.no_multiple_versions     |
+      | code     | duplicate_different_versions  |
+      | severity | error                         |
+
+  Scenario: Optional dependency without feature reference is flagged
+    Given a workspace fixture "optional_unused"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has a finding with:
+      | check_id | deps.optional_unused     |
+      | code     | optional_not_in_features |
+      | severity | error                    |
+
+  Scenario: Dev-only crate in normal dependencies is flagged
+    Given a workspace fixture "dev_only_in_normal"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has a finding with:
+      | check_id | deps.dev_only_in_normal |
+      | code     | dev_dep_in_normal       |
+      | severity | error                   |
+
+  Scenario: Inline suppressions filter allowed findings
+    Given a workspace fixture "inline_suppression"
+    When I run "depguard check --repo-root ."
+    Then the exit code is 2
+    And the receipt has 1 findings
+    And the receipt has a finding with:
+      | check_id | deps.no_wildcards |
+      | code     | wildcard_version  |
+      | severity | error             |
+
   # ===========================================================================
   # Output rendering
   # ===========================================================================

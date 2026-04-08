@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DepguardBaselineV1",
+  "description": "Baseline file used to suppress known findings during gradual rollout.",
+  "type": "object",
+  "properties": {
+    "findings": {
+      "description": "Optional human-readable entries for review and auditing.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BaselineFinding"
+      }
+    },
+    "fingerprints": {
+      "description": "Fingerprints to suppress. Must be deterministic and unique.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "schema": {
+      "description": "Versioned schema identifier for the baseline shape.",
+      "type": "string"
+    },
+    "tool": {
+      "$ref": "#/$defs/ToolMeta"
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "generated_at"
+  ],
+  "$defs": {
+    "BaselineFinding": {
+      "description": "A baseline entry for a single known finding.",
+      "type": "object",
+      "properties": {
+        "check_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "description": "Stable finding fingerprint.",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "fingerprint",
+        "check_id",
+        "code"
+      ]
+    },
+    "Location": {
+      "type": "object",
+      "properties": {
+        "col": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "$ref": "#/$defs/RepoPath"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "RepoPath": {
+      "description": "Canonical repo-relative path used in findings and reports.\n\nNormalization rules are intentionally simple and deterministic:\n- always forward slashes (`/`)\n- no leading `./`\n- never absolute (best-effort: absolute inputs are preserved but flagged by checks)",
+      "type": "string"
+    },
+    "ToolMeta": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    }
+  }
+}

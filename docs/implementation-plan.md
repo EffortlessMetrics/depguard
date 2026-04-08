@@ -86,7 +86,7 @@ Implement one check at a time; each adds fixtures and explain entries.
 
 ### Tests
 - [x] BDD scenarios for each rule
-- [ ] Mutation testing (cargo-mutants) enabled for domain crate
+- [x] Mutation testing (cargo-mutants) enabled for domain crate
 - [x] Determinism tests for stable findings ordering
 
 ---
@@ -119,11 +119,11 @@ Implement one check at a time; each adds fixtures and explain entries.
   - [x] Scan only changed manifests (still read root for workspace deps)
 - [x] Missing/partial inputs policy:
   - [x] Treat shallow clone missing base as tool error with remediation message
-  - [ ] Optionally support `--diff-file` later to avoid git dependency
+  - [x] Optionally support `--diff-file` later to avoid git dependency
 
 ### Tests
-- [ ] BDD: diff scope analyzes only modified manifests
-- [ ] Fixture: base/head selection works with a known git repo fixture
+- [x] BDD: diff scope analyzes only modified manifests
+- [x] Fixture: base/head selection works with a known git repo fixture
 
 ---
 
@@ -135,15 +135,15 @@ Implement one check at a time; each adds fixtures and explain entries.
   - [x] Workspace member discovery inputs (never panic)
 - [x] Expanded property tests:
   - [x] Ordering invariants under randomized iteration order
-  - [ ] Path normalization invariants
-- [ ] Conformance harness integration:
-  - [ ] Validate receipt against schemas in CI
-  - [ ] Enforce explain coverage for every emitted code
+  - [x] Path normalization invariants
+- [x] Conformance harness integration:
+  - [x] Validate receipt against schemas in CI
+  - [x] Enforce explain coverage for every emitted code
 
 ### Release polish
-- [ ] Prebuilt binaries (Linux/macOS/Windows) via GitHub Releases
+- [x] Prebuilt binaries (Linux/macOS/Windows) via GitHub Releases
 - [x] README quickstart + CI snippet
-- [ ] `cargo publish --dry-run` gating (if publishing to crates.io)
+- [x] `cargo publish --dry-run` gating (if publishing to crates.io)
 
 ---
 
@@ -156,48 +156,48 @@ Implement one check at a time; each adds fixtures and explain entries.
 - [x] Renderers exist (md + annotations)
 - [x] Golden snapshot tests pass
 - [x] Fuzz targets exist and run in scheduled CI
-- [ ] Mutation testing runs on domain crate
+- [x] Mutation testing runs on domain crate
 
 ---
 
 ## Phase 6 — CI/CD & Release Automation 🆕
 
 ### 6.1 Continuous Integration Workflow
-- [ ] `.github/workflows/ci.yml`:
-  - [ ] Unit tests: `cargo test --lib`
-  - [ ] Integration tests: `cargo test --test '*'`
-  - [ ] Format check: `cargo fmt --check`
-  - [ ] Clippy: `cargo clippy --all-targets --all-features`
-  - [ ] Schema validation: `cargo xtask validate-schemas`
-- [ ] Mutation testing job (scheduled):
-  - [ ] `cargo mutants --package depguard-domain`
-  - [ ] Fail if mutation score drops below threshold
+- [x] `.github/workflows/ci.yml`:
+  - [x] Unit tests: `cargo test --lib`
+  - [x] Integration tests: `cargo test --test '*'`
+  - [x] Format check: `cargo fmt --check`
+  - [x] Clippy: `cargo clippy --all-targets --all-features`
+  - [x] Schema validation: `cargo xtask validate-schemas`
+- [x] Mutation testing job (scheduled):
+  - [x] `cargo mutants --package depguard-domain`
+  - [x] Fail if mutation score drops below threshold
 
 ### 6.2 Self-Dogfooding Workflow
-- [ ] `.github/workflows/depguard.yml`:
-  - [ ] Full scan on push to main
-  - [ ] Diff-scope scan on PRs (`--scope diff --base origin/${{ github.base_ref }}`)
-  - [ ] Generate JSON report + Markdown summary
-  - [ ] Create GitHub annotations for findings
-  - [ ] Upload artifacts (90-day retention)
-  - [ ] Fail on policy violations (exit code 2)
+- [x] `.github/workflows/depguard.yml`:
+  - [x] Full scan on push to main
+  - [x] Diff-scope scan on PRs (`--scope diff --base origin/${{ github.base_ref }}`)
+  - [x] Generate JSON report + Markdown summary
+  - [x] Create GitHub annotations for findings
+  - [x] Upload artifacts (90-day retention)
+  - [x] Fail on policy violations (exit code 2)
 
 ### 6.3 Conformance Workflow
-- [ ] `.github/workflows/conformance.yml`:
-  - [ ] Run `cargo xtask conform`
-  - [ ] Validate receipts against all schema versions
-  - [ ] Enforce explain coverage for every emitted code
+- [x] `.github/workflows/conformance.yml`:
+  - [x] Run `cargo xtask conform`
+  - [x] Validate receipts against all schema versions
+  - [x] Enforce explain coverage for every emitted code
 
 ### 6.4 Release Workflow
-- [ ] `.github/workflows/release.yml`:
-  - [ ] Trigger on git tag (`v*`) or manual dispatch
-  - [ ] Build matrix: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64)
-  - [ ] Create GitHub Release with prebuilt binaries
-  - [ ] `cargo publish --dry-run` validation
-  - [ ] Optional: publish to crates.io
+- [x] `.github/workflows/release.yml`:
+  - [x] Trigger on git tag (`v*`) or manual dispatch
+  - [x] Build matrix: Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64)
+  - [x] Create GitHub Release with prebuilt binaries
+  - [x] `cargo publish --dry-run` validation
+  - [x] Optional: publish to crates.io
 
 ### Tests
-- [ ] Workflow syntax validation via `actionlint`
+- [x] Workflow syntax validation via `actionlint`
 - [ ] Manual workflow dispatch test for release dry-run
 
 ---
@@ -207,55 +207,55 @@ Implement one check at a time; each adds fixtures and explain entries.
 Expand coverage with high-value dependency hygiene checks.
 
 ### 7.1 deps.git_requires_version (High Priority)
-- [ ] Detect `{ git = "..." }` without `version = "..."`
-- [ ] Respect `ignore_publish_false` flag (like path_requires_version)
-- [ ] Code: `git_without_version`
-- [ ] Explain entry with before/after examples
-- [ ] BDD scenarios and golden fixtures
+- [x] Detect `{ git = "..." }` without `version = "..."`
+- [x] Respect `ignore_publish_false` flag (like path_requires_version)
+- [x] Code: `git_without_version`
+- [x] Explain entry with before/after examples
+- [x] BDD scenarios and golden fixtures
 
 **Justification**: Git deps without versions are non-reproducible and block crates.io publishing.
 
 ### 7.2 deps.default_features_explicit (Medium Priority)
-- [ ] Flag dependencies with inline options but no explicit `default-features`
-- [ ] Suggest adding `default-features = true` or `false`
-- [ ] Configurable severity (default: warn)
-- [ ] Code: `default_features_implicit`
-- [ ] Explain entry and fixtures
+- [x] Flag dependencies with inline options but no explicit `default-features`
+- [x] Suggest adding `default-features = true` or `false`
+- [x] Configurable severity (default: warn)
+- [x] Code: `default_features_implicit`
+- [x] Explain entry and fixtures
 
 **Justification**: Explicit intent improves maintainability and supply chain auditing.
 
 ### 7.3 deps.no_multiple_versions (Medium Priority)
-- [ ] Track (crate_name, version) pairs across workspace
-- [ ] Warn when same crate appears with different versions
-- [ ] Allowlist for intentional version splits
-- [ ] Code: `duplicate_different_versions`
-- [ ] Explain entry and fixtures
+- [x] Track (crate_name, version) pairs across workspace
+- [x] Warn when same crate appears with different versions
+- [x] Allowlist for intentional version splits
+- [x] Code: `duplicate_different_versions`
+- [x] Explain entry and fixtures
 
 **Justification**: Multiple versions bloat binaries and cause subtle interop bugs.
 
 ### 7.4 deps.optional_unused (Medium Priority)
-- [ ] Parse `[features]` table from manifests
-- [ ] Flag `optional = true` deps without corresponding feature
-- [ ] Code: `optional_not_in_features`
-- [ ] Allowlist for custom feature naming patterns
-- [ ] Explain entry and fixtures
+- [x] Parse `[features]` table from manifests
+- [x] Flag `optional = true` deps without corresponding feature
+- [x] Code: `optional_not_in_features`
+- [x] Allowlist for custom feature naming patterns
+- [x] Explain entry and fixtures
 
 **Justification**: Orphaned optional deps are unreachable dead weight.
 
 ### 7.5 deps.dev_only_in_normal (Low Priority)
-- [ ] Curated list of dev/test crate names (proptest, insta, criterion, etc.)
-- [ ] Flag if they appear in `[dependencies]` section
-- [ ] Code: `dev_dep_in_normal`
-- [ ] Configurable via allowlist
-- [ ] Explain entry and fixtures
+- [x] Curated list of dev/test crate names (proptest, insta, criterion, etc.)
+- [x] Flag if they appear in `[dependencies]` section
+- [x] Code: `dev_dep_in_normal`
+- [x] Configurable via allowlist
+- [x] Explain entry and fixtures
 
 **Justification**: Reduces transitive deps for consumers; catches copy-paste errors.
 
 ### 7.6 deps.yanked_versions (Future, Optional)
-- [ ] Accept `--yanked-index` file (pre-computed offline list)
-- [ ] Flag pinned versions that are yanked
-- [ ] Code: `version_yanked`
-- [ ] Optional network mode for live crates.io lookup
+- [x] Accept `--yanked-index` file (pre-computed offline list)
+- [x] Flag pinned versions that are yanked
+- [x] Code: `version_yanked`
+- [x] Optional network mode for live crates.io lookup
 
 **Justification**: Yanked versions signal bugs/security issues; blocks publishing.
 
@@ -270,36 +270,36 @@ Expand coverage with high-value dependency hygiene checks.
 ## Phase 8 — Future Enhancements 🆕
 
 ### 8.1 Enhanced Diff Scope
-- [ ] `--diff-file` option to accept pre-computed file list
-- [ ] Avoid git dependency for containerized/sandboxed environments
-- [ ] Support GitHub Actions changed-files action output format
+- [x] `--diff-file` option to accept pre-computed file list
+- [x] Avoid git dependency for containerized/sandboxed environments
+- [x] Support GitHub Actions changed-files action output format
 
 ### 8.2 Suppression & Baseline
-- [ ] Inline suppression comments: `# depguard: allow(no_wildcards)`
-- [ ] Baseline file: ignore known violations during migration
-- [ ] `depguard baseline` command to generate suppression file
-- [ ] Gradual adoption: only fail on new violations
+- [x] Inline suppression comments: `# depguard: allow(no_wildcards)`
+- [x] Baseline file: ignore known violations during migration
+- [x] `depguard baseline` command to generate suppression file
+- [x] Gradual adoption: only fail on new violations
 
 ### 8.3 Fix Suggestions
-- [ ] Machine-readable fix suggestions in report
-- [ ] `depguard fix` command for auto-remediation
-- [ ] Integration with buildfix.plan.v1 schema
-- [ ] Conservative: only safe, unambiguous fixes
+- [x] Machine-readable fix suggestions in report
+- [x] `depguard fix` command for auto-remediation
+- [x] Integration with buildfix.plan.v1 schema
+- [x] Conservative: only safe, unambiguous fixes
 
 ### 8.4 Extended Outputs
-- [ ] SARIF output for GitHub Advanced Security
-- [ ] JUnit XML for legacy CI systems
-- [ ] JSON Lines streaming for large workspaces
+- [x] SARIF output for GitHub Advanced Security
+- [x] JUnit XML for legacy CI systems
+- [x] JSON Lines streaming for large workspaces
 
 ### 8.5 Performance & Scale
-- [ ] Parallel manifest parsing for large workspaces
-- [ ] Incremental mode: cache parsed manifests
+- [x] Parallel manifest parsing for large workspaces
+- [x] Incremental mode: cache parsed manifests
 - [ ] Memory-efficient streaming for 1000+ crate workspaces
 
 ### 8.6 Ecosystem Integration
 - [ ] VS Code extension for inline diagnostics
-- [ ] Pre-commit hook integration
-- [ ] Cargo subcommand: `cargo depguard`
+- [x] Pre-commit hook integration
+- [x] Cargo subcommand: `cargo depguard`
 
 ---
 

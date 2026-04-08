@@ -8,6 +8,7 @@
 //! 5. Contract fixtures validate against sensor.report.v1 schema
 //! 6. Path and token hygiene in fixtures
 
+use depguard_check_catalog as check_catalog;
 use depguard_types::{explain, ids};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -29,6 +30,16 @@ fn contracts_dir() -> PathBuf {
         .parent()
         .expect("crates should have parent")
         .join("contracts")
+}
+
+fn feature_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("depguard-cli should have parent")
+        .parent()
+        .expect("crates should have parent")
+        .join("tests")
+        .join("features")
 }
 
 fn is_valid_token(s: &str) -> bool {
@@ -142,18 +153,8 @@ fn check_ids_and_codes_are_consistent() {
 
 #[test]
 fn known_check_ids_are_documented() {
-    let known_check_ids = [
-        ids::CHECK_DEPS_NO_WILDCARDS,
-        ids::CHECK_DEPS_PATH_REQUIRES_VERSION,
-        ids::CHECK_DEPS_PATH_SAFETY,
-        ids::CHECK_DEPS_WORKSPACE_INHERITANCE,
-        ids::CHECK_DEPS_GIT_REQUIRES_VERSION,
-        ids::CHECK_DEPS_DEV_ONLY_IN_NORMAL,
-        ids::CHECK_DEPS_DEFAULT_FEATURES_EXPLICIT,
-        ids::CHECK_DEPS_NO_MULTIPLE_VERSIONS,
-        ids::CHECK_DEPS_OPTIONAL_UNUSED,
-        ids::CHECK_TOOL_RUNTIME,
-    ];
+    let mut known_check_ids = check_catalog::all_check_ids();
+    known_check_ids.push(ids::CHECK_TOOL_RUNTIME);
 
     let registered = explain::all_check_ids();
 
@@ -178,19 +179,8 @@ fn known_check_ids_are_documented() {
 
 #[test]
 fn known_codes_are_documented() {
-    let known_codes = [
-        ids::CODE_WILDCARD_VERSION,
-        ids::CODE_PATH_WITHOUT_VERSION,
-        ids::CODE_ABSOLUTE_PATH,
-        ids::CODE_PARENT_ESCAPE,
-        ids::CODE_MISSING_WORKSPACE_TRUE,
-        ids::CODE_GIT_WITHOUT_VERSION,
-        ids::CODE_DEV_DEP_IN_NORMAL,
-        ids::CODE_DEFAULT_FEATURES_IMPLICIT,
-        ids::CODE_DUPLICATE_DIFFERENT_VERSIONS,
-        ids::CODE_OPTIONAL_NOT_IN_FEATURES,
-        ids::CODE_RUNTIME_ERROR,
-    ];
+    let mut known_codes = check_catalog::all_codes();
+    known_codes.push(ids::CODE_RUNTIME_ERROR);
 
     let registered = explain::all_codes();
 
@@ -210,6 +200,63 @@ fn known_codes_are_documented() {
             code
         );
     }
+}
+
+#[test]
+fn all_check_ids_have_bdd_rules_feature_coverage() {
+    let feature_dir = feature_dir();
+    let mut feature_corpus: Vec<(PathBuf, String)> = Vec::new();
+
+    for entry in std::fs::read_dir(&feature_dir).expect("read tests/features") {
+        let path = entry.expect("read feature directory entry").path();
+        if path.extension().is_none_or(|ext| ext != "feature") {
+            continue;
+        }
+        let feature_text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("read BDD feature file {}", path.display()));
+        feature_corpus.push((path, feature_text));
+    }
+
+    let mut missing_coverage = Vec::new();
+
+    for check_id in check_catalog::all_check_ids() {
+        let Some(bdd_file) = check_catalog::bdd_feature_file(check_id) else {
+            panic!("check id '{check_id}' is missing bdd feature file metadata");
+        };
+        let Some(feature_gate) = check_catalog::feature_name(check_id) else {
+            panic!("check id '{check_id}' is missing feature gate metadata");
+        };
+        assert!(
+            !feature_gate.is_empty(),
+            "check id '{check_id}' has empty feature gate"
+        );
+        assert!(
+            feature_dir.join(bdd_file).exists(),
+            "check id '{check_id}' maps to missing BDD file '{}'",
+            bdd_file
+        );
+
+        assert!(
+            !bdd_file.is_empty(),
+            "check id '{check_id}' BDD file name must not be empty"
+        );
+
+        let quoted_check = format!("\"{check_id}\"");
+        let body = feature_corpus
+            .iter()
+            .find(|(path, _)| path.ends_with(bdd_file))
+            .map(|(_, body)| body)
+            .expect("BDD feature file entry should be preloaded");
+        if !body.contains(&quoted_check) {
+            missing_coverage.push(check_id);
+        }
+    }
+
+    assert!(
+        missing_coverage.is_empty(),
+        "These check IDs are not covered by any BDD feature file in tests/features: {:?}",
+        missing_coverage
+    );
 }
 
 // =============================================================================

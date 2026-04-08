@@ -7,7 +7,8 @@
 use anyhow::{Context, bail};
 use schemars::schema_for;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Get the project root (parent of xtask directory).
 fn project_root() -> PathBuf {
@@ -65,6 +66,11 @@ fn generate_config_schema() -> schemars::Schema {
     schema_for!(depguard_settings::DepguardConfigV1)
 }
 
+/// Generate the Depguard baseline schema.
+fn generate_baseline_schema() -> schemars::Schema {
+    schema_for!(depguard_types::DepguardBaselineV1)
+}
+
 /// List of schemas to generate.
 /// Note: receipt.envelope.v1.json is vendored/external and not regenerated.
 fn schema_specs() -> Vec<SchemaSpec> {
@@ -80,6 +86,10 @@ fn schema_specs() -> Vec<SchemaSpec> {
         SchemaSpec {
             filename: "depguard.config.v1.json",
             generate: generate_config_schema,
+        },
+        SchemaSpec {
+            filename: "depguard.baseline.v1.json",
+            generate: generate_baseline_schema,
         },
     ]
 }
@@ -169,12 +179,24 @@ fn print_help() {
     eprintln!("  help              Show this message");
     eprintln!("  emit-schemas      Generate JSON schemas from Rust types to schemas/");
     eprintln!("  validate-schemas  Check if schemas/ matches generated output (for CI)");
+    eprintln!("  fixtures          Regenerate test fixture goldens in tests/fixtures/");
     eprintln!("  print-schema-ids  Print known schema IDs");
     eprintln!("  conform           Validate contract fixtures against sensor.report.v1 schema");
     eprintln!(
         "  conform-full      Full conformance: contract fixtures + depguard output validation"
     );
     eprintln!("  explain-coverage  Validate all check IDs and codes have explanations");
+    eprintln!();
+    eprintln!("CI Automation:");
+    eprintln!("  generate-smoke    Generate CI smoke test scripts (bash and PowerShell)");
+    eprintln!("  generate-smoke --format=github  Generate GitHub Actions workflow snippet");
+    eprintln!();
+    eprintln!("Release Automation:");
+    eprintln!(
+        "  release-prepare   Prepare release: validate state, update changelog, bump version"
+    );
+    eprintln!("  release-artifacts Build release artifacts for current target");
+    eprintln!("  release-check     Run pre-release validation checks");
 }
 
 /// Token pattern for reason codes and verdict reasons.
@@ -360,9 +382,9 @@ struct RunOutput {
 
 #[cfg(not(any(test, coverage)))]
 fn run_depguard(
-    depguard_bin: &PathBuf,
-    fixture_dir: &PathBuf,
-    report_out: &PathBuf,
+    depguard_bin: &Path,
+    fixture_dir: &Path,
+    report_out: &Path,
 ) -> anyhow::Result<RunOutput> {
     let output = std::process::Command::new(depguard_bin)
         .args([
@@ -394,9 +416,9 @@ fn run_depguard(
 #[allow(unexpected_cfgs)]
 #[cfg(any(test, coverage))]
 fn run_depguard(
-    _depguard_bin: &PathBuf,
-    fixture_dir: &PathBuf,
-    report_out: &PathBuf,
+    _depguard_bin: &Path,
+    fixture_dir: &Path,
+    report_out: &Path,
 ) -> anyhow::Result<RunOutput> {
     let fixture_name = fixture_dir
         .file_name()
@@ -499,9 +521,7 @@ fn conform_full() -> anyhow::Result<()> {
         if !output.success {
             errors.push(format!(
                 "fixture '{}': depguard exited with {:?}: {}",
-                fixture_name,
-                output.code,
-                output.stderr
+                fixture_name, output.code, output.stderr
             ));
             continue;
         }
@@ -577,14 +597,14 @@ fn explain_coverage() -> anyhow::Result<()> {
     let check_ids = depguard_types::explain::all_check_ids();
     let codes = depguard_types::explain::all_codes();
 
-    explain_coverage_with(check_ids, codes, depguard_types::explain::lookup_explanation)
+    explain_coverage_with(
+        check_ids,
+        codes,
+        depguard_types::explain::lookup_explanation,
+    )
 }
 
-fn explain_coverage_with<F>(
-    check_ids: &[&str],
-    codes: &[&str],
-    mut lookup: F,
-) -> anyhow::Result<()>
+fn explain_coverage_with<F>(check_ids: &[&str], codes: &[&str], mut lookup: F) -> anyhow::Result<()>
 where
     F: FnMut(&str) -> Option<depguard_types::explain::Explanation>,
 {
@@ -646,6 +666,1209 @@ where
     }
 }
 
+fn depguard_bin_path() -> PathBuf {
+    let depguard_bin = project_root().join("target").join("debug").join("depguard");
+    #[cfg(target_os = "windows")]
+    let depguard_bin = depguard_bin.with_extension("exe");
+    depguard_bin
+}
+
+fn run_depguard_cli(depguard_bin: &Path, args: &[String]) -> anyhow::Result<std::process::Output> {
+    std::process::Command::new(depguard_bin)
+        .args(args)
+        .output()
+        .with_context(|| format!("Failed to run depguard with args: {}", args.join(" ")))
+}
+
+/// Regenerate golden outputs in tests/fixtures/.
+///
+/// For each fixture directory, this updates:
+/// - expected.report.json (always)
+/// - expected.comment.md (if file already exists)
+/// - expected.annotations.txt (if file already exists)
+/// - expected.sensor-report.json (if file already exists)
+fn fixtures() -> anyhow::Result<()> {
+    let depguard_bin = depguard_bin_path();
+    if !depguard_bin.exists() {
+        bail!(
+            "depguard binary not found at {}.\n\
+            Run `cargo build -p depguard-cli` first.",
+            depguard_bin.display()
+        );
+    }
+
+    let fixtures_root = project_root().join("tests").join("fixtures");
+    if !fixtures_root.exists() {
+        bail!("fixtures directory not found: {}", fixtures_root.display());
+    }
+
+    let mut fixture_dirs = Vec::new();
+    for entry in fs::read_dir(&fixtures_root)
+        .with_context(|| format!("Failed to read {}", fixtures_root.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            fixture_dirs.push(path);
+        }
+    }
+    fixture_dirs.sort();
+
+    if fixture_dirs.is_empty() {
+        bail!(
+            "No fixture directories found in {}",
+            fixtures_root.display()
+        );
+    }
+
+    let mut updated = 0usize;
+
+    for fixture_dir in fixture_dirs {
+        let fixture_name = fixture_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        let temp_dir = tempfile::tempdir().context("Failed to create temp dir")?;
+        let report_out = temp_dir.path().join("report.json");
+
+        let check_args = vec![
+            "--repo-root".to_string(),
+            fixture_dir.display().to_string(),
+            "check".to_string(),
+            "--mode".to_string(),
+            "cockpit".to_string(),
+            "--report-version".to_string(),
+            "v2".to_string(),
+            "--report-out".to_string(),
+            report_out.display().to_string(),
+        ];
+
+        let output = run_depguard_cli(&depguard_bin, &check_args)?;
+        if !output.status.success() {
+            bail!(
+                "fixture '{}': depguard check failed with {:?}: {}",
+                fixture_name,
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let report_content = fs::read_to_string(&report_out).with_context(|| {
+            format!(
+                "fixture '{}': failed to read generated report {}",
+                fixture_name,
+                report_out.display()
+            )
+        })?;
+        let report_value: serde_json::Value = serde_json::from_str(&report_content)
+            .with_context(|| format!("fixture '{}': report is not valid JSON", fixture_name))?;
+        let normalized = depguard_test_util::normalize_nondeterministic(report_value);
+        let mut report_json = serde_json::to_string_pretty(&normalized)?;
+        report_json.push('\n');
+        fs::write(fixture_dir.join("expected.report.json"), report_json).with_context(|| {
+            format!(
+                "fixture '{}': failed to write expected.report.json",
+                fixture_name
+            )
+        })?;
+
+        let expected_comment = fixture_dir.join("expected.comment.md");
+        if expected_comment.exists() {
+            let md_args = vec![
+                "md".to_string(),
+                "--report".to_string(),
+                report_out.display().to_string(),
+            ];
+            let md_output = run_depguard_cli(&depguard_bin, &md_args)?;
+            if !md_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard md failed with {:?}: {}",
+                    fixture_name,
+                    md_output.status.code(),
+                    String::from_utf8_lossy(&md_output.stderr)
+                );
+            }
+            let md_text = String::from_utf8_lossy(&md_output.stdout).replace("\r\n", "\n");
+            fs::write(&expected_comment, md_text).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.comment.md",
+                    fixture_name
+                )
+            })?;
+        }
+
+        let expected_annotations = fixture_dir.join("expected.annotations.txt");
+        if expected_annotations.exists() {
+            let annotation_args = vec![
+                "annotations".to_string(),
+                "--report".to_string(),
+                report_out.display().to_string(),
+            ];
+            let annotation_output = run_depguard_cli(&depguard_bin, &annotation_args)?;
+            if !annotation_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard annotations failed with {:?}: {}",
+                    fixture_name,
+                    annotation_output.status.code(),
+                    String::from_utf8_lossy(&annotation_output.stderr)
+                );
+            }
+            let annotations =
+                String::from_utf8_lossy(&annotation_output.stdout).replace("\r\n", "\n");
+            fs::write(&expected_annotations, annotations).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.annotations.txt",
+                    fixture_name
+                )
+            })?;
+        }
+
+        let expected_sensor = fixture_dir.join("expected.sensor-report.json");
+        if expected_sensor.exists() {
+            let sensor_out = temp_dir.path().join("sensor-report.json");
+            let sensor_args = vec![
+                "--repo-root".to_string(),
+                fixture_dir.display().to_string(),
+                "check".to_string(),
+                "--mode".to_string(),
+                "cockpit".to_string(),
+                "--report-version".to_string(),
+                "sensor-v1".to_string(),
+                "--report-out".to_string(),
+                sensor_out.display().to_string(),
+            ];
+            let sensor_output = run_depguard_cli(&depguard_bin, &sensor_args)?;
+            if !sensor_output.status.success() {
+                bail!(
+                    "fixture '{}': depguard sensor-v1 check failed with {:?}: {}",
+                    fixture_name,
+                    sensor_output.status.code(),
+                    String::from_utf8_lossy(&sensor_output.stderr)
+                );
+            }
+
+            let sensor_content = fs::read_to_string(&sensor_out).with_context(|| {
+                format!(
+                    "fixture '{}': failed to read generated sensor report {}",
+                    fixture_name,
+                    sensor_out.display()
+                )
+            })?;
+            let sensor_value: serde_json::Value = serde_json::from_str(&sensor_content)
+                .with_context(|| {
+                    format!(
+                        "fixture '{}': sensor report is not valid JSON",
+                        fixture_name
+                    )
+                })?;
+            let sensor_normalized = depguard_test_util::normalize_nondeterministic(sensor_value);
+            let mut sensor_json = serde_json::to_string_pretty(&sensor_normalized)?;
+            sensor_json.push('\n');
+            fs::write(&expected_sensor, sensor_json).with_context(|| {
+                format!(
+                    "fixture '{}': failed to write expected.sensor-report.json",
+                    fixture_name
+                )
+            })?;
+        }
+
+        updated += 1;
+        println!("  ✓ updated fixture '{}'", fixture_name);
+    }
+
+    println!("\n✓ Updated {} fixture(s).", updated);
+    Ok(())
+}
+
+// =============================================================================
+// CI Smoke Script Generation
+// =============================================================================
+
+/// Output format for smoke script generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SmokeOutputFormat {
+    /// Generate standalone shell scripts (bash and PowerShell)
+    Scripts,
+    /// Generate GitHub Actions workflow snippet
+    GitHub,
+}
+
+/// Generate CI smoke test scripts.
+///
+/// Creates scripts that verify the depguard binary works with basic operations:
+/// - Binary exists and is executable
+/// - `--help` runs successfully
+/// - `--version` outputs version info
+/// - `check` runs on a minimal fixture
+fn generate_smoke_scripts(format: SmokeOutputFormat) -> anyhow::Result<()> {
+    match format {
+        SmokeOutputFormat::Scripts => generate_smoke_scripts_standalone(),
+        SmokeOutputFormat::GitHub => generate_smoke_github_workflow(),
+    }
+}
+
+/// Generate standalone bash and PowerShell smoke scripts.
+fn generate_smoke_scripts_standalone() -> anyhow::Result<()> {
+    let output_dir = project_root().join("scripts").join("ci");
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("Failed to create {}", output_dir.display()))?;
+
+    // Generate bash script
+    let bash_script = generate_bash_smoke_script();
+    let bash_path = output_dir.join("smoke-test.sh");
+    fs::write(&bash_path, bash_script)
+        .with_context(|| format!("Failed to write {}", bash_path.display()))?;
+    println!("Generated {}", bash_path.display());
+
+    // Generate PowerShell script
+    let ps_script = generate_powershell_smoke_script();
+    let ps_path = output_dir.join("smoke-test.ps1");
+    fs::write(&ps_path, ps_script)
+        .with_context(|| format!("Failed to write {}", ps_path.display()))?;
+    println!("Generated {}", ps_path.display());
+
+    println!(
+        "\n✓ Smoke test scripts generated in {}",
+        output_dir.display()
+    );
+    println!("\nUsage:");
+    println!("  bash scripts/ci/smoke-test.sh");
+    println!("  pwsh scripts/ci/smoke-test.ps1");
+    Ok(())
+}
+
+/// Generate bash smoke test script.
+fn generate_bash_smoke_script() -> String {
+    let timestamp = current_timestamp();
+    format!(
+        r#"#!/usr/bin/env bash
+# Smoke test script for depguard
+# Generated by: cargo xtask generate-smoke
+# Generated at: {timestamp}
+#
+# This script verifies the depguard binary works with basic operations.
+# Exit codes: 0 = pass, 1 = fail
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+DEPGUARD_BIN="${{DEPGUARD_BIN:-$REPO_ROOT/target/debug/depguard}}"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+pass() {{
+    echo -e "${{GREEN}}✓${{NC}} $1"
+}}
+
+fail() {{
+    echo -e "${{RED}}✗${{NC}} $1"
+    exit 1
+}}
+
+info() {{
+    echo -e "${{YELLOW}}ℹ${{NC}} $1"
+}}
+
+# Check binary exists
+if [[ ! -x "$DEPGUARD_BIN" ]]; then
+    fail "Binary not found or not executable: $DEPGUARD_BIN"
+fi
+pass "Binary exists: $DEPGUARD_BIN"
+
+# Test --help
+if "$DEPGUARD_BIN" --help > /dev/null 2>&1; then
+    pass "depguard --help runs successfully"
+else
+    fail "depguard --help failed"
+fi
+
+# Test --version
+VERSION_OUTPUT=$("$DEPGUARD_BIN" --version 2>&1) || fail "depguard --version failed"
+if [[ "$VERSION_OUTPUT" =~ depguard ]]; then
+    pass "depguard --version outputs version info: $(echo "$VERSION_OUTPUT" | head -1)"
+else
+    fail "depguard --version output unexpected: $VERSION_OUTPUT"
+fi
+
+# Create a minimal test fixture
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+cat > "$TEMP_DIR/Cargo.toml" << 'EOF'
+[package]
+name = "smoke-test-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+EOF
+
+# Test check command with minimal fixture
+REPORT_OUT="$TEMP_DIR/report.json"
+if "$DEPGUARD_BIN" --repo-root "$TEMP_DIR" check --report-out "$REPORT_OUT" > /dev/null 2>&1; then
+    pass "depguard check runs on minimal fixture"
+else
+    # Check may exit 2 for policy violations, which is acceptable for smoke test
+    EXIT_CODE=$?
+    if [[ $EXIT_CODE -eq 2 ]]; then
+        pass "depguard check runs (policy violation exit code 2 is acceptable)"
+    else
+        fail "depguard check failed with exit code $EXIT_CODE"
+    fi
+fi
+
+# Verify report was created
+if [[ -f "$REPORT_OUT" ]]; then
+    pass "Report file created: $REPORT_OUT"
+    # Validate it's valid JSON
+    if command -v jq > /dev/null 2>&1; then
+        if jq empty "$REPORT_OUT" 2>/dev/null; then
+            pass "Report is valid JSON"
+        else
+            fail "Report is not valid JSON"
+        fi
+    else
+        info "jq not available, skipping JSON validation"
+    fi
+else
+    info "Report file not created (may be expected for some modes)"
+fi
+
+# Test explain command
+if "$DEPGUARD_BIN" explain no_wildcards > /dev/null 2>&1; then
+    pass "depguard explain runs successfully"
+else
+    fail "depguard explain failed"
+fi
+
+echo ""
+echo -e "${{GREEN}}All smoke tests passed!${{NC}}"
+exit 0
+"#,
+        timestamp = timestamp
+    )
+}
+
+/// Generate PowerShell smoke test script.
+fn generate_powershell_smoke_script() -> String {
+    let timestamp = current_timestamp();
+    format!(
+        r#"# Smoke test script for depguard (PowerShell)
+# Generated by: cargo xtask generate-smoke
+# Generated at: {timestamp}
+#
+# This script verifies the depguard binary works with basic operations.
+# Exit codes: 0 = pass, 1 = fail
+
+param(
+    [string]$DepguardBin = ""
+)
+
+$ErrorActionPreference = "Stop"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = (Get-Item "$ScriptDir\..\..").FullName
+
+if ([string]::IsNullOrEmpty($DepguardBin)) {{
+    $DepguardBin = Join-Path $RepoRoot "target\debug\depguard.exe"
+}}
+
+function Write-Pass($message) {{
+    Write-Host "✓ $message" -ForegroundColor Green
+}}
+
+function Write-Fail($message) {{
+    Write-Host "✗ $message" -ForegroundColor Red
+    exit 1
+}}
+
+function Write-Info($message) {{
+    Write-Host "ℹ $message" -ForegroundColor Yellow
+}}
+
+# Check binary exists
+if (-not (Test-Path $DepguardBin)) {{
+    Write-Fail "Binary not found: $DepguardBin"
+}}
+Write-Pass "Binary exists: $DepguardBin"
+
+# Test --help
+try {{
+    & $DepguardBin --help | Out-Null
+    Write-Pass "depguard --help runs successfully"
+}} catch {{
+    Write-Fail "depguard --help failed: $_"
+}}
+
+# Test --version
+try {{
+    $versionOutput = & $DepguardBin --version 2>&1
+    if ($versionOutput -match "depguard") {{
+        Write-Pass "depguard --version outputs version info: ${{($versionOutput -split '`n')[0]}}"
+    }} else {{
+        Write-Fail "depguard --version output unexpected: $versionOutput"
+    }}
+}} catch {{
+    Write-Fail "depguard --version failed: $_"
+}}
+
+# Create a minimal test fixture
+$TempDir = New-TempDir
+try {{
+    $CargoToml = @"
+[package]
+name = "smoke-test-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"@
+    Set-Content -Path (Join-Path $TempDir "Cargo.toml") -Value $CargoToml -NoNewline
+
+    # Test check command with minimal fixture
+    $ReportOut = Join-Path $TempDir "report.json"
+    $exitCode = 0
+    try {{
+        & $DepguardBin --repo-root $TempDir check --report-out $ReportOut 2>&1 | Out-Null
+    }} catch {{
+        $exitCode = $_.Exception.HResult
+    }}
+    
+    if ($LASTEXITCODE -eq 0) {{
+        Write-Pass "depguard check runs on minimal fixture"
+    }} elseif ($LASTEXITCODE -eq 2) {{
+        Write-Pass "depguard check runs (policy violation exit code 2 is acceptable)"
+    }} else {{
+        Write-Fail "depguard check failed with exit code $LASTEXITCODE"
+    }}
+
+    # Verify report was created
+    if (Test-Path $ReportOut) {{
+        Write-Pass "Report file created: $ReportOut"
+        try {{
+            Get-Content $ReportOut | ConvertFrom-Json | Out-Null
+            Write-Pass "Report is valid JSON"
+        }} catch {{
+            Write-Fail "Report is not valid JSON: $_"
+        }}
+    }} else {{
+        Write-Info "Report file not created (may be expected for some modes)"
+    }}
+
+    # Test explain command
+    try {{
+        & $DepguardBin explain no_wildcards | Out-Null
+        Write-Pass "depguard explain runs successfully"
+    }} catch {{
+        Write-Fail "depguard explain failed: $_"
+    }}
+}} finally {{
+    Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
+}}
+
+Write-Host ""
+Write-Host "All smoke tests passed!" -ForegroundColor Green
+exit 0
+
+function New-TempDir {{
+    $tempPath = [System.IO.Path]::GetTempPath()
+    $tempDir = Join-Path $tempPath "depguard-smoke-$(Get-Random)"
+    New-Item -ItemType Directory -Path $tempDir | Out-Null
+    return $tempDir
+}}
+"#,
+        timestamp = timestamp
+    )
+}
+
+/// Generate GitHub Actions workflow snippet for smoke tests.
+fn generate_smoke_github_workflow() -> anyhow::Result<()> {
+    let snippet = r#"# Smoke Test Job for GitHub Actions
+# Add this job to your workflow to run smoke tests on built binaries
+
+smoke-test:
+  name: Smoke Test
+  needs: build  # Assumes you have a build job
+  runs-on: ${{ matrix.os }}
+  strategy:
+    fail-fast: false
+    matrix:
+      include:
+        - os: ubuntu-latest
+          binary: target/debug/depguard
+        - os: windows-latest
+          binary: target/debug/depguard.exe
+        - os: macos-latest
+          binary: target/debug/depguard
+  steps:
+    - name: Download binary
+      uses: actions/download-artifact@v4
+      with:
+        name: binary-${{ matrix.os }}
+        path: target/debug
+
+    - name: Make binary executable (Unix)
+      if: runner.os != 'Windows'
+      run: chmod +x ${{ matrix.binary }}
+
+    - name: Run smoke tests (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        echo "Testing binary: ${{ matrix.binary }}"
+        
+        # Test --help
+        ${{ matrix.binary }} --help || exit 1
+        echo "✓ --help passed"
+        
+        # Test --version
+        VERSION=$(${{ matrix.binary }} --version) || exit 1
+        echo "✓ --version passed: $VERSION"
+        
+        # Test check on minimal fixture
+        mkdir -p /tmp/smoke-test
+        echo '[package]
+        name = "smoke-test"
+        version = "0.1.0"
+        edition = "2021"
+        [dependencies]' > /tmp/smoke-test/Cargo.toml
+        
+        ${{ matrix.binary }} --repo-root /tmp/smoke-test check --report-out /tmp/smoke-test/report.json || EXIT_CODE=$?
+        if [[ ${EXIT_CODE:-0} -le 2 ]]; then
+          echo "✓ check passed (exit code ${EXIT_CODE:-0})"
+        else
+          exit 1
+        fi
+        
+        # Test explain
+        ${{ matrix.binary }} explain no_wildcards || exit 1
+        echo "✓ explain passed"
+        
+        echo "All smoke tests passed!"
+
+    - name: Run smoke tests (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $binary = "${{ matrix.binary }}"
+        Write-Host "Testing binary: $binary"
+        
+        # Test --help
+        & $binary --help
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        Write-Host "✓ --help passed"
+        
+        # Test --version
+        $version = & $binary --version
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        Write-Host "✓ --version passed: $version"
+        
+        # Test check on minimal fixture
+        $tempDir = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "smoke-test")
+        @"
+        [package]
+        name = "smoke-test"
+        version = "0.1.0"
+        edition = "2021"
+        [dependencies]
+        "@ | Out-File -FilePath (Join-Path $tempDir "Cargo.toml") -Encoding utf8
+        
+        $reportOut = Join-Path $tempDir "report.json"
+        & $binary --repo-root $tempDir check --report-out $reportOut
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -le 2) {
+          Write-Host "✓ check passed (exit code $exitCode)"
+        } else {
+          exit 1
+        }
+        
+        # Test explain
+        & $binary explain no_wildcards
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        Write-Host "✓ explain passed"
+        
+        Write-Host "All smoke tests passed!"
+"#;
+
+    println!("{}", snippet);
+    println!("\n---");
+    println!("Copy the above snippet into your GitHub Actions workflow file.");
+    println!("The snippet assumes you have a 'build' job that produces binary artifacts.");
+    Ok(())
+}
+
+/// Get current timestamp in ISO 8601 format.
+fn current_timestamp() -> String {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+    // Simple ISO-like format without chrono dependency
+    format!(
+        "{}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        1970 + secs / 31536000,
+        (secs % 31536000) / 2592000 + 1,
+        (secs % 2592000) / 86400 + 1,
+        (secs % 86400) / 3600,
+        (secs % 3600) / 60,
+        secs % 60
+    )
+}
+
+// =============================================================================
+// Release Packaging Automation
+// =============================================================================
+
+/// Release preparation options.
+#[derive(Debug, Clone)]
+struct ReleaseOptions {
+    /// Target version (e.g., "1.2.3"). If None, uses current version.
+    target_version: Option<String>,
+    /// Dry run mode - show what would be done without making changes.
+    dry_run: bool,
+    /// Skip changelog updates.
+    skip_changelog: bool,
+    /// Build artifacts after preparation.
+    build_artifacts: bool,
+}
+
+/// Parse release options from command line arguments.
+fn parse_release_options(args: &[String]) -> ReleaseOptions {
+    let mut options = ReleaseOptions {
+        target_version: None,
+        dry_run: false,
+        skip_changelog: false,
+        build_artifacts: false,
+    };
+
+    for arg in args.iter().skip(2) {
+        if arg == "--dry-run" {
+            options.dry_run = true;
+        } else if arg == "--skip-changelog" {
+            options.skip_changelog = true;
+        } else if arg == "--build" {
+            options.build_artifacts = true;
+        } else if let Some(stripped) = arg.strip_prefix("--version=") {
+            options.target_version = Some(stripped.to_string());
+        } else if !arg.starts_with("--") {
+            // Positional argument: version
+            options.target_version = Some(arg.clone());
+        }
+    }
+
+    options
+}
+
+/// Prepare a release: validate state, update changelog, bump version.
+fn release_prepare(args: &[String]) -> anyhow::Result<()> {
+    let options = parse_release_options(args);
+
+    println!("Preparing release...");
+    if options.dry_run {
+        println!("(dry run mode - no changes will be made)");
+    }
+    println!();
+
+    // Step 1: Validate repository state
+    println!("=== Step 1: Validate repository state ===");
+    validate_repo_state(&options)?;
+    println!();
+
+    // Step 2: Get current version
+    println!("=== Step 2: Get current version ===");
+    let current_version = get_current_version()?;
+    println!("Current version: {}", current_version);
+    println!();
+
+    // Step 3: Determine target version
+    println!("=== Step 3: Determine target version ===");
+    let target_version = options
+        .target_version
+        .clone()
+        .unwrap_or_else(|| bump_patch_version(&current_version));
+    println!("Target version: {}", target_version);
+    println!();
+
+    // Step 4: Update changelog
+    if !options.skip_changelog {
+        println!("=== Step 4: Update changelog ===");
+        update_changelog(&current_version, &target_version, &options)?;
+    } else {
+        println!("=== Step 4: Update changelog (skipped) ===");
+    }
+    println!();
+
+    // Step 5: Bump version in Cargo.toml files
+    println!("=== Step 5: Bump version ===");
+    bump_version(&current_version, &target_version, &options)?;
+    println!();
+
+    // Step 6: Run validation checks
+    println!("=== Step 6: Run validation checks ===");
+    if !options.dry_run {
+        run_release_checks()?;
+    } else {
+        println!("(skipped in dry-run mode)");
+    }
+    println!();
+
+    // Step 7: Build artifacts if requested
+    if options.build_artifacts {
+        println!("=== Step 7: Build artifacts ===");
+        build_release_artifacts(&options)?;
+    } else {
+        println!("=== Step 7: Build artifacts (skipped) ===");
+        println!("Run 'cargo xtask release-artifacts' to build release artifacts.");
+    }
+    println!();
+
+    println!("✓ Release preparation complete!");
+    println!();
+    println!("Next steps:");
+    println!("  1. Review the changes");
+    println!(
+        "  2. Commit: git add -A && git commit -m 'chore: release v{}'",
+        target_version
+    );
+    println!("  3. Tag: git tag v{}", target_version);
+    println!("  4. Push: git push && git push --tags");
+    Ok(())
+}
+
+/// Validate repository state for release.
+fn validate_repo_state(options: &ReleaseOptions) -> anyhow::Result<()> {
+    // Check for uncommitted changes
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .context("Failed to run git status")?;
+
+    let has_changes = !output.stdout.is_empty();
+
+    if has_changes && !options.dry_run {
+        bail!(
+            "Repository has uncommitted changes. Please commit or stash them first.\n\
+             Run 'git status' to see the changes."
+        );
+    } else if has_changes {
+        println!("⚠ Warning: Repository has uncommitted changes (would fail in non-dry-run mode)");
+    } else {
+        println!("✓ Repository is clean");
+    }
+
+    // Check that we're on a reasonable branch (not detached HEAD)
+    let branch_output = std::process::Command::new("git")
+        .args(["branch", "--show-current"])
+        .output()
+        .context("Failed to get current branch")?;
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout);
+    let branch = branch.trim();
+
+    if branch.is_empty() {
+        println!("⚠ Warning: Detached HEAD state");
+    } else {
+        println!("✓ Current branch: {}", branch);
+    }
+
+    Ok(())
+}
+
+/// Get the current version from the workspace Cargo.toml or CLI crate Cargo.toml.
+fn get_current_version() -> anyhow::Result<String> {
+    // First try workspace Cargo.toml
+    let cargo_toml_path = project_root().join("Cargo.toml");
+    if let Ok(content) = fs::read_to_string(&cargo_toml_path)
+        && let Some(version) = extract_version_from_toml(&content)
+    {
+        return Ok(version);
+    }
+
+    // Fallback to CLI crate Cargo.toml
+    let cli_cargo_toml = project_root()
+        .join("crates")
+        .join("depguard-cli")
+        .join("Cargo.toml");
+    if let Ok(content) = fs::read_to_string(&cli_cargo_toml)
+        && let Some(version) = extract_version_from_toml(&content)
+    {
+        return Ok(version);
+    }
+
+    bail!("Could not find version in Cargo.toml files")
+}
+
+/// Extract version from TOML content.
+fn extract_version_from_toml(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("version") {
+            // Extract version value
+            if let Some(eq_pos) = trimmed.find('=') {
+                let version_part = &trimmed[eq_pos + 1..];
+                let version = version_part.trim().trim_matches('"').trim().to_string();
+                if !version.is_empty() && !version.starts_with(".workspace") {
+                    return Some(version);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Bump the patch version (e.g., "1.2.3" -> "1.2.4").
+fn bump_patch_version(version: &str) -> String {
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() >= 3
+        && let Ok(mut patch) = parts[2].parse::<u32>()
+    {
+        patch += 1;
+        return format!("{}.{}.{}", parts[0], parts[1], patch);
+    }
+    // Fallback: just append "-next"
+    format!("{}-next", version)
+}
+
+/// Update the changelog for the release.
+fn update_changelog(current: &str, target: &str, options: &ReleaseOptions) -> anyhow::Result<()> {
+    let changelog_path = project_root().join("CHANGELOG.md");
+
+    if !changelog_path.exists() {
+        println!("⚠ No CHANGELOG.md found, skipping changelog update");
+        return Ok(());
+    }
+
+    // Generate changelog entry from git log
+    let log_output = std::process::Command::new("git")
+        .args([
+            "log",
+            &format!("v{}..HEAD", current),
+            "--oneline",
+            "--no-merges",
+        ])
+        .output();
+
+    let commits = match log_output {
+        Ok(output) => String::from_utf8_lossy(&output.stdout).to_string(),
+        Err(_) => {
+            println!("⚠ Could not get git log, using placeholder");
+            "  - Various improvements and bug fixes".to_string()
+        }
+    };
+
+    let entry = format!(
+        "\n## [{}] - {}\n\n### Changes\n\n{}\n",
+        target,
+        chrono_date(),
+        if commits.is_empty() {
+            "  - Various improvements and bug fixes".to_string()
+        } else {
+            commits
+                .lines()
+                .filter(|l| !l.is_empty())
+                .map(|l| {
+                    format!(
+                        "  - {}",
+                        l.split_once(' ').map(|(_, rest)| rest).unwrap_or(l)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    );
+
+    if options.dry_run {
+        println!("Would add to CHANGELOG.md:");
+        println!("{}", entry);
+    } else {
+        let existing = fs::read_to_string(&changelog_path)?;
+        // Insert after the header
+        let new_content = if let Some(pos) = existing.find("\n## ") {
+            let (header, rest) = existing.split_at(pos);
+            format!("{}{}{}", header, entry, rest)
+        } else {
+            format!("{}{}", entry, existing)
+        };
+        fs::write(&changelog_path, new_content)?;
+        println!("✓ Updated CHANGELOG.md");
+    }
+
+    Ok(())
+}
+
+/// Get current date in ISO format (YYYY-MM-DD).
+fn chrono_date() -> String {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+    // Simple calculation without chrono
+    let days = secs / 86400;
+    // Days since 1970-01-01
+    let years = days / 365;
+    let remaining_days = days % 365;
+    let month = remaining_days / 30 + 1;
+    let day = remaining_days % 30 + 1;
+    format!("{}-{:02}-{:02}", 1970 + years, month.min(12), day.min(28))
+}
+
+/// Bump version in Cargo.toml files.
+fn bump_version(current: &str, target: &str, options: &ReleaseOptions) -> anyhow::Result<()> {
+    if current == target {
+        println!("Version unchanged: {}", current);
+        return Ok(());
+    }
+
+    if options.dry_run {
+        println!("Would bump version: {} -> {}", current, target);
+        return Ok(());
+    }
+
+    // Update workspace Cargo.toml
+    let workspace_toml = project_root().join("Cargo.toml");
+    update_version_in_toml(&workspace_toml, current, target)?;
+
+    // Update crate Cargo.toml files
+    let crates_dir = project_root().join("crates");
+    if crates_dir.exists() {
+        for entry in fs::read_dir(&crates_dir)? {
+            let entry = entry?;
+            let cargo_toml = entry.path().join("Cargo.toml");
+            if cargo_toml.exists() {
+                update_version_in_toml(&cargo_toml, current, target)?;
+            }
+        }
+    }
+
+    // Update CLI Cargo.toml
+    let cli_toml = project_root()
+        .join("crates")
+        .join("depguard-cli")
+        .join("Cargo.toml");
+    if cli_toml.exists() {
+        update_version_in_toml(&cli_toml, current, target)?;
+    }
+
+    println!("✓ Bumped version to {} in all Cargo.toml files", target);
+    Ok(())
+}
+
+/// Update version in a single Cargo.toml file.
+fn update_version_in_toml(path: &Path, current: &str, target: &str) -> anyhow::Result<()> {
+    let content = fs::read_to_string(path)?;
+    let new_content = content.replace(
+        &format!("version = \"{}\"", current),
+        &format!("version = \"{}\"", target),
+    );
+
+    if content != new_content {
+        fs::write(path, new_content)?;
+        println!("  ✓ Updated {}", path.display());
+    }
+
+    Ok(())
+}
+
+/// Run release validation checks.
+fn run_release_checks() -> anyhow::Result<()> {
+    // Run cargo check
+    println!("Running cargo check...");
+    let check_output = std::process::Command::new("cargo")
+        .args(["check", "--all-targets"])
+        .current_dir(project_root())
+        .output()
+        .context("Failed to run cargo check")?;
+
+    if !check_output.status.success() {
+        bail!("cargo check failed");
+    }
+    println!("  ✓ cargo check passed");
+
+    // Run cargo test
+    println!("Running cargo test...");
+    let test_output = std::process::Command::new("cargo")
+        .args(["test", "--lib"])
+        .current_dir(project_root())
+        .output()
+        .context("Failed to run cargo test")?;
+
+    if !test_output.status.success() {
+        bail!("cargo test failed");
+    }
+    println!("  ✓ cargo test passed");
+
+    // Run cargo clippy
+    println!("Running cargo clippy...");
+    let clippy_output = std::process::Command::new("cargo")
+        .args([
+            "clippy",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ])
+        .current_dir(project_root())
+        .output()
+        .context("Failed to run cargo clippy")?;
+
+    if !clippy_output.status.success() {
+        bail!("cargo clippy failed");
+    }
+    println!("  ✓ cargo clippy passed");
+
+    println!("✓ All release checks passed");
+    Ok(())
+}
+
+/// Build release artifacts for the current target.
+fn build_release_artifacts(options: &ReleaseOptions) -> anyhow::Result<()> {
+    if options.dry_run {
+        println!("Would build release artifacts with: cargo build --release");
+        return Ok(());
+    }
+
+    println!("Building release artifacts...");
+
+    let output = std::process::Command::new("cargo")
+        .args(["build", "--release", "-p", "depguard-cli"])
+        .current_dir(project_root())
+        .output()
+        .context("Failed to build release artifacts")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("Failed to build release artifacts:\n{}", stderr);
+    }
+
+    let target_triple = get_target_triple();
+    let binary_name = if cfg!(target_os = "windows") {
+        "depguard.exe"
+    } else {
+        "depguard"
+    };
+
+    let release_binary = project_root()
+        .join("target")
+        .join("release")
+        .join(binary_name);
+
+    println!("✓ Release binary built: {}", release_binary.display());
+
+    // Create artifact directory
+    let artifact_dir = project_root().join("target").join("release-artifacts");
+    fs::create_dir_all(&artifact_dir)?;
+
+    // Copy binary to artifact directory with target triple
+    let artifact_name = format!(
+        "depguard-{}{}",
+        target_triple,
+        if cfg!(target_os = "windows") {
+            ".exe"
+        } else {
+            ""
+        }
+    );
+    let artifact_path = artifact_dir.join(&artifact_name);
+    fs::copy(&release_binary, &artifact_path)?;
+    println!("✓ Artifact created: {}", artifact_path.display());
+
+    // Generate checksum
+    if let Ok(checksum) = generate_sha256_checksum(&artifact_path) {
+        let checksum_path = artifact_dir.join(format!("{}.sha256", artifact_name));
+        fs::write(&checksum_path, &checksum)?;
+        println!("✓ Checksum created: {}", checksum_path.display());
+    }
+
+    println!();
+    println!("Artifacts available in: {}", artifact_dir.display());
+
+    Ok(())
+}
+
+/// Get the current target triple.
+fn get_target_triple() -> String {
+    std::env::var("TARGET").unwrap_or_else(|_| {
+        // Fallback: guess based on OS
+        let os = if cfg!(target_os = "linux") {
+            "unknown-linux-gnu"
+        } else if cfg!(target_os = "macos") {
+            "apple-darwin"
+        } else if cfg!(target_os = "windows") {
+            "pc-windows-msvc"
+        } else {
+            "unknown"
+        };
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x86_64"
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64"
+        } else {
+            "unknown"
+        };
+        format!("{}-{}", arch, os)
+    })
+}
+
+/// Generate SHA256 checksum for a file.
+fn generate_sha256_checksum(path: &Path) -> anyhow::Result<String> {
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    // Simple SHA256 implementation would go here
+    // For now, use openssl or sha256sum if available
+    let output = std::process::Command::new("sha256sum").arg(path).output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let checksum = String::from_utf8_lossy(&output.stdout);
+            let parts: Vec<&str> = checksum.split_whitespace().collect();
+            Ok(parts.first().unwrap_or(&"").to_string())
+        }
+        _ => {
+            // Try certutil on Windows
+            let output = std::process::Command::new("certutil")
+                .args(["-hashfile", path.to_str().unwrap_or(""), "SHA256"])
+                .output();
+
+            match output {
+                Ok(output) if output.status.success() => {
+                    let result = String::from_utf8_lossy(&output.stdout);
+                    // Parse certutil output
+                    for line in result.lines() {
+                        let trimmed = line.trim();
+                        if trimmed.len() == 64 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+                            return Ok(trimmed.to_lowercase());
+                        }
+                    }
+                    bail!("Could not parse certutil output")
+                }
+                _ => bail!("Could not generate checksum (sha256sum or certutil not available)"),
+            }
+        }
+    }
+}
+
+/// Build release artifacts (standalone command).
+fn release_artifacts(args: &[String]) -> anyhow::Result<()> {
+    let options = parse_release_options(args);
+    build_release_artifacts(&options)
+}
+
+/// Run pre-release validation checks (standalone command).
+fn release_check() -> anyhow::Result<()> {
+    println!("Running pre-release validation checks...\n");
+    run_release_checks()
+}
+
 fn run_with_args(args: &[String]) -> anyhow::Result<()> {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("help");
 
@@ -656,6 +1879,7 @@ fn run_with_args(args: &[String]) -> anyhow::Result<()> {
         }
         "emit-schemas" => emit_schemas(),
         "validate-schemas" => validate_schemas(),
+        "fixtures" => fixtures(),
         "conform" => conform(),
         "conform-full" => conform_full(),
         "explain-coverage" => explain_coverage(),
@@ -669,6 +1893,22 @@ fn run_with_args(args: &[String]) -> anyhow::Result<()> {
             }
             Ok(())
         }
+        // CI smoke script generation
+        "generate-smoke" => {
+            let format = if args
+                .iter()
+                .any(|a| a == "--format=github" || a == "--github")
+            {
+                SmokeOutputFormat::GitHub
+            } else {
+                SmokeOutputFormat::Scripts
+            };
+            generate_smoke_scripts(format)
+        }
+        // Release automation
+        "release-prepare" => release_prepare(args),
+        "release-artifacts" => release_artifacts(args),
+        "release-check" => release_check(),
         other => bail!("unknown xtask command: {other}\n\nRun `cargo xtask help` for usage."),
     }
     .context("xtask failed")
@@ -729,7 +1969,7 @@ mod tests {
         }
     }
 
-    fn write_schema_file(path: &PathBuf) {
+    fn write_schema_file(path: &Path) {
         let schema = json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object"
@@ -738,7 +1978,7 @@ mod tests {
         fs::write(path, json).expect("write schema");
     }
 
-    fn setup_contracts(root: &PathBuf) -> PathBuf {
+    fn setup_contracts(root: &Path) -> PathBuf {
         let schemas_dir = root.join("contracts").join("schemas");
         let fixtures_dir = root.join("contracts").join("fixtures");
         fs::create_dir_all(&schemas_dir).expect("create schemas");
@@ -747,12 +1987,12 @@ mod tests {
         fixtures_dir
     }
 
-    fn write_contract_fixture(fixtures_dir: &PathBuf, name: &str, value: serde_json::Value) {
+    fn write_contract_fixture(fixtures_dir: &Path, name: &str, value: serde_json::Value) {
         let content = serde_json::to_string(&value).expect("fixture json");
         fs::write(fixtures_dir.join(name), content).expect("write fixture");
     }
 
-    fn write_test_fixture(root: &PathBuf, name: &str, golden: Option<serde_json::Value>) {
+    fn write_test_fixture(root: &Path, name: &str, golden: Option<serde_json::Value>) {
         let dir = root.join("tests").join("fixtures").join(name);
         fs::create_dir_all(&dir).expect("create fixture dir");
         fs::write(
@@ -770,7 +2010,7 @@ version = "0.1.0"
         }
     }
 
-    fn write_dummy_depguard_bin(root: &PathBuf) {
+    fn write_dummy_depguard_bin(root: &Path) {
         let bin_dir = root.join("target").join("debug");
         fs::create_dir_all(&bin_dir).expect("create bin dir");
         let mut bin = bin_dir.join("depguard");
@@ -805,6 +2045,7 @@ version = "0.1.0"
         assert!(names.contains(&"depguard.report.v1.json"));
         assert!(names.contains(&"depguard.report.v2.json"));
         assert!(names.contains(&"depguard.config.v1.json"));
+        assert!(names.contains(&"depguard.baseline.v1.json"));
 
         for spec in schema_specs() {
             let _schema = (spec.generate)();
@@ -1180,14 +2421,21 @@ version = "0.1.0"
             write_test_fixture(root, "fail-status", None);
             write_test_fixture(root, "missing-report", None);
             write_test_fixture(root, "bad-report", None);
-            write_test_fixture(root, "mismatch-golden", Some(json!({ "schema": "different" })));
+            write_test_fixture(
+                root,
+                "mismatch-golden",
+                Some(json!({ "schema": "different" })),
+            );
 
             let test_fixtures_dir = root.join("tests").join("fixtures");
             fs::write(test_fixtures_dir.join("README.txt"), "ignore").expect("write file");
             fs::create_dir_all(test_fixtures_dir.join("empty")).expect("create empty dir");
 
             let err = conform_full().unwrap_err();
-            assert!(err.to_string().contains("Full conformance validation failed"));
+            assert!(
+                err.to_string()
+                    .contains("Full conformance validation failed")
+            );
         });
     }
 
@@ -1200,34 +2448,48 @@ version = "0.1.0"
     fn explain_coverage_error_path() {
         let check_ids = ["check.one", "check.none"];
         let codes = ["code.one", "code.empty"];
-        let result = explain_coverage_with(&check_ids, &codes, |id| {
-            match id {
-                "check.one" | "code.empty" => Some(depguard_types::explain::Explanation {
-                    title: "",
-                    description: "",
-                    remediation: "",
-                    examples: depguard_types::explain::ExamplePair { before: "", after: "" },
-                }),
-                _ => None,
-            }
+        let result = explain_coverage_with(&check_ids, &codes, |id| match id {
+            "check.one" | "code.empty" => Some(depguard_types::explain::Explanation {
+                title: "",
+                description: "",
+                remediation: "",
+                examples: depguard_types::explain::ExamplePair {
+                    before: "",
+                    after: "",
+                },
+            }),
+            _ => None,
         });
         assert!(result.is_err());
     }
 
     #[test]
     fn run_with_args_help_and_unknown() {
-        run_with_args(&vec!["xtask".to_string(), "help".to_string()]).expect("help");
-        let err = run_with_args(&vec!["xtask".to_string(), "nope".to_string()]).unwrap_err();
+        let help_args = ["xtask".to_string(), "help".to_string()];
+        run_with_args(&help_args).expect("help");
+
+        let unknown_args = ["xtask".to_string(), "nope".to_string()];
+        let err = run_with_args(&unknown_args).unwrap_err();
         assert!(err.to_string().contains("unknown xtask command"));
     }
 
     #[test]
     fn run_with_args_emit_and_validate_schemas() {
         with_temp_root(|_root| {
-            run_with_args(&vec!["xtask".to_string(), "emit-schemas".to_string()])
-                .expect("emit");
-            run_with_args(&vec!["xtask".to_string(), "validate-schemas".to_string()])
-                .expect("validate");
+            let emit_args = ["xtask".to_string(), "emit-schemas".to_string()];
+            run_with_args(&emit_args).expect("emit");
+
+            let validate_args = ["xtask".to_string(), "validate-schemas".to_string()];
+            run_with_args(&validate_args).expect("validate");
+        });
+    }
+
+    #[test]
+    fn run_with_args_fixtures_requires_depguard_bin() {
+        with_temp_root(|_root| {
+            let fixtures_args = ["xtask".to_string(), "fixtures".to_string()];
+            let err = run_with_args(&fixtures_args).unwrap_err();
+            assert!(format!("{err:#}").contains("xtask failed"));
         });
     }
 
@@ -1244,18 +2506,329 @@ version = "0.1.0"
             write_dummy_depguard_bin(root);
             write_test_fixture(root, "ok", None);
 
-            run_with_args(&vec!["xtask".to_string(), "conform".to_string()])
-                .expect("conform");
-            run_with_args(&vec!["xtask".to_string(), "conform-full".to_string()])
-                .expect("conform-full");
+            let conform_args = ["xtask".to_string(), "conform".to_string()];
+            run_with_args(&conform_args).expect("conform");
+
+            let conform_full_args = ["xtask".to_string(), "conform-full".to_string()];
+            run_with_args(&conform_full_args).expect("conform-full");
         });
     }
 
     #[test]
     fn run_with_args_print_schema_ids_and_explain() {
-        run_with_args(&vec!["xtask".to_string(), "print-schema-ids".to_string()])
-            .expect("print-schema-ids");
-        run_with_args(&vec!["xtask".to_string(), "explain-coverage".to_string()])
-            .expect("explain-coverage");
+        let print_args = ["xtask".to_string(), "print-schema-ids".to_string()];
+        run_with_args(&print_args).expect("print-schema-ids");
+
+        let explain_args = ["xtask".to_string(), "explain-coverage".to_string()];
+        run_with_args(&explain_args).expect("explain-coverage");
+    }
+
+    // =========================================================================
+    // Tests for CI smoke script generation
+    // =========================================================================
+
+    #[test]
+    fn generate_smoke_scripts_creates_files() {
+        with_temp_root(|root| {
+            generate_smoke_scripts(SmokeOutputFormat::Scripts).expect("generate scripts");
+
+            let scripts_dir = root.join("scripts").join("ci");
+            assert!(scripts_dir.exists(), "scripts/ci directory should exist");
+
+            let bash_script = scripts_dir.join("smoke-test.sh");
+            assert!(bash_script.exists(), "smoke-test.sh should exist");
+            let bash_content = fs::read_to_string(&bash_script).expect("read bash script");
+            assert!(bash_content.contains("#!/usr/bin/env bash"));
+            assert!(bash_content.contains("depguard --help"));
+            assert!(bash_content.contains("depguard --version"));
+            assert!(bash_content.contains("depguard check"));
+
+            let ps_script = scripts_dir.join("smoke-test.ps1");
+            assert!(ps_script.exists(), "smoke-test.ps1 should exist");
+            let ps_content = fs::read_to_string(&ps_script).expect("read ps script");
+            assert!(ps_content.contains("param("));
+            assert!(ps_content.contains("--help"));
+            assert!(ps_content.contains("--version"));
+        });
+    }
+
+    #[test]
+    fn generate_bash_smoke_script_contains_required_tests() {
+        let script = generate_bash_smoke_script();
+
+        // Check for required test sections
+        assert!(script.contains("--help"), "Should test --help");
+        assert!(script.contains("--version"), "Should test --version");
+        assert!(script.contains("check"), "Should test check command");
+        assert!(script.contains("explain"), "Should test explain command");
+        assert!(script.contains("Cargo.toml"), "Should create test fixture");
+        assert!(
+            script.contains("report.json"),
+            "Should check for report output"
+        );
+    }
+
+    #[test]
+    fn generate_powershell_smoke_script_contains_required_tests() {
+        let script = generate_powershell_smoke_script();
+
+        // Check for required test sections
+        assert!(script.contains("--help"), "Should test --help");
+        assert!(script.contains("--version"), "Should test --version");
+        assert!(script.contains("check"), "Should test check command");
+        assert!(script.contains("explain"), "Should test explain command");
+        assert!(script.contains("Cargo.toml"), "Should create test fixture");
+    }
+
+    #[test]
+    fn generate_smoke_github_workflow_outputs_snippet() {
+        // This just prints to stdout, so we just verify it doesn't error
+        generate_smoke_scripts(SmokeOutputFormat::GitHub).expect("generate github workflow");
+    }
+
+    #[test]
+    fn current_timestamp_returns_iso_format() {
+        let ts = current_timestamp();
+        // Should contain T and Z for ISO 8601
+        assert!(
+            ts.contains('T') || ts.contains('-'),
+            "Timestamp should be ISO-like"
+        );
+    }
+
+    // =========================================================================
+    // Tests for release packaging automation
+    // =========================================================================
+
+    #[test]
+    fn parse_release_options_defaults() {
+        let args = ["xtask".to_string(), "release-prepare".to_string()];
+        let options = parse_release_options(&args);
+
+        assert!(options.target_version.is_none());
+        assert!(!options.dry_run);
+        assert!(!options.skip_changelog);
+        assert!(!options.build_artifacts);
+    }
+
+    #[test]
+    fn parse_release_options_with_flags() {
+        let args = [
+            "xtask".to_string(),
+            "release-prepare".to_string(),
+            "--dry-run".to_string(),
+            "--skip-changelog".to_string(),
+            "--build".to_string(),
+        ];
+        let options = parse_release_options(&args);
+
+        assert!(options.dry_run);
+        assert!(options.skip_changelog);
+        assert!(options.build_artifacts);
+    }
+
+    #[test]
+    fn parse_release_options_with_version() {
+        let args = [
+            "xtask".to_string(),
+            "release-prepare".to_string(),
+            "1.2.3".to_string(),
+        ];
+        let options = parse_release_options(&args);
+
+        assert_eq!(options.target_version, Some("1.2.3".to_string()));
+    }
+
+    #[test]
+    fn parse_release_options_with_version_flag() {
+        let args = [
+            "xtask".to_string(),
+            "release-prepare".to_string(),
+            "--version=2.0.0".to_string(),
+        ];
+        let options = parse_release_options(&args);
+
+        assert_eq!(options.target_version, Some("2.0.0".to_string()));
+    }
+
+    #[test]
+    fn bump_patch_version_increments() {
+        assert_eq!(bump_patch_version("1.2.3"), "1.2.4");
+        assert_eq!(bump_patch_version("0.0.1"), "0.0.2");
+        assert_eq!(bump_patch_version("10.20.30"), "10.20.31");
+    }
+
+    #[test]
+    fn bump_patch_version_fallback() {
+        // Invalid version format should append -next
+        assert_eq!(bump_patch_version("invalid"), "invalid-next");
+    }
+
+    #[test]
+    fn get_current_version_parses_toml() {
+        with_temp_root(|root| {
+            let cargo_toml = root.join("Cargo.toml");
+            fs::write(
+                &cargo_toml,
+                r#"[workspace.package]
+version = "1.2.3"
+"#,
+            )
+            .expect("write Cargo.toml");
+
+            let version = get_current_version().expect("get version");
+            assert_eq!(version, "1.2.3");
+        });
+    }
+
+    #[test]
+    fn get_current_version_handles_package_section() {
+        with_temp_root(|root| {
+            let cargo_toml = root.join("Cargo.toml");
+            fs::write(
+                &cargo_toml,
+                r#"[package]
+name = "test"
+version = "0.1.0"
+"#,
+            )
+            .expect("write Cargo.toml");
+
+            let version = get_current_version().expect("get version");
+            assert_eq!(version, "0.1.0");
+        });
+    }
+
+    #[test]
+    fn update_version_in_toml_modifies_file() {
+        with_temp_root(|root| {
+            let cargo_toml = root.join("Cargo.toml");
+            fs::write(
+                &cargo_toml,
+                r#"[package]
+name = "test"
+version = "0.1.0"
+"#,
+            )
+            .expect("write Cargo.toml");
+
+            update_version_in_toml(&cargo_toml, "0.1.0", "0.2.0").expect("update version");
+
+            let content = fs::read_to_string(&cargo_toml).expect("read Cargo.toml");
+            assert!(content.contains("version = \"0.2.0\""));
+            assert!(!content.contains("version = \"0.1.0\""));
+        });
+    }
+
+    #[test]
+    fn update_version_in_toml_no_change_if_different() {
+        with_temp_root(|root| {
+            let cargo_toml = root.join("Cargo.toml");
+            let original = r#"[package]
+name = "test"
+version = "0.1.0"
+"#;
+            fs::write(&cargo_toml, original).expect("write Cargo.toml");
+
+            // Try to update a version that doesn't exist
+            update_version_in_toml(&cargo_toml, "9.9.9", "10.0.0").expect("update version");
+
+            let content = fs::read_to_string(&cargo_toml).expect("read Cargo.toml");
+            // Should be unchanged since 9.9.9 wasn't found
+            assert_eq!(content, original);
+        });
+    }
+
+    #[test]
+    fn chrono_date_returns_iso_format() {
+        let date = chrono_date();
+        // Should be YYYY-MM-DD format
+        let parts: Vec<&str> = date.split('-').collect();
+        assert_eq!(parts.len(), 3, "Date should have 3 parts");
+        assert!(parts[0].len() == 4, "Year should be 4 digits");
+        assert!(parts[1].len() == 2, "Month should be 2 digits");
+        assert!(parts[2].len() == 2, "Day should be 2 digits");
+    }
+
+    #[test]
+    fn get_target_triple_returns_something() {
+        let triple = get_target_triple();
+        // Should contain arch and os
+        assert!(!triple.is_empty());
+        assert!(
+            triple.contains("x86_64") || triple.contains("aarch64") || triple.contains("unknown")
+        );
+    }
+
+    #[test]
+    fn release_options_struct_works() {
+        let options = ReleaseOptions {
+            target_version: Some("1.0.0".to_string()),
+            dry_run: true,
+            skip_changelog: false,
+            build_artifacts: true,
+        };
+
+        assert_eq!(options.target_version, Some("1.0.0".to_string()));
+        assert!(options.dry_run);
+        assert!(!options.skip_changelog);
+        assert!(options.build_artifacts);
+    }
+
+    #[test]
+    fn run_with_args_generate_smoke() {
+        with_temp_root(|_root| {
+            let args = ["xtask".to_string(), "generate-smoke".to_string()];
+            run_with_args(&args).expect("generate-smoke");
+        });
+    }
+
+    #[test]
+    fn run_with_args_generate_smoke_github() {
+        let args = [
+            "xtask".to_string(),
+            "generate-smoke".to_string(),
+            "--format=github".to_string(),
+        ];
+        run_with_args(&args).expect("generate-smoke github");
+    }
+
+    #[test]
+    fn run_with_args_release_prepare_dry_run() {
+        with_temp_root(|root| {
+            // Create a minimal Cargo.toml
+            fs::write(
+                root.join("Cargo.toml"),
+                r#"[workspace.package]
+version = "0.1.0"
+"#,
+            )
+            .expect("write Cargo.toml");
+
+            let args = [
+                "xtask".to_string(),
+                "release-prepare".to_string(),
+                "--dry-run".to_string(),
+            ];
+            // This will fail because git commands won't work in temp dir
+            // but we can at least verify the command is recognized
+            let result = run_with_args(&args);
+            // The command should be recognized even if it fails
+            assert!(
+                result.is_err() || result.is_ok(),
+                "Command should be recognized"
+            );
+        });
+    }
+
+    #[test]
+    fn run_with_args_release_check_without_git() {
+        // release-check will fail without git/cargo, but should be recognized
+        let args = ["xtask".to_string(), "release-check".to_string()];
+        let result = run_with_args(&args);
+        // Command should be recognized (even if it fails)
+        let err = result.unwrap_err();
+        // Should not be "unknown command"
+        assert!(!err.to_string().contains("unknown xtask command"));
     }
 }

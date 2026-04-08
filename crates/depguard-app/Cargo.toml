@@ -4,19 +4,69 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Use case orchestration for depguard (check, md, annotations, explain)"
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+authors.workspace = true
+description = "depguard application use cases for check, explain, baseline, and rendering"
+readme = "README.md"
 
 [dependencies]
-depguard-types.path = "../depguard-types"
-depguard-domain.path = "../depguard-domain"
-depguard-repo.path = "../depguard-repo"
-depguard-settings.path = "../depguard-settings"
-depguard-render.path = "../depguard-render"
+depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
+depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
+depguard-settings = { version = "0.1.0", path = "../depguard-settings", default-features = false }
+depguard-render = { version = "0.1.0", path = "../depguard-render" }
+depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
 
 anyhow.workspace = true
 camino.workspace = true
 serde_json.workspace = true
 time.workspace = true
+toml_edit.workspace = true
+
+[features]
+default = ["depguard-domain/default", "depguard-settings/default"]
+check-no-wildcards = [
+    "depguard-domain/check-no-wildcards",
+    "depguard-settings/check-no-wildcards",
+]
+check-path-requires-version = [
+    "depguard-domain/check-path-requires-version",
+    "depguard-settings/check-path-requires-version",
+]
+check-path-safety = [
+    "depguard-domain/check-path-safety",
+    "depguard-settings/check-path-safety",
+]
+check-workspace-inheritance = [
+    "depguard-domain/check-workspace-inheritance",
+    "depguard-settings/check-workspace-inheritance",
+]
+check-git-requires-version = [
+    "depguard-domain/check-git-requires-version",
+    "depguard-settings/check-git-requires-version",
+]
+check-dev-only-in-normal = [
+    "depguard-domain/check-dev-only-in-normal",
+    "depguard-settings/check-dev-only-in-normal",
+]
+check-default-features-explicit = [
+    "depguard-domain/check-default-features-explicit",
+    "depguard-settings/check-default-features-explicit",
+]
+check-no-multiple-versions = [
+    "depguard-domain/check-no-multiple-versions",
+    "depguard-settings/check-no-multiple-versions",
+]
+check-optional-unused = [
+    "depguard-domain/check-optional-unused",
+    "depguard-settings/check-optional-unused",
+]
+check-yanked-versions = [
+    "depguard-domain/check-yanked-versions",
+    "depguard-settings/check-yanked-versions",
+]
 
 [dev-dependencies]
 tempfile.workspace = true
