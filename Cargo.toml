@@ -25,7 +25,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/depguard/"
 homepage = "https://github.com/EffortlessMetrics/depguard/"
 description = "Repo-truth dependency manifest hygiene sensor for Rust workspaces"
-keywords = ["depguard", "dependencies", "dependency-management", "cargo", "security"]
+keywords = ["depguard", "dependencies", "manifest-hygiene", "cargo", "security"]
 authors = ["Depguard contributors"]
 
 [workspace.dependencies]
