@@ -10,7 +10,6 @@ keywords.workspace = true
 authors.workspace = true
 description = "Inline suppression parser for depguard"
 readme = "README.md"
-publish = false
 
 [dependencies]
 depguard-types = { version = "0.1.0", path = "../depguard-types" }

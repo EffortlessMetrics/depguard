@@ -45,7 +45,8 @@ This prevents false normalization of nested objects that happen to share the sam
 
 ## Design Constraints
 
-- **Publishable**: `publish = false` — only for internal testing
+- **Support crate**: intended for workspace tests/tooling, not end-user runtime APIs
+- **Publishable**: kept publishable so crates with dev-dependencies on it can pass crates.io packaging/verification
 - **No I/O**: Pure JSON transformation
 - **Deterministic**: Same input → same output
 

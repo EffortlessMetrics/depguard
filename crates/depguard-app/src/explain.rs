@@ -84,7 +84,7 @@ pub fn format_not_found(
         out.push_str(&format!("  - {}\n", code));
     }
     out.push_str("\nTo get detailed information about a specific check, run:\n");
-    out.push_str(&format!("  depguard explain <check_id|code>\n"));
+    out.push_str("  depguard explain <check_id|code>\n");
 
     out
 }

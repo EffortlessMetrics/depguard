@@ -19,7 +19,7 @@ Contributor workflows (schema generation, fixture maintenance, conformance check
 ### Release and CI automation
 - Produce smoke scripts
 - Prepare release metadata and artifacts
-- Validate pre-release checks
+- Validate pre-release checks, including packaging publishable crates
 
 ## How to use
 ```bash

@@ -9,8 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 authors.workspace = true
-readme = "../depguard-domain/README.md"
-publish = false
+readme = "README.md"
 
 [dependencies]
 depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }

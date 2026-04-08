@@ -12,7 +12,8 @@ Golden fixture tests are unreliable when outputs contain timestamps, versions, a
 - Optional deterministic crypto fixture utilities behind a feature flag
 
 ## Usage intent
-- Use only in workspace tests/build tooling, not as shipped runtime API.
+- Use primarily in workspace tests/build tooling, not as shipped runtime API.
+- Publish it only as support for crates.io packaging and verification of workspace crates that use it in dev-dependencies.
 - Normalize before string/JSON snapshot comparison.
 
 ## Design constraints

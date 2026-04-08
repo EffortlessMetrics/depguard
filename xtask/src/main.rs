@@ -220,6 +220,11 @@ fn is_clean_path(path: &str) -> bool {
         || (path.len() >= 2 && path.as_bytes()[1] == b':'))
 }
 
+/// Workspace members that are intentionally internal-only and excluded from publish checks.
+fn release_package_excludes() -> &'static [&'static str] {
+    &["xtask"]
+}
+
 /// Validate sensor.report.v1 conformance.
 ///
 /// This checks:
@@ -955,7 +960,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-DEPGUARD_BIN="${{DEPGUARD_BIN:-$REPO_ROOT/target/debug/depguard}}"
+if [[ -f "$REPO_ROOT/target/debug/depguard.exe" ]]; then
+    DEFAULT_DEPGUARD_BIN="$REPO_ROOT/target/debug/depguard.exe"
+elif [[ -x "$REPO_ROOT/target/debug/depguard" ]]; then
+    DEFAULT_DEPGUARD_BIN="$REPO_ROOT/target/debug/depguard"
+else
+    DEFAULT_DEPGUARD_BIN="$REPO_ROOT/target/debug/depguard"
+fi
+DEPGUARD_BIN="${{DEPGUARD_BIN:-$DEFAULT_DEPGUARD_BIN}}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -965,20 +977,65 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 pass() {{
-    echo -e "${{GREEN}}✓${{NC}} $1"
+    echo -e "${{GREEN}}[PASS]${{NC}} $1"
 }}
 
 fail() {{
-    echo -e "${{RED}}✗${{NC}} $1"
+    echo -e "${{RED}}[FAIL]${{NC}} $1"
     exit 1
 }}
 
 info() {{
-    echo -e "${{YELLOW}}ℹ${{NC}} $1"
+    echo -e "${{YELLOW}}[INFO]${{NC}} $1"
 }}
 
 section() {{
     echo -e "${{BLUE}}=== $1 ===${{NC}}"
+}}
+
+new_temp_dir() {{
+    if [[ "$DEPGUARD_BIN" == *.exe ]]; then
+        mkdir -p "$REPO_ROOT/target/bash-smoke"
+        mktemp -d "$REPO_ROOT/target/bash-smoke/depguard-smoke.XXXXXX"
+    else
+        mktemp -d
+    fi
+}}
+
+new_temp_file() {{
+    if [[ "$DEPGUARD_BIN" == *.exe ]]; then
+        mkdir -p "$REPO_ROOT/target/bash-smoke"
+        mktemp "$REPO_ROOT/target/bash-smoke/depguard-smoke.XXXXXX"
+    else
+        mktemp
+    fi
+}}
+
+to_depguard_path() {{
+    if [[ "$DEPGUARD_BIN" == *.exe ]]; then
+        if command -v cygpath > /dev/null 2>&1; then
+            cygpath -w "$1"
+            return
+        fi
+        if command -v wslpath > /dev/null 2>&1; then
+            wslpath -w "$1"
+            return
+        fi
+    fi
+    printf '%s' "$1"
+}}
+
+run_quiet() {{
+    local stdout_file stderr_file exit_code
+    stdout_file=$(new_temp_file)
+    stderr_file=$(new_temp_file)
+    if "$@" >"$stdout_file" 2>"$stderr_file"; then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    rm -f "$stdout_file" "$stderr_file"
+    return "$exit_code"
 }}
 
 # Check binary exists
@@ -1003,7 +1060,7 @@ else
 fi
 
 # Create a comprehensive test fixture
-TEMP_DIR=$(mktemp -d)
+TEMP_DIR=$(new_temp_dir)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Create a fixture with various dependency patterns
@@ -1024,7 +1081,7 @@ EOF
 
 section "Testing basic check command"
 REPORT_OUT="$TEMP_DIR/report.json"
-if "$DEPGUARD_BIN" --repo-root "$TEMP_DIR" check --report-out "$REPORT_OUT" > /dev/null 2>&1; then
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$TEMP_DIR")" check --report-out "$(to_depguard_path "$REPORT_OUT")"; then
     pass "depguard check runs on fixture"
 else
     # Check may exit 2 for policy violations, which is acceptable for smoke test
@@ -1054,21 +1111,21 @@ fi
 
 section "Testing output formats"
 # Test markdown output
-if "$DEPGUARD_BIN" md --report "$REPORT_OUT" > "$TEMP_DIR/output.md" 2>&1; then
+if "$DEPGUARD_BIN" md --report "$(to_depguard_path "$REPORT_OUT")" > "$TEMP_DIR/output.md" 2>&1; then
     pass "Markdown output generation works"
 else
     fail "Markdown output generation failed"
 fi
 
 # Test annotations output
-if "$DEPGUARD_BIN" annotations --report "$REPORT_OUT" > "$TEMP_DIR/annotations.txt" 2>&1; then
+if "$DEPGUARD_BIN" annotations --report "$(to_depguard_path "$REPORT_OUT")" > "$TEMP_DIR/annotations.txt" 2>&1; then
     pass "Annotations output generation works"
 else
     fail "Annotations output generation failed"
 fi
 
 # Test SARIF output
-if "$DEPGUARD_BIN" sarif --report "$REPORT_OUT" > "$TEMP_DIR/output.sarif" 2>&1; then
+if "$DEPGUARD_BIN" sarif --report "$(to_depguard_path "$REPORT_OUT")" > "$TEMP_DIR/output.sarif" 2>&1; then
     pass "SARIF output generation works"
     # Validate SARIF is valid JSON
     if command -v jq > /dev/null 2>&1; then
@@ -1083,14 +1140,14 @@ else
 fi
 
 # Test JUnit output
-if "$DEPGUARD_BIN" junit --report "$REPORT_OUT" > "$TEMP_DIR/output.junit" 2>&1; then
+if "$DEPGUARD_BIN" junit --report "$(to_depguard_path "$REPORT_OUT")" > "$TEMP_DIR/output.junit" 2>&1; then
     pass "JUnit output generation works"
 else
     fail "JUnit output generation failed"
 fi
 
 # Test JSONL output
-if "$DEPGUARD_BIN" jsonl --report "$REPORT_OUT" > "$TEMP_DIR/output.jsonl" 2>&1; then
+if "$DEPGUARD_BIN" jsonl --report "$(to_depguard_path "$REPORT_OUT")" > "$TEMP_DIR/output.jsonl" 2>&1; then
     pass "JSONL output generation works"
 else
     fail "JSONL output generation failed"
@@ -1098,7 +1155,7 @@ fi
 
 section "Testing exit codes"
 # Test with a clean fixture (should exit 0)
-CLEAN_DIR=$(mktemp -d)
+CLEAN_DIR=$(new_temp_dir)
 cat > "$CLEAN_DIR/Cargo.toml" << 'EOF'
 [package]
 name = "clean-fixture"
@@ -1110,7 +1167,7 @@ serde = "1.0"
 EOF
 
 CLEAN_REPORT="$CLEAN_DIR/report.json"
-if "$DEPGUARD_BIN" --repo-root "$CLEAN_DIR" check --report-out "$CLEAN_REPORT" > /dev/null 2>&1; then
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$CLEAN_DIR")" check --report-out "$(to_depguard_path "$CLEAN_REPORT")"; then
     pass "Clean fixture exits with code 0"
 else
     EXIT_CODE=$?
@@ -1123,7 +1180,7 @@ fi
 rm -rf "$CLEAN_DIR"
 
 # Test with violations (should exit 2)
-VIOLATIONS_DIR=$(mktemp -d)
+VIOLATIONS_DIR=$(new_temp_dir)
 cat > "$VIOLATIONS_DIR/Cargo.toml" << 'EOF'
 [package]
 name = "violations-fixture"
@@ -1136,21 +1193,23 @@ tokio = "*"
 EOF
 
 VIOLATIONS_REPORT="$VIOLATIONS_DIR/report.json"
-if "$DEPGUARD_BIN" --repo-root "$VIOLATIONS_DIR" check --report-out "$VIOLATIONS_REPORT" > /dev/null 2>&1; then
-    info "Violations fixture may not trigger violations (depends on config)"
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$VIOLATIONS_DIR")" check --report-out "$(to_depguard_path "$VIOLATIONS_REPORT")"; then
+    EXIT_CODE=0
 else
     EXIT_CODE=$?
-    if [[ $EXIT_CODE -eq 2 ]]; then
-        pass "Violations fixture exits with code 2 (policy failure)"
-    else
-        info "Violations fixture exited with code $EXIT_CODE"
-    fi
+fi
+if [[ $EXIT_CODE -eq 2 ]]; then
+    pass "Violations fixture exits with code 2 (policy failure)"
+elif [[ $EXIT_CODE -eq 0 ]]; then
+    fail "Violations fixture unexpectedly exited with code 0"
+else
+    fail "Violations fixture exited with unexpected code $EXIT_CODE"
 fi
 rm -rf "$VIOLATIONS_DIR"
 
 section "Testing diff-scope functionality"
 # Create a workspace for diff-scope testing
-WORKSPACE_DIR=$(mktemp -d)
+WORKSPACE_DIR=$(new_temp_dir)
 cat > "$WORKSPACE_DIR/Cargo.toml" << 'EOF'
 [workspace]
 members = ["member1", "member2"]
@@ -1179,7 +1238,7 @@ tokio = "1.0"
 EOF
 
 DIFF_REPORT="$WORKSPACE_DIR/report.json"
-if "$DEPGUARD_BIN" --repo-root "$WORKSPACE_DIR" check --report-out "$DIFF_REPORT" > /dev/null 2>&1; then
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$WORKSPACE_DIR")" check --report-out "$(to_depguard_path "$DIFF_REPORT")"; then
     pass "Workspace check with diff-scope works"
 else
     EXIT_CODE=$?
@@ -1192,7 +1251,7 @@ fi
 rm -rf "$WORKSPACE_DIR"
 
 section "Testing baseline generation"
-BASELINE_DIR=$(mktemp -d)
+BASELINE_DIR=$(new_temp_dir)
 cat > "$BASELINE_DIR/Cargo.toml" << 'EOF'
 [package]
 name = "baseline-fixture"
@@ -1204,79 +1263,89 @@ serde = "*"
 EOF
 
 BASELINE_OUT="$BASELINE_DIR/depguard.baseline.toml"
-if "$DEPGUARD_BIN" --repo-root "$BASELINE_DIR" baseline --output "$BASELINE_OUT" > /dev/null 2>&1; then
-    pass "Baseline generation works"
-    if [[ -f "$BASELINE_OUT" ]]; then
-        pass "Baseline file created: $BASELINE_OUT"
-    else
-        fail "Baseline file not created"
-    fi
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$BASELINE_DIR")" baseline --output "$(to_depguard_path "$BASELINE_OUT")"; then
+    BASELINE_EXIT_CODE=0
 else
-    info "Baseline generation may have failed (expected for some configurations)"
+    BASELINE_EXIT_CODE=$?
+fi
+if [[ $BASELINE_EXIT_CODE -ne 0 ]]; then
+    fail "Baseline generation failed with exit code $BASELINE_EXIT_CODE"
+fi
+pass "Baseline generation works"
+if [[ -f "$BASELINE_OUT" ]]; then
+    pass "Baseline file created: $BASELINE_OUT"
+else
+    fail "Baseline file not created"
 fi
 rm -rf "$BASELINE_DIR"
 
 section "Testing explain command"
 # Test explain with check ID
-if "$DEPGUARD_BIN" explain no_wildcards > /dev/null 2>&1; then
-    pass "depguard explain no_wildcards works"
+if run_quiet "$DEPGUARD_BIN" explain deps.no_wildcards; then
+    pass "depguard explain deps.no_wildcards works"
 else
-    fail "depguard explain no_wildcards failed"
+    fail "depguard explain deps.no_wildcards failed"
 fi
 
 # Test explain with code
-if "$DEPGUARD_BIN" explain wildcard_found > /dev/null 2>&1; then
-    pass "depguard explain wildcard_found works"
+if run_quiet "$DEPGUARD_BIN" explain wildcard_version; then
+    pass "depguard explain wildcard_version works"
 else
-    fail "depguard explain wildcard_found failed"
+    fail "depguard explain wildcard_version failed"
 fi
 
 section "Testing schema conformance"
 # Test v2 report schema
-if "$DEPGUARD_BIN" --repo-root "$TEMP_DIR" check --report-version v2 --report-out "$TEMP_DIR/v2-report.json" > /dev/null 2>&1; then
-    pass "v2 report generation works"
-    if command -v jq > /dev/null 2>&1; then
-        SCHEMA_VERSION=$(jq -r '.schema // empty' "$TEMP_DIR/v2-report.json" 2>/dev/null || echo "")
-        if [[ "$SCHEMA_VERSION" == "depguard.report.v2" ]]; then
-            pass "v2 report has correct schema identifier"
-        else
-            info "v2 report schema version: $SCHEMA_VERSION"
-        fi
-    fi
+V2_REPORT="$TEMP_DIR/v2-report.json"
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$TEMP_DIR")" check --report-version v2 --report-out "$(to_depguard_path "$V2_REPORT")"; then
+    EXIT_CODE=0
 else
     EXIT_CODE=$?
-    if [[ $EXIT_CODE -eq 0 || $EXIT_CODE -eq 2 ]]; then
-        pass "v2 report generation works (exit code $EXIT_CODE)"
+fi
+if [[ $EXIT_CODE -ne 0 && $EXIT_CODE -ne 2 ]]; then
+    fail "v2 report generation failed with exit code $EXIT_CODE"
+fi
+[[ -f "$V2_REPORT" ]] || fail "v2 report not created"
+pass "v2 report generation works (exit code $EXIT_CODE)"
+if command -v jq > /dev/null 2>&1; then
+    SCHEMA_VERSION=$(jq -r '.schema // empty' "$V2_REPORT" 2>/dev/null || echo "")
+    if [[ "$SCHEMA_VERSION" == "depguard.report.v2" ]]; then
+        pass "v2 report has correct schema identifier"
     else
-        fail "v2 report generation failed with exit code $EXIT_CODE"
+        fail "v2 report schema version mismatch: expected depguard.report.v2, got '$SCHEMA_VERSION'"
     fi
+else
+    info "jq not available, skipping schema validation"
 fi
 
 # Test sensor-v1 report schema
-if "$DEPGUARD_BIN" --repo-root "$TEMP_DIR" check --report-version sensor-v1 --mode cockpit --report-out "$TEMP_DIR/sensor-report.json" > /dev/null 2>&1; then
-    pass "sensor-v1 report generation works"
-    if command -v jq > /dev/null 2>&1; then
-        SCHEMA_VERSION=$(jq -r '.schema // empty' "$TEMP_DIR/sensor-report.json" 2>/dev/null || echo "")
-        if [[ "$SCHEMA_VERSION" == "sensor.report.v1" ]]; then
-            pass "sensor-v1 report has correct schema identifier"
-        else
-            info "sensor-v1 report schema version: $SCHEMA_VERSION"
-        fi
-    fi
+SENSOR_REPORT="$TEMP_DIR/sensor-report.json"
+if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$TEMP_DIR")" check --report-version sensor-v1 --mode cockpit --report-out "$(to_depguard_path "$SENSOR_REPORT")"; then
+    EXIT_CODE=0
 else
     EXIT_CODE=$?
-    if [[ $EXIT_CODE -eq 0 || $EXIT_CODE -eq 2 ]]; then
-        pass "sensor-v1 report generation works (exit code $EXIT_CODE)"
+fi
+if [[ $EXIT_CODE -ne 0 && $EXIT_CODE -ne 2 ]]; then
+    fail "sensor-v1 report generation failed with exit code $EXIT_CODE"
+fi
+[[ -f "$SENSOR_REPORT" ]] || fail "sensor-v1 report not created"
+pass "sensor-v1 report generation works (exit code $EXIT_CODE)"
+if command -v jq > /dev/null 2>&1; then
+    SCHEMA_VERSION=$(jq -r '.schema // empty' "$SENSOR_REPORT" 2>/dev/null || echo "")
+    if [[ "$SCHEMA_VERSION" == "sensor.report.v1" ]]; then
+        pass "sensor-v1 report has correct schema identifier"
     else
-        fail "sensor-v1 report generation failed with exit code $EXIT_CODE"
+        fail "sensor-v1 report schema version mismatch: expected sensor.report.v1, got '$SCHEMA_VERSION'"
     fi
+else
+    info "jq not available, skipping schema validation"
 fi
 
 section "Testing workspace check"
 # Test check on the actual workspace if available
 if [[ -d "$REPO_ROOT/crates" ]]; then
     WORKSPACE_REPORT="$TEMP_DIR/workspace-report.json"
-    if "$DEPGUARD_BIN" --repo-root "$REPO_ROOT" check --report-out "$WORKSPACE_REPORT" > /dev/null 2>&1; then
+    if run_quiet "$DEPGUARD_BIN" --repo-root "$(to_depguard_path "$REPO_ROOT")" check --report-out "$(to_depguard_path "$WORKSPACE_REPORT")"; then
         pass "Workspace check on actual repo works"
     else
         EXIT_CODE=$?
@@ -1323,16 +1392,16 @@ if ([string]::IsNullOrEmpty($DepguardBin)) {{
 }}
 
 function Write-Pass($message) {{
-    Write-Host "✓ $message" -ForegroundColor Green
+    Write-Host "[PASS] $message" -ForegroundColor Green
 }}
 
 function Write-Fail($message) {{
-    Write-Host "✗ $message" -ForegroundColor Red
+    Write-Host "[FAIL] $message" -ForegroundColor Red
     exit 1
 }}
 
 function Write-Info($message) {{
-    Write-Host "ℹ $message" -ForegroundColor Yellow
+    Write-Host "[INFO] $message" -ForegroundColor Yellow
 }}
 
 function Write-Section($message) {{
@@ -1344,6 +1413,17 @@ function New-TempDir {{
     $tempDir = Join-Path $tempPath "depguard-smoke-$(Get-Random)"
     New-Item -ItemType Directory -Path $tempDir | Out-Null
     return $tempDir
+}}
+
+function Invoke-DepguardQuiet([string[]]$Arguments) {{
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {{
+        $process = Start-Process -FilePath $DepguardBin -ArgumentList $Arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+        return $process.ExitCode
+    }} finally {{
+        Remove-Item @($stdoutPath, $stderrPath) -Force -ErrorAction SilentlyContinue
+    }}
 }}
 
 # Check binary exists
@@ -1363,8 +1443,9 @@ try {{
 # Test --version
 try {{
     $versionOutput = & $DepguardBin --version 2>&1
+    $firstVersionLine = (($versionOutput | Out-String).Trim() -split "\r?\n")[0]
     if ($versionOutput -match "depguard") {{
-        Write-Pass "depguard --version outputs version info: ${{($versionOutput -split '`n')[0]}}"
+        Write-Pass "depguard --version outputs version info: $firstVersionLine"
     }} else {{
         Write-Fail "depguard --version output unexpected: $versionOutput"
     }}
@@ -1397,7 +1478,8 @@ criterion = "0.5"
     $ReportOut = Join-Path $TempDir "report.json"
     $exitCode = 0
     try {{
-        & $DepguardBin --repo-root $TempDir check --report-out $ReportOut 2>&1 | Out-Null
+        & $DepguardBin --repo-root $TempDir check --report-out $ReportOut *> $null
+        $exitCode = $LASTEXITCODE
     }} catch {{
         $exitCode = $_.Exception.HResult
     }}
@@ -1428,7 +1510,7 @@ criterion = "0.5"
     # Test markdown output
     $mdOutput = Join-Path $TempDir "output.md"
     try {{
-        & $DepguardBin md --report $ReportOut 2>&1 | Out-File -FilePath $mdOutput
+        & $DepguardBin md --report $ReportOut *> $mdOutput
         Write-Pass "Markdown output generation works"
     }} catch {{
         Write-Fail "Markdown output generation failed: $_"
@@ -1437,7 +1519,7 @@ criterion = "0.5"
     # Test annotations output
     $annotationsOutput = Join-Path $TempDir "annotations.txt"
     try {{
-        & $DepguardBin annotations --report $ReportOut 2>&1 | Out-File -FilePath $annotationsOutput
+        & $DepguardBin annotations --report $ReportOut *> $annotationsOutput
         Write-Pass "Annotations output generation works"
     }} catch {{
         Write-Fail "Annotations output generation failed: $_"
@@ -1446,7 +1528,7 @@ criterion = "0.5"
     # Test SARIF output
     $sarifOutput = Join-Path $TempDir "output.sarif"
     try {{
-        & $DepguardBin sarif --report $ReportOut 2>&1 | Out-File -FilePath $sarifOutput
+        & $DepguardBin sarif --report $ReportOut *> $sarifOutput
         Write-Pass "SARIF output generation works"
         # Validate SARIF is valid JSON
         try {{
@@ -1462,7 +1544,7 @@ criterion = "0.5"
     # Test JUnit output
     $junitOutput = Join-Path $TempDir "output.junit"
     try {{
-        & $DepguardBin junit --report $ReportOut 2>&1 | Out-File -FilePath $junitOutput
+        & $DepguardBin junit --report $ReportOut *> $junitOutput
         Write-Pass "JUnit output generation works"
     }} catch {{
         Write-Fail "JUnit output generation failed: $_"
@@ -1471,7 +1553,7 @@ criterion = "0.5"
     # Test JSONL output
     $jsonlOutput = Join-Path $TempDir "output.jsonl"
     try {{
-        & $DepguardBin jsonl --report $ReportOut 2>&1 | Out-File -FilePath $jsonlOutput
+        & $DepguardBin jsonl --report $ReportOut *> $jsonlOutput
         Write-Pass "JSONL output generation works"
     }} catch {{
         Write-Fail "JSONL output generation failed: $_"
@@ -1496,7 +1578,8 @@ serde = "1.0"
         $CleanReport = Join-Path $CleanDir "report.json"
         $exitCode = 0
         try {{
-            & $DepguardBin --repo-root $CleanDir check --report-out $CleanReport 2>&1 | Out-Null
+            & $DepguardBin --repo-root $CleanDir check --report-out $CleanReport *> $null
+            $exitCode = $LASTEXITCODE
         }} catch {{
             $exitCode = $_.Exception.HResult
         }}
@@ -1528,17 +1611,18 @@ tokio = "*"
         $ViolationsReport = Join-Path $ViolationsDir "report.json"
         $exitCode = 0
         try {{
-            & $DepguardBin --repo-root $ViolationsDir check --report-out $ViolationsReport 2>&1 | Out-Null
+            & $DepguardBin --repo-root $ViolationsDir check --report-out $ViolationsReport *> $null
+            $exitCode = $LASTEXITCODE
         }} catch {{
             $exitCode = $_.Exception.HResult
         }}
         
-        if ($LASTEXITCODE -eq 2) {{
+        if ($exitCode -eq 2) {{
             Write-Pass "Violations fixture exits with code 2 (policy failure)"
-        }} elseif ($LASTEXITCODE -eq 0) {{
-            Write-Info "Violations fixture may not trigger violations (depends on config)"
+        }} elseif ($exitCode -eq 0) {{
+            Write-Fail "Violations fixture unexpectedly exited with code 0"
         }} else {{
-            Write-Info "Violations fixture exited with code $LASTEXITCODE"
+            Write-Fail "Violations fixture exited with unexpected code $exitCode"
         }}
     }} finally {{
         Remove-Item -Recurse -Force $ViolationsDir -ErrorAction SilentlyContinue
@@ -1584,7 +1668,8 @@ tokio = "1.0"
         $DiffReport = Join-Path $WorkspaceDir "report.json"
         $exitCode = 0
         try {{
-            & $DepguardBin --repo-root $WorkspaceDir check --report-out $DiffReport 2>&1 | Out-Null
+            & $DepguardBin --repo-root $WorkspaceDir check --report-out $DiffReport *> $null
+            $exitCode = $LASTEXITCODE
         }} catch {{
             $exitCode = $_.Exception.HResult
         }}
@@ -1614,16 +1699,17 @@ serde = "*"
         Set-Content -Path (Join-Path $BaselineDir "Cargo.toml") -Value $BaselineToml -NoNewline
         
         $BaselineOut = Join-Path $BaselineDir "depguard.baseline.toml"
-        try {{
-            & $DepguardBin --repo-root $BaselineDir baseline --output $BaselineOut 2>&1 | Out-Null
-            Write-Pass "Baseline generation works"
-            if (Test-Path $BaselineOut) {{
-                Write-Pass "Baseline file created: $BaselineOut"
-            }} else {{
-                Write-Fail "Baseline file not created"
-            }}
-        }} catch {{
-            Write-Info "Baseline generation may have failed (expected for some configurations)"
+        $exitCode = Invoke-DepguardQuiet @("--repo-root", $BaselineDir, "baseline", "--output", $BaselineOut)
+
+        if ($exitCode -ne 0) {{
+            Write-Fail "Baseline generation failed with exit code $exitCode"
+        }}
+
+        Write-Pass "Baseline generation works"
+        if (Test-Path $BaselineOut) {{
+            Write-Pass "Baseline file created: $BaselineOut"
+        }} else {{
+            Write-Fail "Baseline file not created"
         }}
     }} finally {{
         Remove-Item -Recurse -Force $BaselineDir -ErrorAction SilentlyContinue
@@ -1633,18 +1719,18 @@ serde = "*"
     
     # Test explain with check ID
     try {{
-        & $DepguardBin explain no_wildcards 2>&1 | Out-Null
-        Write-Pass "depguard explain no_wildcards works"
+        & $DepguardBin explain deps.no_wildcards *> $null
+        Write-Pass "depguard explain deps.no_wildcards works"
     }} catch {{
-        Write-Fail "depguard explain no_wildcards failed: $_"
+        Write-Fail "depguard explain deps.no_wildcards failed: $_"
     }}
 
     # Test explain with code
     try {{
-        & $DepguardBin explain wildcard_found 2>&1 | Out-Null
-        Write-Pass "depguard explain wildcard_found works"
+        & $DepguardBin explain wildcard_version *> $null
+        Write-Pass "depguard explain wildcard_version works"
     }} catch {{
-        Write-Fail "depguard explain wildcard_found failed: $_"
+        Write-Fail "depguard explain wildcard_version failed: $_"
     }}
 
     Write-Section "Testing schema conformance"
@@ -1653,50 +1739,60 @@ serde = "*"
     $v2Report = Join-Path $TempDir "v2-report.json"
     $exitCode = 0
     try {{
-        & $DepguardBin --repo-root $TempDir check --report-version v2 --report-out $v2Report 2>&1 | Out-Null
+        & $DepguardBin --repo-root $TempDir check --report-version v2 --report-out $v2Report *> $null
+        $exitCode = $LASTEXITCODE
     }} catch {{
         $exitCode = $_.Exception.HResult
     }}
     
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {{
-        Write-Pass "v2 report generation works (exit code $LASTEXITCODE)"
-        try {{
-            $v2Content = Get-Content $v2Report | ConvertFrom-Json
-            if ($v2Content.schema -eq "depguard.report.v2") {{
-                Write-Pass "v2 report has correct schema identifier"
-            }} else {{
-                Write-Info "v2 report schema version: $($v2Content.schema)"
-            }}
-        }} catch {{
-            Write-Info "Could not validate v2 report schema"
+    if ($exitCode -ne 0 -and $exitCode -ne 2) {{
+        Write-Fail "v2 report generation failed with exit code $exitCode"
+    }}
+
+    if (-not (Test-Path $v2Report)) {{
+        Write-Fail "v2 report not created"
+    }}
+
+    Write-Pass "v2 report generation works (exit code $exitCode)"
+    try {{
+        $v2Content = Get-Content $v2Report | ConvertFrom-Json
+        if ($v2Content.schema -eq "depguard.report.v2") {{
+            Write-Pass "v2 report has correct schema identifier"
+        }} else {{
+            Write-Fail "v2 report schema version mismatch: expected depguard.report.v2, got '$($v2Content.schema)'"
         }}
-    }} else {{
-        Write-Fail "v2 report generation failed with exit code $LASTEXITCODE"
+    }} catch {{
+        Write-Fail "Could not validate v2 report schema: $_"
     }}
 
     # Test sensor-v1 report schema
     $sensorReport = Join-Path $TempDir "sensor-report.json"
     $exitCode = 0
     try {{
-        & $DepguardBin --repo-root $TempDir check --report-version sensor-v1 --mode cockpit --report-out $sensorReport 2>&1 | Out-Null
+        & $DepguardBin --repo-root $TempDir check --report-version sensor-v1 --mode cockpit --report-out $sensorReport *> $null
+        $exitCode = $LASTEXITCODE
     }} catch {{
         $exitCode = $_.Exception.HResult
     }}
     
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 2) {{
-        Write-Pass "sensor-v1 report generation works (exit code $LASTEXITCODE)"
-        try {{
-            $sensorContent = Get-Content $sensorReport | ConvertFrom-Json
-            if ($sensorContent.schema -eq "sensor.report.v1") {{
-                Write-Pass "sensor-v1 report has correct schema identifier"
-            }} else {{
-                Write-Info "sensor-v1 report schema version: $($sensorContent.schema)"
-            }}
-        }} catch {{
-            Write-Info "Could not validate sensor-v1 report schema"
+    if ($exitCode -ne 0 -and $exitCode -ne 2) {{
+        Write-Fail "sensor-v1 report generation failed with exit code $exitCode"
+    }}
+
+    if (-not (Test-Path $sensorReport)) {{
+        Write-Fail "sensor-v1 report not created"
+    }}
+
+    Write-Pass "sensor-v1 report generation works (exit code $exitCode)"
+    try {{
+        $sensorContent = Get-Content $sensorReport | ConvertFrom-Json
+        if ($sensorContent.schema -eq "sensor.report.v1") {{
+            Write-Pass "sensor-v1 report has correct schema identifier"
+        }} else {{
+            Write-Fail "sensor-v1 report schema version mismatch: expected sensor.report.v1, got '$($sensorContent.schema)'"
         }}
-    }} else {{
-        Write-Fail "sensor-v1 report generation failed with exit code $LASTEXITCODE"
+    }} catch {{
+        Write-Fail "Could not validate sensor-v1 report schema: $_"
     }}
 
     Write-Section "Testing workspace check"
@@ -1706,7 +1802,8 @@ serde = "*"
         $WorkspaceReport = Join-Path $TempDir "workspace-report.json"
         $exitCode = 0
         try {{
-            & $DepguardBin --repo-root $RepoRoot check --report-out $WorkspaceReport 2>&1 | Out-Null
+            & $DepguardBin --repo-root $RepoRoot check --report-out $WorkspaceReport *> $null
+            $exitCode = $LASTEXITCODE
         }} catch {{
             $exitCode = $_.Exception.HResult
         }}
@@ -1791,7 +1888,7 @@ smoke-test:
         fi
         
         # Test explain
-        ${{ matrix.binary }} explain no_wildcards || exit 1
+        ${{ matrix.binary }} explain deps.no_wildcards || exit 1
         echo "✓ explain passed"
         
         echo "All smoke tests passed!"
@@ -1833,7 +1930,7 @@ smoke-test:
         }
         
         # Test explain
-        & $binary explain no_wildcards
+        & $binary explain deps.no_wildcards
         if ($LASTEXITCODE -ne 0) { exit 1 }
         Write-Host "✓ explain passed"
         
@@ -2267,6 +2364,27 @@ fn run_release_checks() -> anyhow::Result<()> {
     }
     println!("  ✓ cargo clippy passed");
 
+    // Validate that crates intended for crates.io can actually be packaged.
+    println!("Running cargo package for publishable crates...");
+    let mut package_cmd = std::process::Command::new("cargo");
+    package_cmd
+        .arg("package")
+        .arg("--workspace")
+        .arg("--allow-dirty");
+    for package in release_package_excludes() {
+        package_cmd.args(["--exclude", package]);
+    }
+    let package_output = package_cmd
+        .current_dir(project_root())
+        .output()
+        .context("Failed to run cargo package")?;
+
+    if !package_output.status.success() {
+        let stderr = String::from_utf8_lossy(&package_output.stderr);
+        bail!("cargo package failed:\n{}", stderr.trim());
+    }
+    println!("  ✓ cargo package passed for publishable crates");
+
     println!("✓ All release checks passed");
     Ok(())
 }
@@ -2469,7 +2587,7 @@ fn package_binary(
 
     // Create a temporary directory for packaging
     let temp_dir = tempfile::tempdir()?;
-    let staging_dir = temp_dir.path().join(&package_name);
+    let staging_dir = temp_dir.path().join(package_name);
     fs::create_dir_all(&staging_dir)?;
 
     // Copy binary
@@ -3601,6 +3719,11 @@ version = "0.1.0"
         assert!(options.dry_run);
         assert!(!options.skip_changelog);
         assert!(options.build_artifacts);
+    }
+
+    #[test]
+    fn release_package_excludes_internal_only_packages() {
+        assert_eq!(release_package_excludes(), ["xtask"]);
     }
 
     #[test]

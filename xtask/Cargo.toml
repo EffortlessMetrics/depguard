@@ -24,6 +24,6 @@ serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 
-depguard-types = { path = "../crates/depguard-types" }
-depguard-settings = { path = "../crates/depguard-settings" }
-depguard-test-util = { path = "../crates/depguard-test-util" }
+depguard-types = { version = "0.1.0", path = "../crates/depguard-types" }
+depguard-settings = { version = "0.1.0", path = "../crates/depguard-settings" }
+depguard-test-util = { version = "0.1.0", path = "../crates/depguard-test-util" }
