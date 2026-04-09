@@ -24,9 +24,9 @@ This architecture keeps the domain model pure and deterministic, while adapters 
 
 ### Install
 ```bash
-cargo install --path crates/depguard-cli
+cargo install depguard-cli --version 0.1.1 --bin depguard --locked
 # Optional: as Cargo subcommand
-cargo install --path crates/depguard-cli --bin cargo-depguard
+cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
 ```
 
 ### Run a first scan
@@ -36,7 +36,7 @@ depguard check
 
 ### Common CI pattern
 ```bash
-depguard check --scope diff --base origin/main --head HEAD
+depguard --scope diff check --base origin/main --head HEAD
 ```
 
 ### Render existing reports

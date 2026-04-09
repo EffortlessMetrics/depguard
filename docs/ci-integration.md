@@ -13,13 +13,13 @@ jobs:
   depguard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Install depguard
-        run: cargo install --path crates/depguard-cli
+        run: cargo install depguard-cli --version 0.1.1 --bin depguard --locked
       - name: Run checks
-        run: depguard check --scope diff --base origin/${{ github.base_ref }}
+        run: depguard --scope diff check --base origin/${{ github.base_ref }} --head HEAD
       - name: Post markdown report
         run: depguard md --report artifacts/depguard/report.json
 ```

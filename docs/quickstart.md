@@ -8,7 +8,9 @@ A working local run of `depguard` plus a first baseline-ready configuration.
 
 ## Install
 ```bash
-cargo install --path crates/depguard-cli
+cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+# Optional: as Cargo subcommand
+cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
 ```
 
 ## First run
@@ -41,10 +43,10 @@ depguard baseline --output .depguard-baseline.json
 
 ## CI default pattern
 ```bash
-depguard check --scope diff --base origin/main --head HEAD
+depguard --scope diff check --base origin/main --head HEAD
 ```
 
 ## Next steps
 - Review [`docs/config.md`](config.md) for full policy options.
-- If running on large repos, start with `--scope diff`.
+- If running on large repos, start with `depguard --scope diff check`.
 - For output parsing, use [`docs/output-contract.md`](output-contract.md).
