@@ -9,7 +9,8 @@ A short rationale for how `depguard` balances strictness, determinism, and pract
 ## Design decisions
 
 - **Input-first model**: `depguard` evaluates `Cargo.toml` data directly and avoids cargo metadata.
-- **Offline by default**: no network at runtime, so behavior is stable in CI, air-gapped runners, and local scripts.
+- **Offline-by-default**: no required network at runtime, so behavior is stable in CI, air-gapped runners, and local scripts.
+- Optional network-enabled behavior is available through `--yanked-live` for exact yanked checks when explicitly requested.
 - **Pure domain**: all rule evaluation in `depguard-domain` is free of I/O.
 - **Stable contracts**: IDs, schema IDs, and finding codes are versioned and never renamed.
 - **Deterministic output ordering**: predictable for snapshot tests and audit trails.
@@ -29,6 +30,7 @@ A short rationale for how `depguard` balances strictness, determinism, and pract
 ## Tradeoff notes
 - Not resolving the Cargo dependency graph keeps runs fast and reproducible, but it limits checks that require full dependency graph context.
 - Exact-match yanked checks improve determinism, not semver reasoning.
+- Explicit opt-in network mode can improve freshness for yanked-version metadata.
 
 ## When to revisit
 Adjust these decisions if future requirements need dependency graph data, remote index lookups, or richer fix planning across multiple files.

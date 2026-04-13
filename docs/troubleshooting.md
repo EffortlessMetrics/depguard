@@ -7,23 +7,28 @@ Users need fast, practical recovery paths for local and CI failures.
 
 ### `No Cargo.toml found`
 - Ensure you are in or pointed to a Rust workspace root.
-- Use `depguard check --repo-root <path>`.
+- Use `depguard --repo-root <path> check`.
 
 ### `Invalid configuration`
 - Validate TOML syntax with `taplo`.
-- Verify check IDs are in `depguard.types` registry.
+- Verify check IDs and codes are in `depguard-types`.
 - Confirm `profile` and `fail_on` are valid values.
 
 ### `Git ref not found` during diff scope
-- Ensure fetch depth includes base branch:
+- Ensure `--scope diff` is active (via CLI or config) and fetch depth includes the base branch:
 ```yaml
 fetch-depth: 0
 ```
 - Or use `--diff-file` with a precomputed manifest list.
+- When using `--diff-file`, keep `scope` set to `diff` (CLI `--scope diff` or config `scope = "diff"`).
 
 ### `Permission denied` writing output
 - Ensure output directory exists and is writable.
-- Override output paths with `--out-dir`/`--report` equivalents.
+- Override output paths with explicit per-command options:
+  - `--report-out` for `check` JSON reports.
+  - `--markdown-out` for Markdown output.
+  - `--junit-out` for JUnit.
+  - `--jsonl-out` for JSONL.
 
 ### Unexpected exit code `2`
 - Inspect findings in `artifacts/depguard/report.json`.

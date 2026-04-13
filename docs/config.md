@@ -11,8 +11,9 @@ Unclear precedence between CLI flags, config files, and profiles creates surpris
 ## Key settings
 
 - `profile`: `strict | warn | compat`
+- `profile` aliases: `team` -> `warn`, `oss` -> `compat`
 - `scope`: `repo | diff`
-- `fail_on`: `error | warning`
+- `fail_on`: `error` | `warning` (`warn` is accepted as an alias for `warning`)
 - `baseline`: path to baseline JSON file
 - `max_findings`: integer limit
 
@@ -22,11 +23,14 @@ Unclear precedence between CLI flags, config files, and profiles creates surpris
 enabled = true
 severity = "error"
 allow = ["vendor-*"]
+
+[checks."deps.path_requires_version"]
+ignore_publish_false = true
 ```
 
 ## Scopes and base refs
 - Use `--scope diff` for PR-only checks.
-- For restricted runners, avoid git and pass `--diff-file`.
+- For restricted runners, use `--scope diff --diff-file <path>` and `base`/`head` are not required.
 
 ## Why profiles exist
 Profiles encode migration-safe defaults and make repository policy explicit while allowing local overrides.
@@ -36,7 +40,7 @@ Profiles encode migration-safe defaults and make repository policy explicit whil
 ### `fail_on`
 - `error` (default)
 - `warning`
-- `never`
+- `warn` (alias for `warning`)
 
 ### `scope`
 - `repo`: full workspace scan

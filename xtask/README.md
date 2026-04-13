@@ -29,6 +29,14 @@ cargo run -p xtask -- conform-full
 cargo run -p xtask -- release-prepare --dry-run
 ```
 
+## Recommended release flow
+- `cargo run -p xtask -- release-check`
+- `cargo run -p xtask -- release-prepare --version <version>`
+- `cargo run -p xtask -- release-artifacts`
+- `cargo run -p xtask -- release-package` (internal publishing workflow)
+
+Keep `CHANGELOG.md` updated before stable release cycles; `release-prepare` can skip changelog generation if it is absent.
+
 ## Scope boundary
 - This crate is internal (`publish = false`).
 - It orchestrates developer tooling, not production checks.

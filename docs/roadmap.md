@@ -1,0 +1,29 @@
+# depguard Roadmap
+
+## Current status
+
+Last reviewed: 2026-04-12
+
+- Foundation contracts are stable: schema versions, IDs, and report formats.
+- Check catalog and check execution paths are implemented.
+- Rendering is available for Markdown, annotations, SARIF, JUnit, and JSONL.
+- Operational workflows for fixtures/conformance/release tasks exist via `xtask`.
+- Focus has shifted from feature discovery to hardening and governance.
+
+## Active roadmap
+
+1. DOC-01: Formalize release governance (documentation, changelog policy, ownership).
+2. PERF-01: Introduce explicit performance budgets for incremental and diff scope runs.
+3. QA-01: Keep roadmap and task tracking updated with status and ownership.
+
+## Near-term guardrails
+
+- Keep all CLI behavior changes paired with updated docs and fixture coverage.
+- Treat output-contract changes as release-impacting unless tested and justified.
+- Refresh this roadmap whenever `docs/implementation-plan.md` or `docs/tasks.md` changes.
+
+## How this page is maintained
+
+- Quarterly: review completed items, adjust priorities.
+- Monthly: validate open items against open issues and CI needs.
+- Ongoing: update links when commands, output modes, or release workflows change.

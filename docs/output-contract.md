@@ -5,6 +5,7 @@ Without a clear output contract, consumers cannot reliably parse, compare, or pe
 
 ## Canonical artifacts
 - `depguard.report.v1.json` and `depguard.report.v2.json` in `schemas/`.
+- `depguard.baseline.v1.json` for baseline files.
 - Legacy envelope compatibility is retained where documented.
 
 ## Report shape (minimum)
@@ -15,8 +16,9 @@ Without a clear output contract, consumers cannot reliably parse, compare, or pe
 - `findings` — ordered finding events.
 
 ## Finding fields (high-level)
-- `severity`, `check_id`, `code`, `location`, `message`, optional `help/url`, optional `data`.
+- `severity`, `check_id`, `code`, `location`, `message`, optional `help/url`, optional `data`, optional `fingerprint`.
 - `location` includes path/line for actionable edits.
+- `data` carries check-specific details where available.
 
 ## Ordering contract
 `severity -> path -> line -> check_id -> code -> message`
@@ -30,6 +32,8 @@ Without a clear output contract, consumers cannot reliably parse, compare, or pe
 - Use `depguard md` for human review.
 - Use `depguard sarif` for GitHub code scanning and third-party integrations.
 - Use `depguard jsonl` for log pipelines.
+- Use `depguard annotations` for inline GitHub annotations.
+- Use `depguard junit` for CI test result ingest.
 
 ## Related docs
 - `docs/architecture.md`

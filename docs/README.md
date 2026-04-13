@@ -13,10 +13,13 @@ The repository has multiple documentation entry points (architecture, checks, co
   - [docs/testing.md](testing.md)
 - **Reference**: design and contracts
   - [docs/architecture.md](architecture.md)
+  - [docs/output-contract.md](output-contract.md)
   - [docs/microcrates.md](microcrates.md)
   - [docs/design.md](design.md)
   - [docs/implementation.md](implementation.md)
   - [docs/implementation-plan.md](implementation-plan.md)
+- **Roadmap**
+  - [docs/roadmap.md](roadmap.md)
 - **Explanation**: rationale and boundaries
   - [docs/checks.md](checks.md)
   - [docs/requirements.md](requirements.md)
@@ -25,6 +28,10 @@ The repository has multiple documentation entry points (architecture, checks, co
 - Prefer adding docs next to behavior changes.
 - Keep examples executable and deterministic.
 - Link new guidance to the relevant crate README when behavior spans layers.
+
+## Planner maintenance
+- Keep planning docs (`docs/roadmap.md`, `docs/implementation-plan.md`, `docs/tasks.md`) synchronized when behavior, ownership, or cadence changes.
+- Record ownership only when assigned; prefer concrete names/teams over generic placeholders.
 
 ## For maintainers
 If you update behavior in a crate, update:
