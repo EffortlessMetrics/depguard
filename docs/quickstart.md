@@ -18,7 +18,11 @@ cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
 depguard check
 ```
 
-If your project is not at repo root, add `--repo-root /path/to/repo`.
+If your project is not at repo root, run with:
+
+```bash
+depguard --repo-root /path/to/repo check
+```
 
 ## Recommended onboarding flow
 1. Run `depguard check` once and inspect the report.
@@ -40,6 +44,10 @@ depguard baseline --output .depguard-baseline.json
 - `depguard explain <check_id|code>` for remediation.
 - `depguard md --report artifacts/depguard/report.json` for review.
 - `depguard annotations --report artifacts/depguard/report.json` for CI annotations.
+- `depguard sarif --report artifacts/depguard/report.json` for third-party code scanning.
+- `depguard junit --report artifacts/depguard/report.json` for test dashboards.
+- `depguard jsonl --report artifacts/depguard/report.json` for log ingestion.
+- `depguard fix --report artifacts/depguard/report.json [--apply]` for safe remediations.
 
 ## CI default pattern
 ```bash

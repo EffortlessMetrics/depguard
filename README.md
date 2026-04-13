@@ -3,7 +3,7 @@
 ## Problem
 Maintaining dependency hygiene in Rust workspaces is often solved by ad-hoc scripts and hand-rolled checks that are hard to version, hard to audit, and hard to reuse in CI.
 
-depguard centralizes this work as a deterministic, offline policy engine with stable, machine-readable receipts.
+depguard centralizes this work as a deterministic, offline-first policy engine with stable, machine-readable receipts.
 
 ## When to use depguard
 - You need the same dependency rules in local dev, CI, and audit pipelines.
@@ -69,14 +69,38 @@ depguard sarif --report artifacts/depguard/report.json
 ### Runner options
 - `cargo depguard` — Cargo subcommand wrapper
 - `--scope repo|diff` — scan all manifests or changed scope only
-- `--diff-file <path>` — avoid requiring Git in restricted runners
-- `--out-dir`, `--report-version`, `--baseline` for output and policy behavior
+- `--repo-root`, `--config`, `--profile`, `--max-findings` control context and overrides
+- Check and baseline scoped commands accept `--diff-file <path>` (requires `--scope diff` or `scope = "diff"`).
+
+### `check` command options
+- `--out-dir` and `--report-out` — control report destination
+- `--baseline`, `--report-version` — baseline and schema selection
+- `--incremental`, `--cache-dir` — incremental run performance
+- `--yanked-index`, `--yanked-live`, `--yanked-api-base-url` — yanked-resolution behavior
+- `--write-markdown`, `--write-junit`, `--write-jsonl` plus `--markdown-out` / `--junit-out` / `--jsonl-out`
+- `--mode` — standard (`exit 2` on policy failure) or cockpit (`exit 0` after writing receipt)
+- `--diff-file` requires `--scope diff` (or `scope = "diff"` in config)
+
+### `baseline` command options
+- Baseline command options for scoped runs mirror `check`: `--base`, `--head`, and `--diff-file` for diff scope.
+
+### Renderer and fix command options
+- `md|sarif|junit|jsonl`
+  - `--report` (input report path)
+  - `--output` (write output to a file; defaults to stdout)
+- `annotations`
+  - `--report` (input report path)
+  - `--max` (annotation count limit)
+- `fix`
+  - `--report` (input report path)
+  - `--plan-out` (buildfix plan destination, default: `artifacts/buildfix/plan.json`)
+  - `--apply` (write safe fixes in place)
 
 ## Inputs and outputs
 By default, `check` writes:
 - `artifacts/depguard/report.json`
 
-Optional outputs can be enabled in the same invocation (`--write-markdown`, `--write-junit`, `--write-jsonl`, etc.).
+Optional outputs can be enabled in the same invocation with `--write-markdown`, `--write-junit`, `--write-jsonl`, and explicit destinations via `--markdown-out`, `--junit-out`, `--jsonl-out`, or `--out-dir`.
 
 ## Exit codes
 - `0` — pass (no policy failure)
@@ -103,7 +127,7 @@ enabled = true
 See [docs/config.md](docs/config.md) for the full schema and all settings.
 
 ## Non-goals
-- Performing crate resolution or network-dependent checks.
+- Performing crate resolution or requiring network in default execution.
 - Replacing `cargo` build tooling.
 - Enforcing one-size-fits-all policy defaults.
 
@@ -113,7 +137,12 @@ See [docs/config.md](docs/config.md) for the full schema and all settings.
 - [docs/checks.md](docs/checks.md) — check behavior and remediation
 - [docs/architecture.md](docs/architecture.md) — deeper design
 - [docs/testing.md](docs/testing.md) — test strategy
+- [docs/implementation-plan.md](docs/implementation-plan.md) — implementation roadmap and risks
+- [docs/tasks.md](docs/tasks.md) — roadmap initiatives and owners
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution flow
+
+## Roadmap
+- [docs/roadmap.md](docs/roadmap.md) — current status, active work, and upcoming milestones.
 
 ## Workspace design constraints
 - Domain crates have no filesystem/network side effects

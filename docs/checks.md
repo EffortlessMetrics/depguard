@@ -35,6 +35,7 @@ severity = "error"
 ```
 - Add allow-list exceptions:
 ```toml
+[checks."deps.no_wildcards"]
 allow = ["internal-*", "vendor-*"]
 ```
 

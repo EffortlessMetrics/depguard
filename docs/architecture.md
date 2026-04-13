@@ -20,7 +20,8 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
 5. `depguard` exposes the public Rust evaluation surface over the internal domain engine.
 6. `depguard-domain` evaluates checks and produces findings.
 7. `depguard-app` wraps results in report envelopes.
-8. `depguard-render` formats output for Markdown/JSONL/SARIF/JUnit/annotations.
+8. `depguard-cli` handles command orchestration, mode handling, and output paths.
+9. `depguard-render` formats output for Markdown/JSONL/SARIF/JUnit/annotations.
 
 ## Core boundaries
 - `depguard-domain*` never reads files and never invokes subprocesses.
@@ -44,6 +45,7 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
   - `depguard-repo` (discovery, scope resolution)
   - `depguard-settings` (config resolution)
   - `depguard-render` (format adapters)
+  - `depguard-inline-suppressions` (inline suppression parsing)
 - Application / UI
   - `depguard-app` (use cases)
   - `depguard-cli` / `cargo-depguard` (process entry points)
