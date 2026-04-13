@@ -35,19 +35,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ./target/release/depguard --scope diff check \
-              --report-out artifacts/depguard/report.json \
-              --write-markdown \
-              --markdown-out artifacts/depguard/comment.md \
-              --base origin/${{ github.base_ref }} \
-              --head HEAD
-          else
-            ./target/release/depguard --scope repo check \
-              --report-out artifacts/depguard/report.json \
-              --write-markdown \
-              --markdown-out artifacts/depguard/comment.md
-          fi
+          ./target/release/depguard ci github \
+            --event "${{ github.event_name }}" \
+            --out-dir artifacts/depguard \
+            --report-out artifacts/depguard/report.json \
+            --write-markdown \
+            --emit-annotations
 
           code=$?
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
@@ -60,13 +53,6 @@ jobs:
 
           # Defer failing to the final enforcement step so annotations/artifacts always run.
           exit 0
-
-      - name: Generate annotations
-        if: always()
-        run: |
-          if [ -f artifacts/depguard/report.json ]; then
-            ./target/release/depguard annotations --report artifacts/depguard/report.json
-          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

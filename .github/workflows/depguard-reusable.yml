@@ -1,0 +1,178 @@
+name: depguard
+
+on:
+  workflow_call:
+    inputs:
+      repo-root:
+        description: Repository root to scan (for monorepo workspace targeting).
+        required: false
+        type: string
+        default: "."
+      event-name:
+        description: Calling workflow event name (for example pull_request or push).
+        required: false
+        type: string
+        default: "workflow_call"
+      depguard-version:
+        description: depguard CLI release version (for example 0.1.1)
+        required: false
+        type: string
+        default: "0.1.1"
+      base-ref:
+        description: Base ref for diff-mode runs (for example origin/main)
+        required: false
+        type: string
+        default: ""
+      head-ref:
+        description: Head ref for diff-mode runs (for example HEAD)
+        required: false
+        type: string
+        default: ""
+      diff-file:
+        description: Optional path to newline/CSV/JSONL changed-file input
+        required: false
+        type: string
+        default: ""
+      out-dir:
+        description: Output directory for report artifacts
+        required: false
+        type: string
+        default: "artifacts/depguard"
+      write-markdown:
+        description: Emit Markdown from report.json
+        required: false
+        type: boolean
+        default: true
+      write-annotations:
+        description: Emit GitHub annotations from report.json
+        required: false
+        type: boolean
+        default: true
+      write-junit:
+        description: Emit JUnit XML from report.json
+        required: false
+        type: boolean
+        default: false
+      write-jsonl:
+        description: Emit JSONL from report.json
+        required: false
+        type: boolean
+        default: false
+      write-sarif:
+        description: Emit SARIF from report.json
+        required: false
+        type: boolean
+        default: false
+      max-annotations:
+        description: Maximum annotations emitted when annotations output is enabled
+        required: false
+        type: number
+        default: 10
+
+jobs:
+  depguard:
+    name: depguard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install depguard
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ inputs.depguard-version }}"
+          version="${version#v}"
+          cargo install depguard-cli --version "$version" --bin depguard --locked
+
+      - name: Prepare artifacts
+        run: mkdir -p "${{ inputs.out-dir }}"
+
+      - name: Run depguard
+        id: depguard
+        shell: bash
+        run: |
+          set +e
+          report_out="${{ inputs.out-dir }}/report.json"
+          event="${{ inputs.event-name }}"
+          args=(
+            "--repo-root" "${{ inputs.repo-root }}"
+            "ci" "github"
+            "--event" "$event"
+            "--out-dir" "${{ inputs.out-dir }}"
+            "--report-out" "$report_out"
+            "--max-annotations" "${{ inputs.max-annotations }}"
+          )
+          if [ "${{ inputs.write-markdown }}" = "true" ]; then
+            args+=( "--write-markdown" )
+          fi
+          if [ -n "${{ inputs.base-ref }}" ]; then
+            args+=( "--base" "${{ inputs.base-ref }}" )
+          fi
+          if [ -n "${{ inputs.head-ref }}" ]; then
+            args+=( "--head" "${{ inputs.head-ref }}" )
+          fi
+          if [ -n "${{ inputs.diff-file }}" ]; then
+            args+=( "--diff-file" "${{ inputs.diff-file }}" )
+          fi
+          if [ "${{ inputs.write-annotations }}" = "true" ]; then
+            args+=( "--emit-annotations" )
+          fi
+          if [ "${{ inputs.write-junit }}" = "true" ]; then
+            args+=( "--write-junit" )
+          fi
+          if [ "${{ inputs.write-jsonl }}" = "true" ]; then
+            args+=( "--write-jsonl" )
+          fi
+          if [ "${{ inputs.write-sarif }}" = "true" ]; then
+            args+=( "--write-sarif" )
+          fi
+
+          depguard "${args[@]}"
+          code="$?"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload depguard artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: depguard-report
+          path: ${{ inputs.out-dir }}/
+
+      - name: Add job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "${{ inputs.out-dir }}/comment.md" ]; then
+            {
+              echo "## Depguard Report"
+              echo
+              cat "${{ inputs.out-dir }}/comment.md"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Depguard Report"
+              echo "No report was written."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Enforce result
+        if: always()
+        shell: bash
+        run: |
+          code="${{ steps.depguard.outputs.exit_code }}"
+          if [ "$code" = "0" ]; then
+            exit 0
+          elif [ "$code" = "2" ]; then
+            exit 2
+          else
+            exit 1
+          fi

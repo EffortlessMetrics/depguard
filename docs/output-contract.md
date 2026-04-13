@@ -29,11 +29,12 @@ Without a clear output contract, consumers cannot reliably parse, compare, or pe
 - Explicit capping (`max_findings`) and truncation indicators.
 
 ## Consumption guidance
-- Use `depguard md` for human review.
-- Use `depguard sarif` for GitHub code scanning and third-party integrations.
-- Use `depguard jsonl` for log pipelines.
-- Use `depguard annotations` for inline GitHub annotations.
-- Use `depguard junit` for CI test result ingest.
+- Use `depguard report md` for human review.
+- Use `depguard report sarif` for GitHub code scanning and third-party integrations.
+- Use `depguard report jsonl` for log pipelines.
+- Use `depguard report annotations` for inline GitHub annotations.
+- Use `depguard report junit` for CI test result ingest.
+- Legacy renderer commands (`depguard md`, etc.) remain supported.
 
 ## Related docs
 - `docs/architecture.md`
