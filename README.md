@@ -28,6 +28,7 @@ cargo install depguard-cli --version 0.1.1 --bin depguard --locked
 # Optional: as Cargo subcommand
 cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
 ```
+For CI, pin a version with the same command and run it in the workflow.
 
 ### Run a first scan
 ```bash
@@ -36,18 +37,20 @@ depguard check
 
 ### Common CI pattern
 ```bash
-depguard --scope diff check --base origin/main --head HEAD --report-out artifacts/depguard/report.json
+depguard ci github \
+  --event pull_request \
+  --report-out artifacts/depguard/report.json
 ```
 
 For cross-repo rollout guidance (PR diff lane + scheduled full-repo lane, baseline policy, and reusable workflow snippets), see [docs/org-rollout.md](docs/org-rollout.md).
 
 ### Render existing reports
 ```bash
-depguard md --report artifacts/depguard/report.json
+depguard report md --report artifacts/depguard/report.json
 
-depguard annotations --report artifacts/depguard/report.json
+depguard report annotations --report artifacts/depguard/report.json
 
-depguard sarif --report artifacts/depguard/report.json
+depguard report sarif --report artifacts/depguard/report.json
 ```
 
 ## Reference (commands by intent)
@@ -56,13 +59,11 @@ depguard sarif --report artifacts/depguard/report.json
 - `depguard check` — analyze manifests and write a receipt
 - `depguard baseline` — generate baseline suppressions
 - `depguard explain <check_id|code>` — show remediation guidance
+- `depguard ci github` — CI-native mode with lane handling (`pull_request`, `push`, `schedule`, `workflow_call`, `auto`)
 
 ### Output conversion
-- `depguard md --report <path>` — Markdown comment block
-- `depguard annotations --report <path>` — GitHub annotations
-- `depguard sarif --report <path>` — SARIF JSON
-- `depguard junit --report <path>` — JUnit XML
-- `depguard jsonl --report <path>` — JSONL stream
+- `depguard report md|annotations|sarif|junit|jsonl --report <path>` — grouped report output renderer
+- `depguard md|annotations|sarif|junit|jsonl --report <path>` — legacy aliases
 
 ### Fixing
 - `depguard fix --report <path>` — generate conservative fix plan
@@ -70,9 +71,11 @@ depguard sarif --report artifacts/depguard/report.json
 
 ### Runner options
 - `cargo depguard` — Cargo subcommand wrapper
+- `depguard ci github --event <pull_request|push|schedule|workflow_call|auto>` — CI-native scope strategy
 - `--scope repo|diff` — scan all manifests or changed scope only
 - `--repo-root`, `--config`, `--profile`, `--max-findings` control context and overrides
 - Check and baseline scoped commands accept `--diff-file <path>` (requires `--scope diff` or `scope = "diff"`).
+- For monorepos, set `--repo-root` to each workspace when using matrixed CI jobs.
 
 ### `check` command options
 - `--out-dir` and `--report-out` — control report destination

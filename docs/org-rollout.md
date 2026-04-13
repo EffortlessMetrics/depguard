@@ -19,10 +19,10 @@ These map to the project contracts: config lives in `depguard.toml`, baseline ge
 
 ## Rollout command shape
 
-Use `--scope diff` for PR gating and `--scope repo` for regular drift/full-repo scans:
+Use `depguard ci github` for CI-native lane control:
 
-- PRs: lightweight, fast feedback on the change set.
-- Mainline/scheduled jobs: periodic full scan to catch drift, stale baseline, or policy gaps.
+- PRs: lightweight, fast feedback on the change set (`depguard ci github --event pull_request`).
+- Mainline/scheduled jobs: periodic full scan with repo scope (`depguard ci github --event push|schedule`).
 
 Because depguard is manifest-only and offline-by-default, these jobs fit early in most pipelines.
 
@@ -31,7 +31,6 @@ Because depguard is manifest-only and offline-by-default, these jobs fit early i
 1. Run a full repo scan locally first:
 
 ```bash
-cargo install depguard-cli --version 0.1.1 --bin depguard --locked
 depguard check
 ```
 
@@ -112,27 +111,20 @@ jobs:
         shell: bash
         run: |
           set +e
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            depguard --scope diff check \
-              --base origin/${{ github.base_ref }} \
-              --head HEAD \
-              --report-out artifacts/depguard/report.json \
-              --write-markdown \
-              --markdown-out artifacts/depguard/comment.md
-          else
-            depguard --scope repo check \
-              --report-out artifacts/depguard/report.json \
-              --write-markdown \
-              --markdown-out artifacts/depguard/comment.md
-          fi
+          depguard ci github \
+            --event "${{ github.event_name }}" \
+            --out-dir artifacts/depguard \
+            --report-out artifacts/depguard/report.json \
+            --write-markdown \
+            --emit-annotations
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
       - name: Emit annotations
         if: always()
         run: |
-          if [ -f artifacts/depguard/report.json ]; then
-            depguard annotations --report artifacts/depguard/report.json
+          if [ -f artifacts/depguard/comment.md ]; then
+            cat artifacts/depguard/comment.md
           fi
 
       - name: Upload depguard artifacts
@@ -156,18 +148,78 @@ jobs:
           fi
 ```
 
+## Reusable workflow option
+
+After you standardize one local baseline in your repo, consume this directly from org repos:
+
+```yaml
+name: depguard
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  depguard:
+    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.1
+    with:
+      depguard-version: 0.1.1
+      event-name: ${{ github.event_name }}
+      write-markdown: true
+      write-annotations: true
+      write-junit: true
+      write-jsonl: true
+      write-sarif: true
+      # For monorepos, include a matrix and pass workspace paths:
+      # repo-root: ${{ matrix.workspace }}
+      # Optional for restricted checkouts:
+      # base-ref: origin/main
+      # head-ref: ${{ github.sha }}
+      # diff-file: .github/changed-manifests.txt
+      # max-annotations: 25
+```
+
+- For monorepos, run one scan per workspace via caller matrix:
+  ```yaml
+  jobs:
+    depguard:
+      strategy:
+        matrix:
+          workspace:
+            - crates/ops
+            - crates/api
+      uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.1
+      with:
+        depguard-version: 0.1.1
+        event-name: ${{ github.event_name }}
+        repo-root: ${{ matrix.workspace }}
+  ```
+
+This keeps scope detection, artifact publishing, and post-run diagnostics in one centrally maintained place.
+
 Use the same model in other CI platforms:
 
-- PR/MR runs: `depguard --scope diff check --base ... --head ... --report-out artifacts/depguard/report.json`
-- Mainline/scheduled runs: `depguard --scope repo check --report-out artifacts/depguard/report.json`
-- Restricted runners: replace base/head with `--diff-file changed-manifests.txt`
+- PR/MR runs: `depguard ci github --event pull_request --report-out artifacts/depguard/report.json`
+- Mainline/scheduled runs: `depguard ci github --event push --report-out artifacts/depguard/report.json`
+- Restricted runners: `depguard ci github --event pull_request --diff-file changed-manifests.txt --report-out artifacts/depguard/report.json`
 
 After rendering the JSON receipt:
 
-- `depguard md --report artifacts/depguard/report.json`
-- `depguard annotations --report artifacts/depguard/report.json`
-- `depguard sarif --report artifacts/depguard/report.json` (optional)
-- `depguard junit --report artifacts/depguard/report.json` (optional)
+- `depguard report md --report artifacts/depguard/report.json`
+- `depguard report annotations --report artifacts/depguard/report.json`
+- `depguard report sarif --report artifacts/depguard/report.json` (optional)
+- `depguard report junit --report artifacts/depguard/report.json` (optional)
+
+## CI install guidance
+
+Keep CI install explicit and minimal for now:
+
+- `cargo install depguard-cli --version 0.1.1 --bin depguard --locked`
+- A dedicated installation action can be introduced later if CI time becomes an issue.
 
 ## Common mistakes
 

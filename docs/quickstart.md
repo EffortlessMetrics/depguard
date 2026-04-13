@@ -8,9 +8,17 @@ A working local run of `depguard` plus a first baseline-ready configuration.
 
 ## Install
 ```bash
+# Local install for local development:
 cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+
 # Optional: as Cargo subcommand
 cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
+```
+
+For GitHub Actions, pin the same `depguard-cli` version in the workflow:
+
+```bash
+cargo install depguard-cli --version 0.1.1 --bin depguard --locked
 ```
 
 ## First run
@@ -41,19 +49,19 @@ depguard baseline --output .depguard-baseline.json
 
 ## CLI you will use often
 - `depguard check` for enforcement.
+- `depguard ci github [--event pull_request|push|schedule|auto]` for CI-native lane handling.
 - `depguard explain <check_id|code>` for remediation.
-- `depguard md --report artifacts/depguard/report.json` for review.
-- `depguard annotations --report artifacts/depguard/report.json` for CI annotations.
-- `depguard sarif --report artifacts/depguard/report.json` for third-party code scanning.
-- `depguard junit --report artifacts/depguard/report.json` for test dashboards.
-- `depguard jsonl --report artifacts/depguard/report.json` for log ingestion.
+- `depguard report md --report artifacts/depguard/report.json` for review.
+- `depguard report annotations --report artifacts/depguard/report.json` for CI annotations.
+- `depguard report sarif --report artifacts/depguard/report.json` for third-party code scanning.
+- `depguard report junit --report artifacts/depguard/report.json` for test dashboards.
+- `depguard report jsonl --report artifacts/depguard/report.json` for log ingestion.
 - `depguard fix --report artifacts/depguard/report.json [--apply]` for safe remediations.
 
 ## CI default pattern
 ```bash
-depguard --scope diff check \
-  --base origin/main \
-  --head HEAD \
+depguard ci github \
+  --event pull_request \
   --report-out artifacts/depguard/report.json
 ```
 

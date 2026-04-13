@@ -3,7 +3,7 @@
 ## Purpose
 This page tracks near-term roadmap items and maintenance work.
 
-Last reviewed: 2026-04-12
+Last reviewed: 2026-04-13
 
 ## Active initiatives
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-04-12
 | DOC-03 | Documentation | Planned | Unassigned | 2026-Q4 | Draft simplified command model and phased adoption guidance |
 | DOC-04 | Configuration | Planned | Unassigned | 2026-Q4 | Draft config composition and policy bundle documentation |
 | DOC-05 | Governance | Planned | Unassigned | 2027-Q1 | Draft ratchet baseline model and owner/expiry process |
-| DOC-06 | CI | Planned | Unassigned | 2027-Q1 | Draft provider-aware CI mode and setup action model |
+| DOC-06 | CI | In progress | Unassigned | 2027-Q1 | Finalize provider-aware `ci` mode and reusable workflow; evaluate dedicated setup action as optional install optimization |
 | DOC-07 | Reporting | Planned | Unassigned | 2027-Q1 | Draft findings metadata extensions for bots/editors |
 | PERF-01 | Performance | Planned | Unassigned | 2026-Q2 | Add measurable benchmarks/budgets for incremental and diff scans |
 | OPS-01 | Release/process | Planned | Unassigned | 2026-Q2 | Publish release process and changelog policy |
