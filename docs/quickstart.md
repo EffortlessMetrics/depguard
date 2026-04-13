@@ -51,8 +51,13 @@ depguard baseline --output .depguard-baseline.json
 
 ## CI default pattern
 ```bash
-depguard --scope diff check --base origin/main --head HEAD
+depguard --scope diff check \
+  --base origin/main \
+  --head HEAD \
+  --report-out artifacts/depguard/report.json
 ```
+
+For repository rollouts across many teams and repositories, follow the standardized two-lane workflow and repo classification guidance in [docs/org-rollout.md](org-rollout.md).
 
 ## Next steps
 - Review [`docs/config.md`](config.md) for full policy options.

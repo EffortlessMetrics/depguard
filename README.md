@@ -36,8 +36,10 @@ depguard check
 
 ### Common CI pattern
 ```bash
-depguard --scope diff check --base origin/main --head HEAD
+depguard --scope diff check --base origin/main --head HEAD --report-out artifacts/depguard/report.json
 ```
+
+For cross-repo rollout guidance (PR diff lane + scheduled full-repo lane, baseline policy, and reusable workflow snippets), see [docs/org-rollout.md](docs/org-rollout.md).
 
 ### Render existing reports
 ```bash
@@ -143,6 +145,7 @@ See [docs/config.md](docs/config.md) for the full schema and all settings.
 
 ## Roadmap
 - [docs/roadmap.md](docs/roadmap.md) — current status, active work, and upcoming milestones.
+- [docs/org-rollout.md](docs/org-rollout.md) — rollout model for multi-repo adoption.
 
 ## Workspace design constraints
 - Domain crates have no filesystem/network side effects

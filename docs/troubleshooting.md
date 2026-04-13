@@ -11,7 +11,7 @@ Users need fast, practical recovery paths for local and CI failures.
 
 ### `Invalid configuration`
 - Validate TOML syntax with `taplo`.
-- Verify check IDs and codes are in `depguard-types`.
+- Verify check IDs and config keys/values are valid in `depguard.toml`.
 - Confirm `profile` and `fail_on` are valid values.
 
 ### `Git ref not found` during diff scope

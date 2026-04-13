@@ -12,9 +12,21 @@ Last reviewed: 2026-04-12
 
 ## Active roadmap
 
-1. DOC-01: Formalize release governance (documentation, changelog policy, ownership).
+1. DOC-01: Publish and enforce a standardized multi-repo rollout playbook.
 2. PERF-01: Introduce explicit performance budgets for incremental and diff scope runs.
-3. QA-01: Keep roadmap and task tracking updated with status and ownership.
+3. DOC-02: Improve command surface documentation and onboarding model for easier adoption.
+
+## Completed
+
+- QA-01: Keep roadmap and task tracking updated with status and ownership.
+
+## Planned direction
+
+- DOC-03: Simplify the public command model around `depguard check`, grouped `depguard report`, `depguard ci`, `depguard init`, and `depguard doctor`.
+- DOC-04: Add config composition and policy bundles for org-level policy inheritance.
+- DOC-05: Add ratcheted baseline suppressions with ownership, expiry, and evidence.
+- DOC-06: Add first-class CI provider adapters as a replacement for hand-written YAML snippets.
+- DOC-07: Enrich findings and explain/report payloads for better bot and editor integrations.
 
 ## Near-term guardrails
 
