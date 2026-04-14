@@ -34,15 +34,19 @@ jobs:
         id: depguard_run
         shell: bash
         run: |
+          code=1
           set +e
-          ./target/release/depguard ci github \
-            --event "${{ github.event_name }}" \
-            --out-dir artifacts/depguard \
-            --report-out artifacts/depguard/report.json \
-            --write-markdown \
-            --emit-annotations
-
-          code=$?
+          if [ ! -x ./target/release/depguard ]; then
+            echo "::error::Depguard binary missing at ./target/release/depguard"
+          else
+            ./target/release/depguard ci github \
+              --event "${{ github.event_name }}" \
+              --out-dir artifacts/depguard \
+              --report-out artifacts/depguard/report.json \
+              --write-markdown \
+              --emit-annotations
+            code=$?
+          fi
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
 
           if [ "$code" -eq 1 ]; then
@@ -128,7 +132,7 @@ jobs:
         run: |
           code="${{ steps.depguard_run.outputs.exit_code }}"
 
-          if [ -z "$code" ]; then
+          if [ -z "$code" ] || ! [[ "$code" =~ ^[0-9]+$ ]]; then
             echo "::error::Depguard did not return an exit code."
             exit 1
           fi
