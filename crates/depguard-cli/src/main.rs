@@ -6,7 +6,7 @@
 #![allow(unexpected_cfgs)]
 
 use anyhow::Context;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 use depguard_app::{
     CheckInput, ExplainOutput, ReportVariant, ReportVersion, add_artifact, apply_baseline,
@@ -123,7 +123,7 @@ struct Cli {
     cmd: Commands,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Commands {
     /// Evaluate policy and write artifacts.
     Check {
@@ -343,7 +343,7 @@ enum Commands {
     },
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum CiProvider {
     /// GitHub Actions-oriented CI mode.
     Github {
@@ -407,23 +407,23 @@ enum CiProvider {
 enum CiEvent {
     /// Infer CI event from GitHub Actions environment variables.
     #[default]
-    #[value(rename = "auto")]
+    #[value(name = "auto")]
     Auto,
     /// Pull request event; run `diff` scope.
-    #[value(rename = "pull_request", alias = "pull-request")]
+    #[value(name = "pull_request", alias = "pull-request")]
     PullRequest,
     /// Push or direct branch events; run `repo` scope.
-    #[value(rename = "push")]
+    #[value(name = "push")]
     Push,
     /// Scheduled jobs; run `repo` scope.
-    #[value(rename = "schedule")]
+    #[value(name = "schedule")]
     Schedule,
     /// Reusable workflow call; run `repo` scope unless a diff file is provided.
-    #[value(rename = "workflow_call", alias = "workflow-call")]
+    #[value(name = "workflow_call", alias = "workflow-call")]
     WorkflowCall,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum ReportFormat {
     /// Render markdown from an existing JSON report.
     Md {
@@ -564,7 +564,7 @@ fn main() -> anyhow::Result<()> {
             plan_out,
             apply,
         } => cmd_fix(&cli.repo_root, report, plan_out, apply),
-        Commands::Ci { provider } => match provider {
+        Commands::Ci { ref provider } => match provider {
             CiProvider::Github {
                 event,
                 base,
@@ -580,18 +580,18 @@ fn main() -> anyhow::Result<()> {
                 report_out,
             } => cmd_ci_github(
                 &cli,
-                event,
-                base,
-                head,
-                diff_file,
-                write_markdown,
-                emit_annotations,
-                write_junit,
-                write_jsonl,
-                write_sarif,
-                max_annotations,
-                out_dir,
-                report_out,
+                *event,
+                base.clone(),
+                head.clone(),
+                diff_file.clone(),
+                *write_markdown,
+                *emit_annotations,
+                *write_junit,
+                *write_jsonl,
+                *write_sarif,
+                *max_annotations,
+                out_dir.clone(),
+                report_out.clone(),
             ),
         },
         Commands::Report { format } => match format {
@@ -1510,6 +1510,7 @@ fn cmd_annotations(report_path: Utf8PathBuf, max: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_ci_github(
     cli: &Cli,
     event: CiEvent,
@@ -1533,7 +1534,6 @@ fn cmd_ci_github(
 
     let mut base = base;
     let mut head = head;
-    let diff_file = diff_file;
 
     if diff_file.is_some() {
         scope = "diff";
@@ -1576,26 +1576,22 @@ fn cmd_ci_github(
     let run_paths = resolve_output_paths(&run_opts);
     cmd_check(&ci_cli, run_opts)?;
 
-    let report_path = run_paths.report_out;
-    let report_text = std::fs::read_to_string(&report_path)
-        .context("read report after ci run")?;
+    let report_path = run_paths.report_out.clone();
+    let report_text = std::fs::read_to_string(&report_path).context("read report after ci run")?;
     let report = parse_report_json(&report_text)?;
     let code = report_exit_code(&report);
 
     if emit_annotations {
-        cmd_annotations(report_path, max_annotations)?;
+        cmd_annotations(report_path.clone(), max_annotations)?;
     }
 
     if write_sarif {
         let sarif_out = run_paths
             .report_out
             .parent()
-            .unwrap_or_else(|| std::path::Path::new("artifacts/depguard"))
+            .unwrap_or_else(|| Utf8Path::new("artifacts/depguard"))
             .join("report.sarif.json");
-        cmd_sarif(
-            report_path.clone(),
-            Some(Utf8PathBuf::from_path_buf(sarif_out).expect("valid utf8 path")),
-        )?;
+        cmd_sarif(report_path.clone(), Some(sarif_out))?;
     }
 
     match code {
@@ -1638,9 +1634,10 @@ fn resolve_ci_github_event(event: CiEvent) -> anyhow::Result<CiEvent> {
         });
 
     match detected.as_str() {
-        "pull_request" | "pull_request_target" | "pull_request_review" | "pull_request_review_comment" => {
-            Ok(CiEvent::PullRequest)
-        }
+        "pull_request"
+        | "pull_request_target"
+        | "pull_request_review"
+        | "pull_request_review_comment" => Ok(CiEvent::PullRequest),
         "workflow_call" => Ok(CiEvent::WorkflowCall),
         "schedule" => Ok(CiEvent::Schedule),
         "push" | "workflow_dispatch" => Ok(CiEvent::Push),
@@ -1659,7 +1656,7 @@ fn ci_default_base_ref(event: &CiEvent) -> anyhow::Result<String> {
         CiEvent::PullRequest => {
             let base = std::env::var("GITHUB_BASE_REF")
                 .or_else(|_| std::env::var("GITHUB_BASE_SHA"))
-                .unwrap_or_else(|| "main".to_string());
+                .unwrap_or_else(|_| "main".to_string());
             Ok(normalize_ci_ref_base(&base))
         }
         _ => Ok("origin/main".to_string()),
@@ -1849,7 +1846,13 @@ mod tests {
 
         let legacy = Command::cargo_bin("depguard")
             .unwrap()
-            .args(["annotations", "--report", report_path.as_str(), "--max", "10"])
+            .args([
+                "annotations",
+                "--report",
+                report_path.as_str(),
+                "--max",
+                "10",
+            ])
             .output()
             .expect("run legacy annotations");
         assert!(legacy.status.success());
@@ -2036,19 +2039,19 @@ mod tests {
     #[test]
     fn cli_parses_depguard_ci_github_defaults() {
         let cli = Cli::parse_from(["depguard", "ci", "github"]);
-        let Commands::Ci { provider } = cli.cmd else {
-            panic!("expected ci command");
-        };
-        let CiProvider::Github {
-            event,
-            write_markdown,
-            emit_annotations,
-            write_junit,
-            write_jsonl,
-            write_sarif,
-            max_annotations,
-            ..
-        } = provider
+        let Commands::Ci {
+            provider:
+                CiProvider::Github {
+                    event,
+                    write_markdown,
+                    emit_annotations,
+                    write_junit,
+                    write_jsonl,
+                    write_sarif,
+                    max_annotations,
+                    ..
+                },
+        } = cli.cmd
         else {
             panic!("expected github ci provider");
         };
@@ -2111,7 +2114,10 @@ mod tests {
         assert_eq!(normalize_ci_ref_base("main"), "origin/main");
         assert_eq!(normalize_ci_ref_base("origin/main"), "origin/main");
         assert_eq!(normalize_ci_ref_base("refs/heads/main"), "refs/heads/main");
-        assert_eq!(normalize_ci_ref_base("c0ff33be0a6fd4d5f9f8e5c9f1b2e6d7f8a9b0c1d"), "c0ff33be0a6fd4d5f9f8e5c9f1b2e6d7f8a9b0c1d");
+        assert_eq!(
+            normalize_ci_ref_base("c0ff33be0a6fd4d5f9f8e5c9f1b2e6d7f8a9b0c1"),
+            "c0ff33be0a6fd4d5f9f8e5c9f1b2e6d7f8a9b0c1"
+        );
     }
 
     #[test]
@@ -2193,7 +2199,7 @@ edition = "2021"
         report.findings.push(depguard_types::FindingV2 {
             severity: depguard_types::SeverityV2::Error,
             check_id: depguard_types::ids::CHECK_DEPS_NO_WILDCARDS.to_string(),
-            code: depguard_types::ids::CODE_WILDCARD_DEPENDENCY.to_string(),
+            code: depguard_types::ids::CODE_WILDCARD_VERSION.to_string(),
             message: "Test wildcard dependency".to_string(),
             location: Some(depguard_types::Location {
                 path: RepoPath::new(manifest_path),
