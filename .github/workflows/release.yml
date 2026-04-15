@@ -149,10 +149,15 @@ jobs:
           path: artifacts
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          files: artifacts/**/*
-          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          name: depguard ${{ github.ref_name }}
+          artifacts: artifacts/**/*
+          generateReleaseNotes: true
+          artifactErrorsFailBuild: true
+          makeLatest: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
 
