@@ -24,18 +24,20 @@ This architecture keeps the domain model pure and deterministic, while adapters 
 
 ### Install
 ```bash
-cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin depguard --locked
 # Optional: as Cargo subcommand
-cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin cargo-depguard --locked
 ```
-For CI, pin a version with the same command and run it in the workflow.
+For CI, prefer the reusable workflow pattern documented in
+[`docs/ci-integration.md`](docs/ci-integration.md), pinning `depguard-version` to
+the release you consume.
 
 ### Run a first scan
 ```bash
 depguard check
 ```
 
-### Common CI pattern
+### Common CI pattern (recommended)
 ```bash
 depguard ci github \
   --event pull_request \
