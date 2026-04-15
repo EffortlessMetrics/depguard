@@ -101,7 +101,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Install depguard
-        run: cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+        run: cargo install depguard-cli --version 0.1.2 --bin depguard --locked
 
       - name: Prepare artifacts
         run: mkdir -p artifacts/depguard
@@ -165,9 +165,9 @@ on:
 
 jobs:
   depguard:
-    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.1
+    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.2
     with:
-      depguard-version: 0.1.1
+      depguard-version: 0.1.2
       event-name: ${{ github.event_name }}
       write-markdown: true
       write-annotations: true
@@ -192,9 +192,9 @@ jobs:
           workspace:
             - crates/ops
             - crates/api
-      uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.1
+      uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.2
       with:
-        depguard-version: 0.1.1
+        depguard-version: 0.1.2
         event-name: ${{ github.event_name }}
         repo-root: ${{ matrix.workspace }}
   ```
@@ -218,7 +218,7 @@ After rendering the JSON receipt:
 
 Keep CI install explicit and minimal for now:
 
-- `cargo install depguard-cli --version 0.1.1 --bin depguard --locked`
+- `cargo install depguard-cli --version 0.1.2 --bin depguard --locked`
 - A dedicated installation action can be introduced later if CI time becomes an issue.
 
 ## Common mistakes
