@@ -86,7 +86,7 @@ jobs:
           Compress-Archive -Path dist/depguard.exe -DestinationPath dist/depguard-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: depguard-${{ matrix.target }}
           path: dist/depguard-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}
@@ -108,18 +108,12 @@ jobs:
         run: cargo publish -p depguard-check-catalog --dry-run --locked
       - name: Dry run depguard-yanked
         run: cargo publish -p depguard-yanked --dry-run --locked
-      - name: Dry run depguard-test-util
-        run: cargo publish -p depguard-test-util --dry-run --locked
       - name: Dry run depguard-domain-core
         run: cargo publish -p depguard-domain-core --dry-run --locked
       - name: Dry run depguard-domain-checks
         run: cargo publish -p depguard-domain-checks --dry-run --locked
       - name: Dry run depguard-domain
         run: cargo publish -p depguard-domain --dry-run --locked
-      - name: Dry run depguard-inline-suppressions
-        run: cargo publish -p depguard-inline-suppressions --dry-run --locked
-      - name: Dry run depguard-repo-parser
-        run: cargo publish -p depguard-repo-parser --dry-run --locked
       - name: Dry run depguard-settings
         run: cargo publish -p depguard-settings --dry-run --locked
       - name: Dry run depguard-repo
@@ -149,10 +143,15 @@ jobs:
           path: artifacts
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          files: artifacts/**/*
-          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          name: depguard ${{ github.ref_name }}
+          artifacts: artifacts/**/*
+          generateReleaseNotes: true
+          artifactErrorsFailBuild: true
+          makeLatest: ${{ !contains(github.ref_name, '-') }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
 
@@ -187,12 +186,6 @@ jobs:
       - name: Wait for crates.io index
         run: sleep 30
 
-      - name: Publish depguard-test-util
-        run: cargo publish -p depguard-test-util --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index
-        run: sleep 30
-
       - name: Publish depguard-domain-core
         run: cargo publish -p depguard-domain-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -207,18 +200,6 @@ jobs:
 
       - name: Publish depguard-domain
         run: cargo publish -p depguard-domain --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index
-        run: sleep 30
-
-      - name: Publish depguard-inline-suppressions
-        run: cargo publish -p depguard-inline-suppressions --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index
-        run: sleep 30
-
-      - name: Publish depguard-repo-parser
-        run: cargo publish -p depguard-repo-parser --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Wait for crates.io index
         run: sleep 30

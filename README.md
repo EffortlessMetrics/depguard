@@ -12,7 +12,7 @@ depguard centralizes this work as a deterministic, offline-first policy engine w
 
 ## How it works (system summary)
 1. `depguard-cli` collects manifests and runtime inputs.
-2. `depguard-repo` and `depguard-repo-parser` build an in-memory workspace model.
+2. `depguard-repo` and its internal parser module build an in-memory workspace model.
 3. `depguard-settings` resolves configuration and effective policy.
 4. `depguard` exposes the public Rust evaluation facade backed by `depguard-domain`.
 5. `depguard-app` orchestrates outputs.
@@ -24,18 +24,20 @@ This architecture keeps the domain model pure and deterministic, while adapters 
 
 ### Install
 ```bash
-cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin depguard --locked
 # Optional: as Cargo subcommand
-cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin cargo-depguard --locked
 ```
-For CI, pin a version with the same command and run it in the workflow.
+For CI, prefer the reusable workflow pattern documented in
+[`docs/ci-integration.md`](docs/ci-integration.md), pinning `depguard-version` to
+the release you consume.
 
 ### Run a first scan
 ```bash
 depguard check
 ```
 
-### Common CI pattern
+### Common CI pattern (recommended)
 ```bash
 depguard ci github \
   --event pull_request \
@@ -143,6 +145,7 @@ See [docs/config.md](docs/config.md) for the full schema and all settings.
 - [docs/architecture.md](docs/architecture.md) — deeper design
 - [docs/testing.md](docs/testing.md) — test strategy
 - [docs/implementation-plan.md](docs/implementation-plan.md) — implementation roadmap and risks
+- [docs/public-api.md](docs/public-api.md) — what is officially supported
 - [docs/tasks.md](docs/tasks.md) — roadmap initiatives and owners
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution flow
 

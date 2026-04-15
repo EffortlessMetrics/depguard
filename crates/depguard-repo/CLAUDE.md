@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Repository adapters for filesystem I/O, workspace discovery, and model assembly. Pure TOML parsing is delegated to `depguard-repo-parser`.
+Repository adapters for filesystem I/O, workspace discovery, and model assembly.
 
 ## Key Modules
 
@@ -45,11 +45,11 @@ pub enum ScopeInput {
 repo_root
     → discover_manifests()
     → read each Cargo.toml
-    → depguard-repo-parser::parse_root_manifest() / parse_member_manifest()
+    → depguard-repo::parser::parse_root_manifest() / parse_member_manifest()
     → assemble WorkspaceModel
 ```
 
-## Parsing Features (via depguard-repo-parser)
+## Parsing Features (via depguard-repo::parser)
 
 - Extracts all dependency sections: `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`
 - Handles `[target.'cfg(...)'.dependencies]` sections
@@ -71,7 +71,7 @@ repo_root
 |------------|---------|
 | `depguard-types` | `RepoPath`, DTOs |
 | `depguard-domain-core` | `WorkspaceModel`, `ManifestModel` |
-| `depguard-repo-parser` | Pure manifest parsing |
+| `depguard-repo::parser` | Pure manifest parsing |
 | `anyhow` | Error handling |
 | `camino` | UTF-8 paths |
 | `globset` | Workspace member glob expansion |
@@ -101,7 +101,7 @@ These ensure no panics on malformed input.
 
 ## Architecture Notes
 
-This crate is the I/O boundary for manifest access. The parsing logic lives in `depguard-repo-parser` to allow:
+This crate is the I/O boundary for manifest access. The internal parser module in `depguard-repo` keeps parsing logic:
 - Pure parsing without filesystem concerns
 - Fuzzing of parsing logic independently
 - Reuse of parsing in other contexts (e.g., buildfix editing)

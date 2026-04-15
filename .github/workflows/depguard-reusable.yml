@@ -14,10 +14,10 @@ on:
         type: string
         default: "workflow_call"
       depguard-version:
-        description: depguard CLI release version (for example 0.1.1)
+        description: depguard CLI release version (for example 0.1.2)
         required: false
         type: string
-        default: "0.1.1"
+        default: "0.1.2"
       base-ref:
         description: Base ref for diff-mode runs (for example origin/main)
         required: false
@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload depguard artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: depguard-report
           path: ${{ inputs.out-dir }}/

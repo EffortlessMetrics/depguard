@@ -24,5 +24,5 @@ fuzz_target!(|input: InlineSuppressionInput| {
         return;
     }
 
-    let _ = depguard_inline_suppressions::parse_inline_suppressions(&input.source, input.line);
+    let _ = depguard_repo::parser::parse_inline_suppressions(&input.source, input.line);
 });

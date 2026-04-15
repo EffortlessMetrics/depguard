@@ -1,6 +1,6 @@
 [package]
 name = "depguard-domain"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -16,10 +16,10 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true
-depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
-depguard-domain-checks = { version = "0.1.0", path = "../depguard-domain-checks", default-features = false }
+depguard-domain-core = { version = "0.1.2", path = "../depguard-domain-core" }
+depguard-domain-checks = { version = "0.1.2", path = "../depguard-domain-checks", default-features = false }
 
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
 
 [dev-dependencies]
 proptest.workspace = true

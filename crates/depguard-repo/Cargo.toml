@@ -1,6 +1,6 @@
 [package]
 name = "depguard-repo"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -21,9 +21,8 @@ rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
-depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core" }
-depguard-repo-parser = { version = "0.1.0", path = "../depguard-repo-parser" }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
+depguard-domain-core = { version = "0.1.2", path = "../depguard-domain-core" }
 
 [dev-dependencies]
 proptest.workspace = true

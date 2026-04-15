@@ -15,7 +15,7 @@ pub fn parse_inline_suppressions(source: &str, line: u32) -> Vec<String> {
         return out;
     }
 
-    // Current line inline comment: dep = "..." # depguard: allow(...)
+    // Current line inline comment: dep = "*" # depguard: allow(...)
     if let Some(line_text) = line_text(source, line)
         && let Some((_, comment)) = line_text.split_once('#')
     {
