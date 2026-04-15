@@ -27,12 +27,12 @@ serde_json.workspace = true
 reqwest.workspace = true
 
 depguard-app = { version = "0.1.2", path = "../depguard-app", default-features = false }
-depguard = { version = "0.1.0", path = "../depguard", default-features = false }
-depguard-repo = { version = "0.1.0", path = "../depguard-repo" }
-depguard-render = { version = "0.1.0", path = "../depguard-render" }
-depguard-settings = { version = "0.1.0", path = "../depguard-settings", default-features = false }
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
-depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
+depguard = { version = "0.1.2", path = "../depguard", default-features = false }
+depguard-repo = { version = "0.1.2", path = "../depguard-repo" }
+depguard-render = { version = "0.1.2", path = "../depguard-render" }
+depguard-settings = { version = "0.1.2", path = "../depguard-settings", default-features = false }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
+depguard-yanked = { version = "0.1.2", path = "../depguard-yanked" }
 
 [features]
 default = ["depguard-app/default", "depguard-settings/default"]
@@ -87,8 +87,8 @@ futures.workspace = true
 jsonschema.workspace = true
 walkdir.workspace = true
 time.workspace = true
-depguard-test-util = { version = "0.1.0", path = "../depguard-test-util", features = ["crypto-fixtures"] }
-depguard-check-catalog = { version = "0.1.0", path = "../depguard-check-catalog" }
+depguard-test-util = { version = "0.1.2", path = "../depguard-test-util", features = ["crypto-fixtures"] }
+depguard-check-catalog = { version = "0.1.2", path = "../depguard-check-catalog" }
 
 [[test]]
 name = "bdd"

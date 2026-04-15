@@ -12,7 +12,7 @@ depguard centralizes this work as a deterministic, offline-first policy engine w
 
 ## How it works (system summary)
 1. `depguard-cli` collects manifests and runtime inputs.
-2. `depguard-repo` and `depguard-repo-parser` build an in-memory workspace model.
+2. `depguard-repo` and its internal parser module build an in-memory workspace model.
 3. `depguard-settings` resolves configuration and effective policy.
 4. `depguard` exposes the public Rust evaluation facade backed by `depguard-domain`.
 5. `depguard-app` orchestrates outputs.
@@ -145,6 +145,7 @@ See [docs/config.md](docs/config.md) for the full schema and all settings.
 - [docs/architecture.md](docs/architecture.md) — deeper design
 - [docs/testing.md](docs/testing.md) — test strategy
 - [docs/implementation-plan.md](docs/implementation-plan.md) — implementation roadmap and risks
+- [docs/public-api.md](docs/public-api.md) — what is officially supported
 - [docs/tasks.md](docs/tasks.md) — roadmap initiatives and owners
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution flow
 

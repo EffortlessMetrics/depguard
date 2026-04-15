@@ -9,8 +9,6 @@ members = [
   "crates/depguard-domain-core",
   "crates/depguard-domain-checks",
   "crates/depguard-check-catalog",
-  "crates/depguard-inline-suppressions",
-  "crates/depguard-repo-parser",
   "crates/depguard-repo",
   "crates/depguard-render",
   "crates/depguard-app",
@@ -46,13 +44,13 @@ schemars = "1.2.1"
 proptest = "1.11.0"
 assert_cmd = "2.2.0"
 predicates = "3.1.4"
-insta = { version = "1.47.1", features = ["json"] }
+insta = { version = "1.47.2", features = ["json"] }
 tempfile = "3.27.0"
 walkdir = "2.5.0"
 cucumber = "0.22.1"
 async-trait = "0.1.89"
 futures = "0.3.32"
-jsonschema = "0.45.0"
-rayon = "1.11.0"
+jsonschema = "0.46.0"
+rayon = "1.12.0"
 reqwest = { version = "0.13.2", default-features = false, features = ["blocking", "json", "rustls"] }
-uselesskey = { version = "0.5.1", default-features = false, features = ["x509"] }
+uselesskey = { version = "0.6.0", default-features = false, features = ["x509"] }

@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload depguard artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: depguard-report
           path: artifacts/depguard/
