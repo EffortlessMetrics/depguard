@@ -1,5 +1,11 @@
 # depguard
 
+[![CI](https://github.com/EffortlessMetrics/depguard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/EffortlessMetrics/depguard/actions/workflows/ci.yml)
+[![Coverage](https://github.com/EffortlessMetrics/depguard/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/EffortlessMetrics/depguard/actions/workflows/coverage.yml)
+[![Codecov](https://codecov.io/gh/EffortlessMetrics/depguard/branch/main/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/depguard)
+[![MSRV](https://img.shields.io/badge/MSRV-1.92-blue.svg)](Cargo.toml)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 ## Problem
 Maintaining dependency hygiene in Rust workspaces is often solved by ad-hoc scripts and hand-rolled checks that are hard to version, hard to audit, and hard to reuse in CI.
 
@@ -19,6 +25,8 @@ depguard centralizes this work as a deterministic, offline-first policy engine w
 6. `depguard-render` emits Markdown, annotations, SARIF, JUnit, JSONL, and report JSON.
 
 This architecture keeps the domain model pure and deterministic, while adapters own I/O.
+
+Codecov is Rust execution-surface telemetry only; see [Coverage](docs/ci/coverage.md) for what the badge does and does not claim.
 
 ## Quick start
 
