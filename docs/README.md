@@ -18,6 +18,7 @@ The repository has multiple documentation entry points (architecture, checks, co
   - [docs/design.md](design.md)
   - [docs/implementation.md](implementation.md)
   - [docs/implementation-plan.md](implementation-plan.md)
+  - [docs/public-api.md](public-api.md)
 - **Roadmap**
   - [docs/roadmap.md](roadmap.md)
   - [docs/org-rollout.md](org-rollout.md)

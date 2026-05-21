@@ -9,7 +9,8 @@ use anyhow::Context;
 use depguard_domain_core::model::{
     DepKind, DepSpec, DependencyDecl, ManifestModel, PackageMeta, WorkspaceDependency,
 };
-use depguard_inline_suppressions::parse_inline_suppressions;
+mod inline_suppressions;
+pub use inline_suppressions::parse_inline_suppressions;
 use depguard_types::{Location, RepoPath};
 use std::collections::BTreeMap;
 use toml_edit::{Document, Item, Value};

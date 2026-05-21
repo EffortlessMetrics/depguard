@@ -16,7 +16,7 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
 1. `depguard-cli` parses command arguments, paths, and scope.
 2. `depguard-settings` resolves effective configuration.
 3. `depguard-repo` discovers and reads manifests.
-4. `depguard-repo-parser` parses `Cargo.toml` into in-memory models.
+4. `depguard-repo` parses `Cargo.toml` into in-memory models via its internal `parser` module.
 5. `depguard` exposes the public Rust evaluation surface over the internal domain engine.
 6. `depguard-domain` evaluates checks and produces findings.
 7. `depguard-app` wraps results in report envelopes.
@@ -41,11 +41,10 @@ Dependency checking was previously easy to evolve in behavior and hard to keep s
   - `depguard-check-catalog` (check metadata)
   - `depguard-domain` (engine orchestration)
 - Adapters
-  - `depguard-repo-parser` (pure TOML parsing)
-  - `depguard-repo` (discovery, scope resolution)
+  - `depguard-repo` (discovery, scope resolution, pure TOML parsing in `parser`)
   - `depguard-settings` (config resolution)
   - `depguard-render` (format adapters)
-  - `depguard-inline-suppressions` (inline suppression parsing)
+  - `depguard-repo` owns inline suppression parsing in its parser module
 - Application / UI
   - `depguard-app` (use cases)
   - `depguard-cli` / `cargo-depguard` (process entry points)

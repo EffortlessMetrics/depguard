@@ -1,6 +1,6 @@
 [package]
 name = "depguard-render"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ authors.workspace = true
 readme = "README.md"
 
 [dependencies]
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
 serde_json.workspace = true
 
 [dev-dependencies]

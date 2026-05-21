@@ -16,9 +16,6 @@ arbitrary = { version = "1.4.2", features = ["derive"] }
 [dependencies.depguard-repo]
 path = "../crates/depguard-repo"
 
-[dependencies.depguard-inline-suppressions]
-path = "../crates/depguard-inline-suppressions"
-
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]

@@ -5,20 +5,22 @@ A large Rust workspace gets fragile when crate responsibilities are unclear.
 
 ## Layer map
 
+- `depguard-cli`
+  - Public product entrypoint and process boundary.
 - `depguard-types`
   - Public contracts: schema IDs, report types, stable IDs, explanations.
 - `depguard-domain-core`
-  - Policy primitives and shared domain types.
+  - Policy primitives and shared domain types (internal).
 - `depguard-domain-checks`
-  - Individual check logic.
+  - Individual check logic (internal implementation).
 - `depguard-check-catalog`
-  - Check metadata and profile defaults.
+  - Check metadata and profile defaults (internal metadata).
 - `depguard`
-  - Public facade over the domain evaluation surface.
+  - Public facade over evaluation for Rust embedding.
 - `depguard-domain`
   - Internal domain engine and orchestration.
-- `depguard-repo-parser`
-  - Pure manifest parsing and location extraction.
+- `depguard-repo`
+  - Pure manifest parsing, inline suppression extraction, and location tracking (now internal to parser module).
 - `depguard-repo`
   - Workspace discovery, path handling, diff selection.
 - `depguard-settings`
@@ -27,16 +29,25 @@ A large Rust workspace gets fragile when crate responsibilities are unclear.
   - Report rendering adapters.
 - `depguard-app`
   - Use-case orchestration.
-- `depguard-cli`
-  - Command parsing and process interface.
 - `depguard-yanked`
   - Offline exact yanked-version lookup.
-- `depguard-inline-suppressions`
-  - Inline manifest suppression directives.
 - `depguard-test-util`
-  - Deterministic test helpers for workspace tooling.
+  - Deterministic test helpers for workspace tooling (not intended for external publishing).
 - `xtask`
   - Developer automation (schemas, fixtures, release prep).
+
+## Public vs internal publishing intent
+
+- Supported public surfaces for external consumers: `depguard-cli`, `depguard`, and `depguard-types`.
+- Published internals (supporting crates): `depguard-domain`, `depguard-domain-*`, `depguard-repo`,
+  `depguard-settings`, `depguard-render`, `depguard-yanked`, `depguard-app`.
+- Internal-only: `depguard-test-util` (set `publish = false`) and `xtask`.
+
+## Collapse target for alpha
+
+- `depguard-inline-suppressions` is now implemented in `depguard-repo::parser` as an internal module.
+- `depguard-repo-parser` was merged into `depguard-repo::parser` in this PR line.
+- Next cleanup target is `depguard-domain-core` + `depguard-domain-checks` + `depguard-check-catalog` into `depguard-domain`.
 
 ## Dependency invariants
 - Foundation crates have the smallest dependency surfaces.

@@ -9,17 +9,15 @@ A working local run of `depguard` plus a first baseline-ready configuration.
 ## Install
 ```bash
 # Local install for local development:
-cargo install depguard-cli --version 0.1.1 --bin depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin depguard --locked
 
 # Optional: as Cargo subcommand
-cargo install depguard-cli --version 0.1.1 --bin cargo-depguard --locked
+cargo install depguard-cli --version 0.1.2 --bin cargo-depguard --locked
 ```
 
-For GitHub Actions, pin the same `depguard-cli` version in the workflow:
-
-```bash
-cargo install depguard-cli --version 0.1.1 --bin depguard --locked
-```
+For GitHub Actions, use the reusable workflow pattern in
+[`docs/ci-integration.md`](ci-integration.md) and pin `depguard-version` to the
+desired release.
 
 ## First run
 ```bash
@@ -69,5 +67,6 @@ For repository rollouts across many teams and repositories, follow the standardi
 
 ## Next steps
 - Review [`docs/config.md`](config.md) for full policy options.
-- If running on large repos, start with `depguard --scope diff check`.
+- If running on large repos, start with `depguard ci github --event pull_request`
+  before widening to full-repo event modes.
 - For output parsing, use [`docs/output-contract.md`](output-contract.md).

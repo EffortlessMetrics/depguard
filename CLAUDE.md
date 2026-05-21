@@ -52,8 +52,6 @@ The project uses **hexagonal (ports & adapters)** architecture with a multi-crat
 | `depguard-domain-core` | Core domain types and traits |
 | `depguard-domain-checks` | Check implementations (pure, no I/O) |
 | `depguard-check-catalog` | Check metadata and explanation registry |
-| `depguard-inline-suppressions` | Inline comment suppression parser |
-| `depguard-repo-parser` | TOML parsing and manifest models |
 | `depguard-repo` | Workspace discovery; diff-scope; model building |
 | `depguard-render` | Markdown, SARIF, JUnit, annotations renderers |
 | `depguard-app` | Use cases: check, md, annotations, explain, fix, baseline |

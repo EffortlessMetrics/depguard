@@ -5,12 +5,12 @@ Policy checks often behave differently across pipelines due to path and scope di
 
 ## Default GitHub Actions pattern
 
-Follow the reference pattern in [docs/org-rollout.md](org-rollout.md) for a stable PR-vs-mainline workflow:
+Use the reusable workflow pattern in this page as the recommended baseline.
 
 1. Always create `artifacts/depguard/report.json`.
-2. Always emit review artifacts (Markdown/annotations).
-3. Report results to the correct scope per event.
-4. Enforce failures only after diagnostics are published.
+2. Always emit review artifacts (`markdown`, `annotations`, and optional `sarif`/`junit`/`jsonl`).
+3. Use event-aware `depguard ci github` behavior for scope.
+4. Enforce failures only after diagnostics are written.
 
 ```yaml
 name: depguard
@@ -25,54 +25,13 @@ on:
 
 jobs:
   depguard:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install depguard
-        run: cargo install depguard-cli --version 0.1.1 --bin depguard --locked
-      - name: Prepare artifacts
-        run: mkdir -p artifacts/depguard
-      - name: Run depguard
-        id: depguard
-        shell: bash
-        run: |
-          set +e
-          depguard ci github \
-            --event "${{ github.event_name }}" \
-            --out-dir artifacts/depguard \
-            --report-out artifacts/depguard/report.json \
-            --write-markdown \
-            --emit-annotations
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Emit GitHub annotations
-        if: always()
-        shell: bash
-        run: |
-          if [ -f artifacts/depguard/comment.md ]; then
-            cat artifacts/depguard/comment.md
-          fi
-      - name: Upload depguard artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: depguard-report
-          path: artifacts/depguard/
-      - name: Enforce result
-        if: always()
-        shell: bash
-        run: |
-          code="${{ steps.depguard.outputs.exit_code }}"
-          if [ "$code" = "0" ]; then
-            exit 0
-          elif [ "$code" = "2" ]; then
-            exit 2
-          else
-            exit 1
-          fi
+    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.2
+    with:
+      depguard-version: 0.1.2
+      event-name: ${{ github.event_name }}
+      repo-root: "."
+      write-markdown: true
+      write-annotations: true
 ```
 
 ## Scope strategy
@@ -109,9 +68,9 @@ on:
 
 jobs:
   depguard:
-    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.1
+    uses: EffortlessMetrics/depguard/.github/workflows/depguard-reusable.yml@v0.1.2
     with:
-      depguard-version: 0.1.1
+      depguard-version: 0.1.2
       event-name: ${{ github.event_name }}
       repo-root: "."
       write-markdown: true
@@ -133,6 +92,7 @@ The same commands work for GitLab/CircleCI/Jenkins as long as working directory 
 
 ## Install options
 
-For CI today, pin `depguard-cli` in the workflow with `cargo install`.
-If you prefer a dedicated installation action later, you can keep that outside the default
-path and keep the same `depguard ci github` command after it.
+Compatibility options:
+- Keep using `cargo install depguard-cli` inline only if your org can tolerate rebuild time.
+- A dedicated installation action is deferred and not required for the canonical
+  `depguard ci github` workflow.

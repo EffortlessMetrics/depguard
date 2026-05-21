@@ -1,6 +1,6 @@
 [package]
 name = "depguard"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ authors.workspace = true
 readme = "README.md"
 
 [dependencies]
-depguard-domain = { version = "0.1.0", path = "../depguard-domain", default-features = false }
+depguard-domain = { version = "0.1.2", path = "../depguard-domain", default-features = false }
 
 [features]
 default = ["depguard-domain/default"]

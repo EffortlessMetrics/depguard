@@ -1,6 +1,6 @@
 [package]
 name = "depguard-domain-core"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -12,6 +12,6 @@ authors.workspace = true
 readme = "README.md"
 
 [dependencies]
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
-depguard-yanked = { version = "0.1.0", path = "../depguard-yanked" }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
+depguard-yanked = { version = "0.1.2", path = "../depguard-yanked" }
 serde.workspace = true

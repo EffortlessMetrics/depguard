@@ -1,6 +1,6 @@
 [package]
 name = "depguard-settings"
-version = "0.1.0"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -18,9 +18,9 @@ serde.workspace = true
 toml.workspace = true
 globset.workspace = true
 
-depguard-types = { version = "0.1.0", path = "../depguard-types" }
-depguard-domain-core = { version = "0.1.0", path = "../depguard-domain-core", default-features = false }
-depguard-check-catalog = { version = "0.1.0", path = "../depguard-check-catalog", default-features = false }
+depguard-types = { version = "0.1.2", path = "../depguard-types" }
+depguard-domain-core = { version = "0.1.2", path = "../depguard-domain-core", default-features = false }
+depguard-check-catalog = { version = "0.1.2", path = "../depguard-check-catalog", default-features = false }
 
 [features]
 default = [
