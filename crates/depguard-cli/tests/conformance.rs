@@ -485,7 +485,8 @@ fn all_fixture_reports_use_v2_schema() {
 #[test]
 fn all_fixture_verdicts_are_valid() {
     let fixtures = fixtures_dir();
-    let valid_statuses = ["pass", "fail", "warn"];
+    let v1_statuses = ["pass", "fail", "warn"];
+    let v2_statuses = ["pass", "fail", "warn", "skip"];
 
     for entry in std::fs::read_dir(&fixtures).expect("Failed to read fixtures dir") {
         let entry = entry.expect("Failed to read entry");
@@ -508,20 +509,20 @@ fn all_fixture_verdicts_are_valid() {
         if let Some(verdict) = report.get("verdict") {
             if let Some(status) = verdict.get("status").and_then(|v| v.as_str()) {
                 assert!(
-                    valid_statuses.contains(&status),
+                    v2_statuses.contains(&status),
                     "Fixture '{}' has invalid verdict status '{}'. Valid: {:?}",
                     fixture_name,
                     status,
-                    valid_statuses
+                    v2_statuses
                 );
             } else if let Some(status) = verdict.as_str() {
                 // v1 reports might have verdict as string
                 assert!(
-                    valid_statuses.contains(&status),
+                    v1_statuses.contains(&status),
                     "Fixture '{}' has invalid verdict '{}'. Valid: {:?}",
                     fixture_name,
                     status,
-                    valid_statuses
+                    v1_statuses
                 );
             }
         }

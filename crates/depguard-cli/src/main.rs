@@ -714,9 +714,11 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
             baseline: opts.baseline.as_ref().map(|p| p.to_string()),
         };
 
-        // Fast path: missing root Cargo.toml -> emit empty report.
         let root_manifest = repo_root.join("Cargo.toml");
-        if !root_manifest.exists() {
+        if !root_manifest
+            .try_exists()
+            .context("locate root Cargo.toml")?
+        {
             let cfg = if cfg_text.trim().is_empty() {
                 depguard_settings::DepguardConfigV1::default()
             } else {
@@ -728,14 +730,29 @@ fn cmd_check(cli: &Cli, opts: CheckOpts) -> anyhow::Result<()> {
                 depguard::policy::Scope::Repo => "repo",
                 depguard::policy::Scope::Diff => "diff",
             };
-            let mut report = empty_report(report_version, scope, &resolved.effective.profile);
+            let message = "No root Cargo.toml found. depguard requires a Cargo manifest.";
+            // The legacy receipt has no skip verdict or reason field.
+            let mut report = match report_version {
+                ReportVersion::V1 => runtime_error_report(report_version, message),
+                _ => empty_report(report_version, scope, &resolved.effective.profile),
+            };
+            match &mut report {
+                ReportVariant::V1(receipt) => {
+                    receipt.data.scope = scope.into();
+                    receipt.data.profile = resolved.effective.profile;
+                }
+                ReportVariant::V2(receipt) => {
+                    receipt.verdict.status = depguard_types::VerdictStatus::Skip;
+                    receipt
+                        .verdict
+                        .reasons
+                        .push(depguard_types::ids::REASON_NO_MANIFEST_FOUND.into());
+                }
+            }
             write_optional_artifacts(&mut report, &opts, &paths)?;
             write_report_file(&paths.report_out, &report).context("write report json")?;
-            eprintln!(
-                "depguard: no Cargo.toml found at {}; emitting empty report",
-                root_manifest
-            );
-            return Ok(0);
+            eprintln!("depguard: {repo_root}: {message}");
+            return Ok(1);
         }
 
         let changed_files = resolve_changed_files(
@@ -1202,7 +1219,12 @@ fn report_exit_code(report: &ReportVariant) -> i32 {
             depguard_types::VerdictStatus::Pass => 0,
             depguard_types::VerdictStatus::Warn => 0,
             depguard_types::VerdictStatus::Fail => 2,
-            depguard_types::VerdictStatus::Skip => 0,
+            depguard_types::VerdictStatus::Skip => i32::from(
+                r.verdict
+                    .reasons
+                    .iter()
+                    .any(|reason| reason == depguard_types::ids::REASON_NO_MANIFEST_FOUND),
+            ),
         },
     }
 }
@@ -2266,7 +2288,7 @@ edition = "2021"
     }
 
     #[test]
-    fn cmd_check_empty_repo_writes_empty_report_and_markdown() {
+    fn cmd_check_missing_manifest_writes_report_and_markdown() {
         let tmp = TempDir::new().expect("temp dir");
         let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8 path");
 
@@ -2297,7 +2319,7 @@ edition = "2021"
             mode: RunMode::Standard,
         };
 
-        cmd_check(&cli, opts).expect("cmd_check");
+        assert_exit_code(1, || cmd_check(&cli, opts).unwrap());
         assert!(report_out.exists());
         assert!(markdown_out.exists());
     }

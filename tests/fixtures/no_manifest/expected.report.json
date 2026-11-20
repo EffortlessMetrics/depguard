@@ -10,13 +10,15 @@
     "duration_ms": 0
   },
   "verdict": {
-    "status": "pass",
+    "status": "skip",
     "counts": {
       "info": 0,
       "warn": 0,
       "error": 0
     },
-    "reasons": []
+    "reasons": [
+      "no_manifest_found"
+    ]
   },
   "findings": [],
   "data": {

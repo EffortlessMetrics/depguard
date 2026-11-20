@@ -264,15 +264,48 @@ fn fixture_multi_violation_fails() {
 }
 
 #[test]
-fn fixture_no_manifest_passes() {
+fn fixture_no_cargo_manifest_is_skipped() {
     let (exit_code, report) = run_check_on_fixture("no_manifest");
     let expected = load_expected_report("no_manifest");
 
-    assert_eq!(
-        exit_code, 0,
-        "no_manifest fixture should exit with 0 (pass)"
-    );
+    assert_eq!(exit_code, 1);
     assert_reports_match(report, expected, "no_manifest");
+}
+
+#[test]
+fn ci_github_rejects_a_missing_cargo_manifest() {
+    let out = TempDir::new().unwrap();
+    depguard_cmd()
+        .arg("--repo-root")
+        .arg(fixtures_dir().join("no_manifest"))
+        .args(["ci", "github", "--event", "push", "--out-dir"])
+        .arg(out.path())
+        .assert()
+        .code(1);
+}
+
+#[test]
+fn missing_cargo_manifest_in_legacy_and_cockpit_reports() {
+    let (exit_code, legacy) = run_check_on_fixture_args("no_manifest", &["--report-version", "v1"]);
+    assert_eq!(exit_code, 1);
+    assert_eq!(legacy["verdict"], "fail");
+    assert!(
+        legacy["findings"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Cargo.toml")
+    );
+
+    let (exit_code, sensor) = run_check_on_fixture_args(
+        "no_manifest",
+        &["--mode", "cockpit", "--report-version", "sensor-v1"],
+    );
+    assert_eq!(exit_code, 0);
+    assert_eq!(sensor["verdict"]["status"], "skip");
+    assert_eq!(
+        sensor["verdict"]["reasons"],
+        serde_json::json!(["no_manifest_found"])
+    );
 }
 
 #[test]

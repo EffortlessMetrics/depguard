@@ -5,7 +5,9 @@ Users need fast, practical recovery paths for local and CI failures.
 
 ## Common failures and fixes
 
-### `No Cargo.toml found`
+### `No root Cargo.toml found`
+A repository root without `Cargo.toml` (for example, one containing only `package.json`) cannot be scanned. Standard mode exits 1. The v2 and sensor receipts record `skip` with reason `no_manifest_found`. Legacy v1 records a failure. Cockpit mode exits 0 when it writes the receipt.
+
 - Ensure you are in or pointed to a Rust workspace root.
 - Use `depguard --repo-root <path> check`.
 
