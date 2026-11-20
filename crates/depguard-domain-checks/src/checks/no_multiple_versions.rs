@@ -14,7 +14,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     // Build a map of crate_name -> set of (version, manifest_path, section)
     let mut version_map: BTreeMap<String, BTreeSet<(String, String, String)>> = BTreeMap::new();
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         for dep in &manifest.dependencies {
             // Skip workspace deps (they use workspace version)
             if dep.spec.workspace {

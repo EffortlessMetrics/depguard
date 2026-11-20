@@ -15,7 +15,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
         return;
     }
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         for dep in &manifest.dependencies {
             if !model.workspace_dependencies.contains_key(&dep.name) {
                 continue;

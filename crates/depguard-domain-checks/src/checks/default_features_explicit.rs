@@ -11,7 +11,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     };
     let allow = build_allowlist(&policy.allow);
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         for dep in &manifest.dependencies {
             // Skip workspace deps (they inherit from workspace definition)
             if dep.spec.workspace {

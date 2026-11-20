@@ -11,7 +11,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     };
     let allow = build_allowlist(&policy.allow);
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         // Common policy: only enforce for crates that can be published.
         if !policy.ignore_publish_false && !manifest.is_publishable() {
             continue;

@@ -13,6 +13,15 @@ pub struct WorkspaceModel {
     pub manifests: Vec<ManifestModel>,
 }
 
+impl WorkspaceModel {
+    /// Cargo manifests eligible for dependency checks and scan counts.
+    pub fn cargo_manifests(&self) -> impl Iterator<Item = &ManifestModel> {
+        self.manifests
+            .iter()
+            .filter(|manifest| manifest.path.as_str().rsplit('/').next() == Some("Cargo.toml"))
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct WorkspaceDependency {
     pub name: String,

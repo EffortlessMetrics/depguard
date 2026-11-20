@@ -11,7 +11,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     };
     let allow = build_allowlist(&policy.allow);
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         // Collect all dependency names referenced in features
         let mut referenced_deps: std::collections::HashSet<String> =
             std::collections::HashSet::new();

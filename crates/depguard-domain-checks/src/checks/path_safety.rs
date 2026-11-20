@@ -11,7 +11,7 @@ pub fn run(model: &WorkspaceModel, cfg: &EffectiveConfig, out: &mut Vec<Finding>
     };
     let allow = build_allowlist(&policy.allow);
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         let manifest_depth = manifest_dir_depth(manifest.path.as_str());
 
         for dep in &manifest.dependencies {

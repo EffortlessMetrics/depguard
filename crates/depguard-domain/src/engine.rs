@@ -38,10 +38,9 @@ pub fn evaluate(model: &WorkspaceModel, cfg: &EffectiveConfig) -> DomainReport {
             crate::policy::Scope::Diff => "diff".to_string(),
         },
         profile: cfg.profile.clone(),
-        manifests_scanned: model.manifests.len() as u32,
+        manifests_scanned: model.cargo_manifests().count() as u32,
         dependencies_scanned: model
-            .manifests
-            .iter()
+            .cargo_manifests()
             .map(|m| m.dependencies.len() as u32)
             .sum(),
         findings_total: total,
@@ -62,7 +61,7 @@ type SuppressionIndex = BTreeMap<(String, u32), BTreeSet<String>>;
 fn build_inline_suppression_index(model: &WorkspaceModel) -> SuppressionIndex {
     let mut index: SuppressionIndex = BTreeMap::new();
 
-    for manifest in &model.manifests {
+    for manifest in model.cargo_manifests() {
         for dep in &manifest.dependencies {
             if dep.spec.inline_suppressions.is_empty() {
                 continue;
@@ -192,6 +191,42 @@ mod tests {
             url: None,
             fingerprint: None,
             data: serde_json::Value::Null,
+        }
+    }
+
+    #[test]
+    fn counts_only_cargo_manifests_in_a_mixed_model() {
+        let cfg = EffectiveConfig {
+            profile: "test".into(),
+            scope: Scope::Repo,
+            fail_on: FailOn::Error,
+            max_findings: 100,
+            yanked_index: None,
+            checks: BTreeMap::new(),
+        };
+        let mut model = WorkspaceModel::default();
+        for (path, expected) in [
+            ("crates/member/Cargo.toml", 1),
+            ("pyproject.toml", 1),
+            ("Cargo.toml", 2),
+        ] {
+            model.manifests.push(ManifestModel {
+                path: RepoPath::new(path),
+                dependencies: vec![DependencyDecl {
+                    kind: DepKind::Normal,
+                    name: "example".into(),
+                    spec: DepSpec {
+                        version: Some("1".into()),
+                        ..DepSpec::default()
+                    },
+                    location: None,
+                    target: None,
+                }],
+                ..ManifestModel::default()
+            });
+            let report = evaluate(&model, &cfg);
+            assert_eq!(report.data.manifests_scanned, expected, "added {path}");
+            assert_eq!(report.data.dependencies_scanned, expected, "added {path}");
         }
     }
 
