@@ -361,7 +361,7 @@ mod check_command {
     }
 
     #[test]
-    fn check_empty_package() {
+    fn check_empty_cargo_package_alongside_package_json() {
         let fixture_path = fixtures_dir().join("empty_package");
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let report_path = temp_dir.path().join("report.json");
@@ -384,6 +384,8 @@ mod check_command {
             Some("pass"),
             "Empty package should pass"
         );
+        assert_eq!(report["data"]["manifests_scanned"], 1);
+        assert_eq!(report["data"]["dependencies_scanned"], 0);
     }
 
     #[test]
